@@ -1,0 +1,283 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Skubert Arcade</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: #17213a;
+      color: white;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 800px;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 36px;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: #bcc7db;
+      margin-bottom: 35px;
+    }
+
+    .panel {
+      background: #283552;
+      border-radius: 16px;
+      padding: 35px;
+      max-width: 420px;
+      margin: auto;
+    }
+
+    input {
+      width: 100%;
+      padding: 14px;
+      margin: 15px 0;
+      border: 1px solid #7784a0;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+
+    button {
+      padding: 14px 25px;
+      background: #f3be65;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+      color: #17213a;
+    }
+
+    button:hover {
+      background: #ffd58e;
+    }
+
+    .error {
+      color: #ffabab;
+      font-size: 14px;
+      margin-bottom: 15px;
+    }
+
+    .games {
+      display: grid;
+      grid-template-columns: repeat(
+        auto-fit, minmax(200px, 1fr)
+      );
+      gap: 20px;
+      margin: 30px 0;
+    }
+
+    .game {
+      display: block;
+      padding: 28px 20px;
+      background: #283552;
+      border-radius: 14px;
+      color: white;
+      text-decoration: none;
+      transition: transform 0.2s, background 0.2s;
+    }
+
+    .game:hover {
+      background: #3c4b6a;
+      transform: translateY(-4px);
+    }
+
+    .game-icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+    }
+
+    .game h2 {
+      font-size: 20px;
+    }
+
+    .game p {
+      font-size: 14px;
+      color: #bcc7db;
+    }
+
+    .footer {
+      margin-top: 35px;
+      color: #a3afc5;
+      font-size: 13px;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>🎮 Skubert Arcade</h1>
+  <p class="subtitle">
+    A collection of games for the team
+  </p>
+
+  <!-- PASSWORD SCREEN -->
+  <section id="loginScreen" class="panel">
+    <h2>🔒 Team Access</h2>
+    <p>Enter the team password to continue.</p>
+
+    <form id="loginForm">
+      <input
+        id="passwordInput"
+        type="password"
+        placeholder="Enter password"
+        aria-label="Team password"
+        autocomplete="off"
+        required
+      >
+
+      <p id="errorMessage"
+         class="error"
+         role="alert"
+         hidden>
+        Incorrect password. Please try again.
+      </p>
+
+      <button type="submit">
+        Unlock Arcade
+      </button>
+    </form>
+  </section>
+
+  <!-- GAME LINKS (HIDDEN INITIALLY) -->
+  <main id="arcadeScreen" hidden>
+
+    <h2>Choose Your Game</h2>
+
+    <div class="games">
+
+      <a class="game" href="games/product-stack/">
+        <div class="game-icon">📦</div>
+        <h2>Product Stack</h2>
+        <p>Build the tallest product tower.</p>
+      </a>
+
+      <a class="game" href="games/typing/">
+        <div class="game-icon">⌨️</div>
+        <h2>Typing Frenzy</h2>
+        <p>Type quickly and earn points.</p>
+      </a>
+
+      <a class="game" href="games/wheres-skubert/">
+        <div class="game-icon">🔍</div>
+        <h2>Where's Skubert?</h2>
+        <p>Find Skubert in the artwork.</p>
+      </a>
+
+    </div>
+
+    <button id="lockButton" type="button">
+      Lock Arcade
+    </button>
+
+  </main>
+
+  <div class="footer">
+    Skubert Arcade &bull; Team Games
+  </div>
+
+</div>
+
+<script>
+  // =========================================
+  // CONFIGURATION - CHANGE PASSWORD HERE
+  // =========================================
+  const TEAM_PASSWORD = "SKUBERT";
+
+  // Elements
+  const loginScreen =
+    document.getElementById("loginScreen");
+
+  const arcadeScreen =
+    document.getElementById("arcadeScreen");
+
+  const loginForm =
+    document.getElementById("loginForm");
+
+  const passwordInput =
+    document.getElementById("passwordInput");
+
+  const errorMessage =
+    document.getElementById("errorMessage");
+
+  const lockButton =
+    document.getElementById("lockButton");
+
+  // Reveal game links
+  function unlockArcade() {
+    loginScreen.hidden = true;
+    arcadeScreen.hidden = false;
+
+    sessionStorage.setItem(
+      "skubertArcadeUnlocked", "true"
+    );
+  }
+
+  // Return to password screen
+  function lockArcade() {
+    sessionStorage.removeItem(
+      "skubertArcadeUnlocked"
+    );
+
+    arcadeScreen.hidden = true;
+    loginScreen.hidden = false;
+
+    passwordInput.value = "";
+    errorMessage.hidden = true;
+    passwordInput.focus();
+  }
+
+  // Process password submission
+  loginForm.addEventListener("submit", function(event) {
+    event.preventDefault();
+
+    const enteredPassword = passwordInput.value;
+
+    if (enteredPassword === TEAM_PASSWORD) {
+      unlockArcade();
+    } else {
+      errorMessage.hidden = false;
+      passwordInput.value = "";
+      passwordInput.focus();
+    }
+  });
+
+  // Lock button
+  lockButton.addEventListener("click", lockArcade);
+
+  // Remember unlock during current browser tab session
+  if (
+    sessionStorage.getItem("skubertArcadeUnlocked")
+      === "true"
+  ) {
+    unlockArcade();
+  }
+</script>
+
+</body>
+</html>
