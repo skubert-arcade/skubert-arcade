@@ -1,23 +1,42 @@
-
 <html>
   <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <title>Skubert Typing Frenzy</title>
-
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta3/dist/css/bootstrap.min.css"
       rel="stylesheet"
       integrity="sha384-eOJMYsd53ii+scO/bJGFsiCZc+5NDVN2yr8+0RDqr0Ql0h+rP48ckxlpbzKgwra6"
       crossorigin="anonymous"
     />
-
     <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
     <link rel="icon" href="/favicon.ico" type="image/x-icon" />
     <link rel="stylesheet" href="css/global.css" />
     <link rel="stylesheet" href="css/game.css" />
-  </head>
 
+    <!-- 3D Skubert overlay: does not capture clicks or typing input -->
+    <style>
+      #Wrapper { position: relative; }
+      #skubert-viewer {
+        position: absolute;
+        pointer-events: none;
+        z-index: 3;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+      #skubert-viewer canvas { display: block; width: 100%; height: 100%; }
+    </style>
+
+    <!-- Keep Three.js and its GLTF loader on the same pinned version -->
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+      }
+    }
+    </script>
+  </head>
   <body>
     <nav class="navbar navbar-expand-lg bg-transparent px-5">
       <button
@@ -31,7 +50,6 @@
       >
         <span class="navbar-toggler-icon"></span>
       </button>
-
       <div class="collapse navbar-collapse ml-0" id="navbarNav">
         <ul class="navbar-nav">
           <li class="nav-item active">
@@ -40,7 +58,8 @@
           <li class="nav-item">
             <a class="nav-link" href="how.html">How to Play</a>
           </li>
-          <li class="nav-item"></li>
+          <li class="nav-item">
+          </li>
         </ul>
       </div>
     </nav>
@@ -55,6 +74,9 @@
         id="GameContent"
         class="row game-content justify-content-center align-items-center"
       ></div>
+      <!-- 3D overlay stays mounted when the words are cleared on game-over -->
+      <div id="skubert-viewer" aria-hidden="true"></div>
+
 
       <form onsubmit="getWord(); return false">
         <input
@@ -73,7 +95,6 @@
       crossorigin="anonymous"
     ></script>
 
-    <!-- Silent placeholders for compatibility with app.js -->
     <audio id="StartGameSound"></audio>
     <audio id="GameoverSound"></audio>
     <audio id="PointSound"></audio>
@@ -81,5 +102,8 @@
     <audio id="MenuSound"></audio>
 
     <script src="./app.js"></script>
+    <!-- Avoid audio calls made by app.js when using silent placeholders -->
+    <script>window.playSound = function () {};</script>
+    <script type="module" src="./skubert-viewer.js"></script>
   </body>
 </html>
