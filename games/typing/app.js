@@ -175,7 +175,9 @@ function drawWord() {
   const word = generateRandomWord(DICTIONARY);
   arrWords.push(word);
   let wordDiv = document.createElement('div');
-  wordDiv.innerHTML = `<p>${word}</p>`;
+  const paragraph = document.createElement('p');
+  paragraph.textContent = word;
+  wordDiv.appendChild(paragraph);
   wordDiv.classList.add('word');
   wordDiv.style.top = '-2px';
   wordDiv.style.zIndex = '1';
