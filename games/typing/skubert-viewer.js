@@ -7,6 +7,10 @@ const MODEL_PATH = './models/skubert.glb';
 const MODEL_BASE_YAW = 0; // Change to Math.PI if Skubert faces backward.
 const TURN_STRENGTH = 0.52; // Radians, ~30 degrees at the far edges.
 const SMOOTHING = 5.0; // Higher values mean quicker turns.
+const PITCH_STRENGTH = 1.10; // Radians per full playfield height.
+const MAX_UP_TILT = 0.55; // ~32 degrees.
+const MAX_DOWN_TILT = 0.38; // ~22 degrees.
+const INVERT_PITCH = false; // Set true if the head tilts away from the word.
 
 const gameArea = document.getElementById('GameContent');
 const wrapper = document.getElementById('Wrapper');
@@ -20,7 +24,7 @@ const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
 camera.position.set(0, 0, 5.0);
 
 const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.setClearColor(0x000000, 0);
 mount.appendChild(renderer.domElement);
@@ -32,6 +36,7 @@ scene.add(keyLight);
 
 // Rotate a parent group rather than the model meshes or GLB animation bones.
 const skubertPivot = new THREE.Group();
+skubertPivot.rotation.order = 'YXZ'; // Head-like yaw and pitch.
 scene.add(skubertPivot);
 let isLoaded = false;
 
@@ -61,9 +66,11 @@ if (window.ResizeObserver) {
 }
 
 const loader = new GLTFLoader();
+console.time('Skubert GLB load and parse');
 loader.load(
   MODEL_PATH,
   ({ scene: model }) => {
+    console.timeEnd('Skubert GLB load and parse');
     // Center and normalize any reasonable model scale automatically.
     const bounds = new THREE.Box3().setFromObject(model);
     if (bounds.isEmpty()) {
@@ -83,8 +90,14 @@ loader.load(
     isLoaded = true;
     mount.style.opacity = '1';
   },
-  undefined,
+  (event) => {
+    if (event.total) {
+      const percent = Math.round(100 * event.loaded / event.total);
+      if (percent === 100) console.info('Skubert GLB transfer complete; parsing/render setup may continue.');
+    }
+  },
   (error) => {
+    console.timeEnd('Skubert GLB load and parse');
     console.error('Unable to load Skubert GLB at ' + MODEL_PATH, error);
     console.info('Upload models/skubert.glb next to game.html, then refresh.');
   }
@@ -123,11 +136,19 @@ function animate() {
         (word.x - (area.left + area.width / 2)) / (area.width / 2),
         -1, 1
       );
-      const progress = THREE.MathUtils.clamp(
-        (word.y - area.top) / area.height, 0, 1
-      );
+      // Pitch follows the word relative to Skubert's actual center.
+      // Earlier code measured from the playfield midpoint and only moved
+      // ~7 degrees, so the up/down motion was very difficult to see.
+      const headBounds = mount.getBoundingClientRect();
+      const headCenterY = headBounds.top + headBounds.height / 2;
+      const verticalOffset = (word.y - headCenterY) / area.height;
+
       targetYaw = horizontal * TURN_STRENGTH;
-      targetPitch = (0.5 - progress) * 0.25;
+      targetPitch = THREE.MathUtils.clamp(
+        verticalOffset * PITCH_STRENGTH,
+        -MAX_UP_TILT, MAX_DOWN_TILT
+      );
+      if (INVERT_PITCH) targetPitch = -targetPitch;
     }
 
     skubertPivot.rotation.y = THREE.MathUtils.damp(
