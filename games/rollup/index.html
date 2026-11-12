@@ -248,6 +248,12 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 #avatar .skubert-webgl{position:absolute;inset:0;display:block;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity .25s ease}
 #avatar.has-3d .skubert-webgl{opacity:1}
 #avatar.has-3d .avatar-inner > .skubert-fallback{opacity:0}
+/* During the close-up title screen, ALWAYS display the Skubert image—even
+   when the GLB has loaded. Removing drop-ready on either Start button makes
+   the model fade in during the drop; when it is still loading, the fallback
+   remains visible until the 3D renderer is ready. */
+#avatar.drop-ready.has-3d .skubert-webgl{opacity:0}
+#avatar.drop-ready.has-3d .avatar-inner > .skubert-fallback{opacity:1}
 #avatar.chomping.has-3d .skubert-webgl{animation:skubert-3d-chomp .23s ease-out}
 @keyframes skubert-3d-chomp{0%,100%{scale:1}55%{scale:1.1}}
 
