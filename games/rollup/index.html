@@ -498,7 +498,12 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const keys = new Set();
   const KEY = 'skubert-dom-dash-scores-v1';
   const DURATION = 180;
-  const MOVE_SPEED = 450; // px/second for keyboard, mouse/touch, AND edge scrolling
+  // MOVEMENT SETTINGS — adjust these four values to customize the ball-like feel.
+  const MOVE_SPEED = 450;          // Maximum speed (pixels/second). Preserves your custom setting.
+  const CHASE_RESPONSE = 7.0;      // Higher = snappier; lower = heavier / more momentum (try 4–12).
+  const SLOWDOWN_RADIUS = 105;     // Distance (px) over which Skubert brakes near the cursor.
+  const EDGE_SCROLL_PUSH = 120;    // Virtual target extension (px) when cursor reaches top/bottom.
+  const EDGE_SCROLL_ZONE = 45;     // Width (px) of the cursor's edge-scroll activation area.
   const SCENES = [
     {name:'PRODUCT LIFECYCLE', tag:'Offline Wikipedia page snapshot'},
     {name:'OPERATIONS DASHBOARD', tag:'Widgets & metrics'},
@@ -557,7 +562,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   let collectibles=[];
   let siteObserver;
   let queuedRescan=false;
-  const game={mode:'timed',status:'intro',scene:0,score:0,eaten:0,total:0,sceneTotal:0,sceneEaten:0,mass:0,level:1,remaining:DURATION,x:120,y:260,tx:120,ty:260,pointer:false,combo:0,lastEatTime:0,transitioning:false,sound:false,previous:0,lastCheck:0,lastHudTime:0,saved:false};
+  const game={mode:'timed',status:'intro',scene:0,score:0,eaten:0,total:0,sceneTotal:0,sceneEaten:0,mass:0,level:1,remaining:DURATION,x:120,y:260,tx:120,ty:260,vx:0,vy:0,pointer:false,combo:0,lastEatTime:0,transitioning:false,sound:false,previous:0,lastCheck:0,lastHudTime:0,saved:false};
   // Read-only for the optional 3D renderer; gameplay owns movement and growth.
   window.skubertWeballState = game;
   const clamp=(v,min,max)=>Math.min(Math.max(v,min),max);
@@ -736,7 +741,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     closeMenu();
     game.status='intro';game.score=0;game.mass=0;game.level=1;game.eaten=0;game.total=0;game.scene=0;game.sceneEaten=0;game.combo=0;game.remaining=DURATION;game.transitioning=false;game.saved=false;game.pointer=false;
     attachments.reset();
-    game.x=field.clientWidth*.50;game.y=field.clientHeight*.35;game.tx=game.x;game.ty=game.y;
+    game.x=field.clientWidth*.50;game.y=field.clientHeight*.35;game.tx=game.x;game.ty=game.y;game.vx=0;game.vy=0;
     renderScene();positionAvatar();show(intro,true);show(pauseOverlay,false);show(finishOverlay,false);show(helpOverlay,false);$('pauseBtn').disabled=true;avatar.style.opacity='1';
   }
   function start(mode){
@@ -746,7 +751,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     if(game.status!=='intro')resetToIntro();
     game.mode=mode;game.status='dropping';
     game.remaining=mode==='relaxed'?Infinity:DURATION;
-    game.x=field.clientWidth*.5;game.y=field.clientHeight*.44;game.tx=game.x;game.ty=game.y;
+    game.x=field.clientWidth*.5;game.y=field.clientHeight*.44;game.tx=game.x;game.ty=game.y;game.vx=0;game.vy=0;
     positionAvatar();
     show(intro,false);
     avatar.classList.remove('drop-ready');
@@ -765,7 +770,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     },700);
   }
   function togglePause(){
-    if(game.status==='playing'){game.status='paused';show(pauseOverlay,true);$('pauseBtn').textContent='▶ Resume'}
+    if(game.status==='playing'){game.status='paused';game.vx=0;game.vy=0;show(pauseOverlay,true);$('pauseBtn').textContent='▶ Resume'}
     else if(game.status==='paused'){game.status='playing';game.previous=performance.now();show(pauseOverlay,false);$('pauseBtn').textContent='Ⅱ Pause'}
     updateHud();
   }
@@ -1004,7 +1009,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       setTimeout(()=>{
         if(game.status==='finished'||game.status==='intro'||game.scene!==capturedScene)return;
         if(game.scene===SCENES.length-1){finish('cleared')}
-        else{game.scene++;renderScene();game.transitioning=false;game.x=field.clientWidth*.2;game.y=field.clientHeight*.66;game.tx=game.x;game.ty=game.y;positionAvatar();setToast(`STAGE ${game.scene+1} · ${SCENES[game.scene].name}`)}
+        else{game.scene++;renderScene();game.transitioning=false;game.x=field.clientWidth*.2;game.y=field.clientHeight*.66;game.tx=game.x;game.ty=game.y;game.vx=0;game.vy=0;positionAvatar();setToast(`STAGE ${game.scene+1} · ${SCENES[game.scene].name}`)}
       },820);
     }
   }
@@ -1032,7 +1037,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   }
   function finish(reason){
     if(game.status==='finished'||game.status==='intro')return;
-    game.status='finished';game.saved=false;$('pauseBtn').disabled=true;show(pauseOverlay,false);show(finishOverlay,true);
+    game.status='finished';game.vx=0;game.vy=0;game.saved=false;$('pauseBtn').disabled=true;show(pauseOverlay,false);show(finishOverlay,true);
     $('finishIcon').textContent=reason==='cleared'?'🏆':'⏱️';
     $('finishTitle').textContent=reason==='cleared'?'Total page destruction!':'Time is up!';
     $('finishMessage').textContent=reason==='cleared'?'All three websites have been delightfully devoured.':'That was one heroic snack run. Can you beat your score?';
@@ -1059,31 +1064,55 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       if(game.status==='playing'){
         const dx=(keys.has('arrowright')||keys.has('d')?1:0)-(keys.has('arrowleft')||keys.has('a')?1:0);
         const dy=(keys.has('arrowdown')||keys.has('s')?1:0)-(keys.has('arrowup')||keys.has('w')?1:0);
-        // Keyboard and pointer use the SAME speed cap (CSS pixels per second).
-        // A mouse cursor can be far away, but Skubert cannot teleport to it.
-        const maxStep = MOVE_SPEED * dt;
-        // Keep the attempted position: any vertical travel beyond the playfield
-        // becomes article scrolling, instead of stopping Skubert at the edge.
-        let attemptedX = game.x, attemptedY = game.y;
+        // Steer velocity toward a desired direction, rather than moving Skubert
+        // directly to the pointer. Velocity persists for a natural, ball-like coast.
+        // Exponential smoothing stays consistent at different frame rates.
+        let desiredVx=0,desiredVy=0;
         if(dx||dy){
-          const length=Math.hypot(dx,dy)||1;
-          attemptedX+=(dx/length)*maxStep;
-          attemptedY+=(dy/length)*maxStep;
-          game.pointer=false;
+          const length=Math.hypot(dx,dy);
+          desiredVx=dx/length*MOVE_SPEED;
+          desiredVy=dy/length*MOVE_SPEED;
+          game.pointer=false; // Keyboard takes control until next pointer move.
         }else if(game.pointer){
-          const vx=game.tx-game.x,vy=game.ty-game.y;
-          const distance=Math.hypot(vx,vy);
-          if(distance>0.001){
-            const step=Math.min(distance,maxStep);
-            attemptedX+=(vx/distance)*step;
-            attemptedY+=(vy/distance)*step;
+          // A pointer near the edge aims just outside the visible playfield.
+          // This preserves edge scrolling after Skubert reaches the boundary.
+          let targetY=game.ty;
+          if(game.scene===0){
+            const h=field.clientHeight;
+            if(game.ty<EDGE_SCROLL_ZONE){
+              targetY-=EDGE_SCROLL_PUSH*(1-game.ty/EDGE_SCROLL_ZONE);
+            }else if(game.ty>h-EDGE_SCROLL_ZONE){
+              targetY+=EDGE_SCROLL_PUSH*(1-(h-game.ty)/EDGE_SCROLL_ZONE);
+            }
+          }
+          const toX=game.tx-game.x,toY=targetY-game.y;
+          const distance=Math.hypot(toX,toY);
+          if(distance>0.01){
+            // Brake gradually when approaching the cursor. It can still
+            // overshoot slightly before turning back, like a rolling ball.
+            const desiredSpeed=MOVE_SPEED*Math.min(1,distance/SLOWDOWN_RADIUS);
+            desiredVx=toX/distance*desiredSpeed;
+            desiredVy=toY/distance*desiredSpeed;
           }
         }
+        const response=1-Math.exp(-CHASE_RESPONSE*dt);
+        game.vx+=(desiredVx-game.vx)*response;
+        game.vy+=(desiredVy-game.vy)*response;
+        // Do not allow diagonal movement or inertia to exceed MOVE_SPEED.
+        const speed=Math.hypot(game.vx,game.vy);
+        if(speed>MOVE_SPEED){
+          const scale=MOVE_SPEED/speed;
+          game.vx*=scale;game.vy*=scale;
+        }
+        if(Math.abs(game.vx)<0.04)game.vx=0;
+        if(Math.abs(game.vy)<0.04)game.vy=0;
+        const attemptedX=game.x+game.vx*dt;
+        const attemptedY=game.y+game.vy*dt;
         const margin=28;
         game.x=clamp(attemptedX,margin,Math.max(margin,field.clientWidth-margin));
         game.y=clamp(attemptedY,margin,Math.max(margin,field.clientHeight-margin));
-        // Uses only the unused part of the player's attempted movement.
-        // This ensures edge scrolling cannot exceed keyboard/mouse movement speed.
+        // Continue to scroll the article when vertical momentum reaches an edge.
+        // The scroll rate is capped by the same MOVE_SPEED setting.
         const spillY=attemptedY-game.y;
         if(Math.abs(spillY)>.01)scrollArticleBy(spillY);
         positionAvatar();if(now-game.lastCheck>75){game.lastCheck=now;checkCollisions(now)}
@@ -1163,7 +1192,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   let helpPreviousStatus='intro';
   $('helpBtn').addEventListener('click',()=>{
     helpPreviousStatus=game.status;
-    if(game.status==='playing')game.status='help';
+    if(game.status==='playing'){game.status='help';game.vx=0;game.vy=0;}
     show(helpOverlay,true);updateHud();
   });
   $('closeHelpBtn').addEventListener('click',()=>{
