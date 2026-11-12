@@ -17,9 +17,9 @@ const RENDER_MAX_FPS = 30;  // Limits GPU work on a 500k-triangle GLB.
 
 const avatar = document.getElementById('avatar');
 const inner = avatar?.querySelector('.avatar-inner');
-const fallback = inner?.querySelector('svg');
+const fallback = inner?.querySelector('.skubert-fallback') || inner?.querySelector('svg');
 if (!avatar || !inner || !fallback) {
-  console.warn('Skubert 3D: expected #avatar > .avatar-inner > svg; leaving 2D mascot.');
+  console.warn('Skubert 3D: expected #avatar > .avatar-inner > .skubert-fallback; leaving 2D mascot.');
 } else {
   start3D();
 }

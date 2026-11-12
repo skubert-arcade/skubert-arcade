@@ -233,11 +233,12 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 }
 
 
-/* Optional GLB mascot: only hide SVG once the 3D model is ready. */
+/* Optional GLB mascot: keep a lightweight image visible until 3D model is ready. */
 #avatar .avatar-inner{isolation:isolate}
+#avatar .skubert-fallback{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;user-select:none;transition:opacity .25s ease}
 #avatar .skubert-webgl{position:absolute;inset:0;display:block;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity .25s ease}
 #avatar.has-3d .skubert-webgl{opacity:1}
-#avatar.has-3d .avatar-inner > svg{opacity:0}
+#avatar.has-3d .avatar-inner > .skubert-fallback{opacity:0}
 #avatar.chomping.has-3d .skubert-webgl{animation:skubert-3d-chomp .23s ease-out}
 @keyframes skubert-3d-chomp{0%,100%{scale:1}55%{scale:1.1}}
 
@@ -275,6 +276,10 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 .wiki-page .eaten{visibility:hidden!important;}
 @media(max-width:740px){.wiki-page .wiki-article{padding:14px 12px 55px}.wiki-page .wiki-columns{grid-template-columns:1fr;gap:5px}.wiki-page .wiki-toc{display:none}.wiki-page .wiki-infobox{float:none;max-width:100%;margin:8px 0 14px}.wiki-page .wiki-tools{display:none}.wiki-page h1{font-size:26px}.wiki-page h2{font-size:21px}}
 
+
+/* Optional saved Wikipedia snapshot, completely separate from game UI styles. */
+.wiki-snapshot-stage{padding:0!important;overflow:hidden!important;background:#fff!important;display:block!important;}
+.wiki-snapshot-stage iframe{border:0;display:block;width:100%;height:100%;background:#fff;pointer-events:none;}
 </style>
 </head>
 <body>
@@ -312,16 +317,8 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       <div id="siteContent"></div>
       <canvas id="attachmentBack" class="attachment-layer" aria-hidden="true"></canvas><div id="avatar" aria-hidden="true" style="--turn:0deg">
         <div class="avatar-inner">
-          <!-- Fallback mascot remains visible until Skubert.glb finishes loading. -->
-          <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Playful placeholder Skubert mascot">
-            <defs><radialGradient id="skin" cx="31%" cy="23%" r="80%"><stop offset="0" stop-color="#eaffaa"/><stop offset=".58" stop-color="#b7e95d"/><stop offset="1" stop-color="#76b94d"/></radialGradient></defs>
-            <path d="M16 54 8 40 25 42 25 24 39 30 49 13 58 27 77 17 80 33 99 29 96 45 111 53 102 67 110 81 90 88 86 106 67 98 56 111 44 98 24 99 25 84 9 77Z" fill="#3e8051" stroke="#244b3a" stroke-width="3" stroke-linejoin="round"/>
-            <ellipse cx="59" cy="60" rx="45" ry="40" fill="url(#skin)" stroke="#2f7043" stroke-width="3"/>
-            <ellipse cx="43" cy="48" rx="10" ry="14" fill="#fff"/><ellipse cx="73" cy="48" rx="10" ry="14" fill="#fff"/>
-            <circle cx="46" cy="49" r="5" fill="#183643"/><circle cx="76" cy="49" r="5" fill="#183643"/><circle cx="47" cy="47" r="2" fill="#fff"/><circle cx="77" cy="47" r="2" fill="#fff"/>
-            <g class="mouth"><path d="M32 68 Q58 100 89 65 Q82 95 62 100 Q44 97 32 68Z" fill="#2c3740" stroke="#23483d" stroke-width="2"/><path d="M38 72Q60 77 82 70L79 77Q58 84 42 77Z" fill="#fff9e8"/><path d="M51 88Q61 82 73 87Q66 97 57 94Z" fill="#ee7e83"/></g>
-            <circle cx="28" cy="66" r="6" fill="#f5a29d" opacity=".58"/><circle cx="91" cy="64" r="6" fill="#f5a29d" opacity=".58"/>
-          </svg>
+          <!-- Preview rendered from the real Skubert GLB; fades out when WebGL is ready. -->
+          <img class="skubert-fallback" src="./assets/skubert-loading.png" alt="" decoding="async" draggable="false">
         </div>
       </div>
       <canvas id="attachmentFront" class="attachment-layer" aria-hidden="true"></canvas>
@@ -387,7 +384,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const DURATION = 180;
   const MOVE_SPEED = 330; // px/second for both keyboard and mouse/touch
   const SCENES = [
-    {name:'PRODUCT LIFECYCLE', tag:'Local Wikipedia-inspired article'},
+    {name:'PRODUCT LIFECYCLE', tag:'Offline Wikipedia page snapshot'},
     {name:'OPERATIONS DASHBOARD', tag:'Widgets & metrics'},
     {name:'WAREHOUSE DISPATCH', tag:'Pick tickets & shipping'}
   ];
@@ -433,7 +430,13 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   // The built-in placeholder is used only while the local article is loading or on file://.
   let localProductLifecycle = null;
   function wikiPlaceholder(){return `<div class="site-page wiki-page"><article class="wiki-article"><h1>Product lifecycle</h1><p>Preparing the local article…</p><p>The full playable article is stored in <code>levels/product-lifecycle.html</code>.</p></article></div>`;}
-  function wikiPage(){return localProductLifecycle || wikiPlaceholder();}
+  let wikiSnapshotAvailable = false;
+  function wikiPage(){
+    if(wikiSnapshotAvailable){
+      return `<div class="site-page wiki-page wiki-snapshot-stage"><iframe id="wikiSnapshot" title="Locally saved Product lifecycle Wikipedia page" src="./levels/product-lifecycle-snapshot.html" loading="eager" sandbox="allow-same-origin" tabindex="-1"></iframe></div>`;
+    }
+    return localProductLifecycle || wikiPlaceholder();
+  }
   const pages=[wikiPage,dashboardPage,warehousePage];
   let collectibles=[];
   let siteObserver;
@@ -453,50 +456,66 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     const parent=node.parentElement;
     if(!parent || parent.closest('script,style,noscript,textarea,input,select,option,svg,canvas,[hidden],[aria-hidden="true"]'))return false;
     if(parent.closest('.dom-word'))return false;
-    const css=getComputedStyle(parent);
+    const css=(parent.ownerDocument.defaultView||window).getComputedStyle(parent);
     return css.display!=='none' && css.visibility!=='hidden';
   }
   function splitWords(root){
-    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+    const owner=root.ownerDocument||document;
+    const walker=owner.createTreeWalker(root,NodeFilter.SHOW_TEXT);
     const nodes=[];let node;
     while((node=walker.nextNode()))if(eligibleWordText(node))nodes.push(node);
     let count=0;
     for(const textNode of nodes){
       const tokens=textNode.nodeValue.split(/(\s+)/);
       if(tokens.length<2 && !textNode.nodeValue.trim())continue;
-      const fragment=document.createDocumentFragment();
+      const fragment=owner.createDocumentFragment();
       for(const part of tokens){
         if(!part)continue;
         if(!part.trim() || count>=650){fragment.append(document.createTextNode(part));continue;}
-        const span=document.createElement('span');
+        const span=owner.createElement('span');
         span.className='dom-word';span.textContent=part;
         fragment.append(span);count++;
       }
       textNode.replaceWith(fragment);
     }
   }
+  function wikiIframe(){return site.querySelector('#wikiSnapshot');}
+  function collectRoot(){
+    const frame=wikiIframe();
+    if(frame && frame.contentDocument?.body && frame.contentDocument.readyState==='complete')return frame.contentDocument.body;
+    return frame ? null : site;
+  }
+  function screenRect(el){
+    const r=el.getBoundingClientRect();
+    const frame=wikiIframe();
+    if(frame && el.ownerDocument!==document && frame.contentDocument===el.ownerDocument){
+      const f=frame.getBoundingClientRect();
+      return {left:r.left+f.left,top:r.top+f.top,right:r.right+f.left,bottom:r.bottom+f.top,width:r.width,height:r.height};
+    }
+    return r;
+  }
   function isVisible(el){
-    const style=getComputedStyle(el);
+    const style=(el.ownerDocument.defaultView||window).getComputedStyle(el);
     if(style.display==='none'||style.visibility==='hidden'||Number(style.opacity)===0)return false;
-    const box=el.getBoundingClientRect(),fieldBox=field.getBoundingClientRect();
+    const box=screenRect(el),fieldBox=field.getBoundingClientRect();
     return box.width>2&&box.height>2&&box.right>fieldBox.left&&box.left<fieldBox.right&&box.bottom>fieldBox.top&&box.top<fieldBox.bottom;
   }
   function isVisualObject(el){
     if(el===site || el.classList.contains('site-page') || el.classList.contains('dom-word'))return false;
     if(el.matches('script,style,svg,span,i,b,strong,p,small,h1,h2,h3,h4'))return false;
     if(!isVisible(el))return false;
-    const box=el.getBoundingClientRect();
+    const box=screenRect(el);
     if(box.width<23||box.height<17||box.width>field.clientWidth*.87)return false;
     const area=box.width*box.height;
     if(area<390||area>field.clientWidth*field.clientHeight*.33)return false;
-    const style=getComputedStyle(el);
+    const style=(el.ownerDocument.defaultView||window).getComputedStyle(el);
     // Backgrounds, borders, images, and native controls define visual surfaces.
     const background=(style.backgroundColor!=='rgba(0, 0, 0, 0)'&&style.backgroundColor!=='transparent') || style.backgroundImage!=='none';
     const border=['borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'].some(side=>parseFloat(style[side])>0 && style.borderTopStyle!=='none');
     return el.matches('img,button,a,[role="button"]') || background || border;
   }
   function objectTier(el){
-    const r=el.getBoundingClientRect();
+    const r=screenRect(el);
     const area=r.width*r.height;
     return area>=17000||r.width>=350?3:area>=4200||r.width>=130?2:1;
   }
@@ -504,10 +523,12 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     // Text splitting changes the DOM, so temporarily disconnect the observer
     // to avoid triggering an endless mutation/re-scan loop.
     if(siteObserver)siteObserver.disconnect();
-    splitWords(site);
+    const root=collectRoot();
+    if(!root){collectibles=[];return;}
+    splitWords(root);
     const existing=new Set(append?collectibles.map(c=>c.el):[]);
-    const words=[...site.querySelectorAll('.dom-word')].filter(el=>!existing.has(el)&&isVisible(el));
-    const objects=[...site.querySelectorAll('*')].filter(el=>!existing.has(el)&&isVisualObject(el));
+    const words=[...root.querySelectorAll('.dom-word')].filter(el=>!existing.has(el)&&isVisible(el));
+    const objects=[...root.querySelectorAll('*')].filter(el=>!existing.has(el)&&isVisualObject(el));
     if(!append)collectibles=[];
     const discovered=[...words.map(el=>({el,type:'word',tier:1,eaten:false})),
       ...objects.map(el=>({el,type:'object',tier:objectTier(el),eaten:false}))];
@@ -520,7 +541,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       game.sceneTotal+=discovered.length;game.total+=discovered.length;
       refreshLocks();updateHud();
     }
-    if(siteObserver)siteObserver.observe(site,{subtree:true,childList:true});
+    if(siteObserver)siteObserver.observe(root,{subtree:true,childList:true});
   }
   siteObserver=new MutationObserver(records=>{
     // Only respond to DOM structure changes, not style/visibility changes.
@@ -534,6 +555,26 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     site.innerHTML=pages[game.scene]();
     discoverCollectibles();
     game.sceneTotal=collectibles.length;game.sceneEaten=0;game.total+=collectibles.length;
+    const frame=wikiIframe();
+    if(frame){
+      frame.addEventListener('load',()=>{
+        if(game.scene!==0)return;
+        const doc=frame.contentDocument;
+        if(!doc?.body){console.warn('Wikipedia snapshot could not be accessed.');return;}
+        // The sandbox prevents the saved page's scripts from executing.
+        // This single style only hides elements that the game collects.
+        const style=doc.createElement('style');
+        style.textContent='.eaten{visibility:hidden!important;opacity:0!important}.dom-word{display:inline}';
+        doc.head.appendChild(style);
+        const countBefore=game.sceneTotal;
+        discoverCollectibles();
+        game.sceneTotal=collectibles.length;
+        game.total+=game.sceneTotal-countBefore;
+        game.sceneEaten=0;
+        refreshLocks();updateHud();
+        console.info('Offline Wikipedia snapshot ready:',game.sceneTotal,'collectibles');
+      },{once:true});
+    }
     $('shellSceneTitle').textContent=`${SCENES[game.scene].name} · STAGE ${game.scene+1} / 3`;
     refreshLocks();updateHud();
   }
@@ -549,7 +590,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     $('timeLabel').textContent=game.mode==='relaxed'?'∞':timeText(game.remaining);
     $('remainingLabel').textContent=`Stage ${game.scene+1}: ${game.sceneTotal-game.sceneEaten} DOM items remaining`;
     $('progressFill').style.width=`${game.sceneTotal?(game.sceneEaten/game.sceneTotal)*100:0}%`;
-    $('shellStatus').textContent=game.status==='playing'?`EATING · ${game.combo>=3?game.combo+' COMBO':'KEEP MOVING'}`:game.status.toUpperCase();
+    $('shellStatus').textContent=game.status==='playing'?'EATING · KEEP MOVING':game.status.toUpperCase();
   }
   function setToast(text){const el=$('toast');el.textContent=text;el.classList.add('show');clearTimeout(setToast.timer);setToast.timer=setTimeout(()=>el.classList.remove('show'),1850)}
   let launchToken=0;
@@ -564,8 +605,11 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     renderScene();positionAvatar();show(intro,true);show(pauseOverlay,false);show(finishOverlay,false);show(helpOverlay,false);$('pauseBtn').disabled=true;avatar.style.opacity='1';
   }
   function start(mode){
-    if(!localProductLifecycle){setToast('ARTICLE IS STILL LOADING');return;}
-    resetToIntro();game.mode=mode;game.status='dropping';
+    if(!localProductLifecycle && !wikiSnapshotAvailable){setToast('ARTICLE IS STILL LOADING');return;}
+    if(wikiSnapshotAvailable && !wikiIframe()?.contentDocument?.body){setToast('SNAPSHOT IS STILL LOADING');return;}
+    // The intro already has a fully loaded snapshot. Avoid re-creating its iframe.
+    if(game.status!=='intro')resetToIntro();
+    game.mode=mode;game.status='dropping';
     game.remaining=mode==='relaxed'?Infinity:DURATION;
     game.x=field.clientWidth*.5;game.y=field.clientHeight*.44;game.tx=game.x;game.ty=game.y;
     positionAvatar();
@@ -592,8 +636,8 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   }
   function positionAvatar(){const size=Math.min(220,65+Math.sqrt(Math.max(0,game.mass))*13);avatar.style.width=`${size}px`;avatar.style.height=`${size}px`;avatar.style.setProperty('--avatar-size',`${size}px`);avatar.style.left=`${game.x}px`;avatar.style.top=`${game.y}px`;}
   function soundEat(tier){if(!game.sound)return;try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;if(!soundEat.context)soundEat.context=new Ctx();const ctx=soundEat.context;if(ctx.state==='suspended')ctx.resume();const o=ctx.createOscillator(),g=ctx.createGain(),t=ctx.currentTime;o.type='sine';o.frequency.setValueAtTime(380+tier*100,t);o.frequency.exponentialRampToValueAtTime(145,t+.12);g.gain.setValueAtTime(.05,t);g.gain.exponentialRampToValueAtTime(.001,t+.14);o.connect(g).connect(ctx.destination);o.start(t);o.stop(t+.15)}catch(e){}}
-  function puff(x,y,tier){
-    const score=document.createElement('div');score.className='float-score';score.textContent=`+${tier===3?70:tier===2?30:10}${game.combo>=4?' COMBO!':''}`;score.style.left=`${x-12}px`;score.style.top=`${y-20}px`;field.appendChild(score);setTimeout(()=>score.remove(),900);
+  function puff(x,y,tier,points){
+    const score=document.createElement('div');score.className='float-score';score.textContent=`+${points}`;score.style.left=`${x-12}px`;score.style.top=`${y-20}px`;field.appendChild(score);setTimeout(()=>score.remove(),900);
     for(let i=0;i<Math.min(tier+3,7);i++){const part=document.createElement('div');part.className='particle';part.style.left=`${x}px`;part.style.top=`${y}px`;part.style.setProperty('--dx',`${Math.cos(i*2.4)* (27+Math.random()*28)}px`);part.style.setProperty('--dy',`${Math.sin(i*2.4)* (27+Math.random()*28)}px`);part.style.setProperty('--part-color',i%2?'#ffd16a':'#a4df69');field.appendChild(part);setTimeout(()=>part.remove(),700)}
   }
   // True object attachment: rasterize collected DOM content, place it on a
@@ -614,13 +658,13 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+ww,y,x+ww,y+hh,r);ctx.arcTo(x+ww,y+hh,x,y+hh,r);ctx.arcTo(x,y+hh,x,y,r);ctx.arcTo(x,y,x+ww,y,r);ctx.closePath();
     }
     function snapshot(el,type){
-      const rect=el.getBoundingClientRect();
+      const rect=screenRect(el);
       const width=type==='word'?Math.min(118,Math.max(25,Math.ceil(rect.width)+12)):Math.min(156,Math.max(34,Math.ceil(rect.width*.65)));
       const height=type==='word'?24:Math.min(102,Math.max(28,Math.ceil(rect.height*.65)));
       const scale=2;
       const img=document.createElement('canvas');img.width=width*scale;img.height=height*scale;
       const ctx=img.getContext('2d');ctx.scale(scale,scale);
-      const css=getComputedStyle(el);
+      const css=(el.ownerDocument.defaultView||window).getComputedStyle(el);
       const bg=css.backgroundColor;
       const hasBg=bg && bg!=='rgba(0, 0, 0, 0)' && bg!=='transparent';
       ctx.shadowColor='rgba(20,40,55,.24)';ctx.shadowBlur=3;ctx.shadowOffsetY=1;
@@ -730,7 +774,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   function eat(candidate,now){
     if(candidate.eaten)return;
     const {el,tier}=candidate;
-    const rect=el.getBoundingClientRect(),fr=field.getBoundingClientRect();
+    const rect=screenRect(el),fr=field.getBoundingClientRect();
     const x=rect.left-fr.left+rect.width/2,y=rect.top-fr.top+rect.height/2;
     attachments.collect(el,candidate.type);
     // Consuming a parent automatically consumes its remaining descendant words
@@ -747,13 +791,14 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     game.combo=now-game.lastEatTime<1700?game.combo+1:1;game.lastEatTime=now;
     const mult=clamp(Math.floor(game.combo/5)+1,1,4);
     const base=tier===3?70:tier===2?30:10;
-    game.score+=(base+Math.min(25,(removed-1)*2))*mult;
+    const points=(base+Math.min(25,(removed-1)*2))*mult;
+    game.score+=points;
     game.eaten+=removed;game.sceneEaten+=removed;
     game.mass+=tier+Math.min(6,(removed-1)*.28);
     const oldLevel=game.level;game.level=levelFromMass(game.mass);
     avatar.classList.remove('chomping');void avatar.offsetWidth;avatar.classList.add('chomping');
     if(game.level>oldLevel){avatar.classList.remove('growing');void avatar.offsetWidth;avatar.classList.add('growing');refreshLocks();setToast(`LEVEL ${game.level}! BIGGER BITES UNLOCKED`)}
-    puff(x,y,tier);soundEat(tier);updateHud();
+    puff(x,y,tier,points);soundEat(tier);updateHud();
     // Finish a stage at 85% collection: text fragments at the edge of a
     // clipped dashboard are otherwise tedious or physically unreachable.
     if(game.sceneEaten/Math.max(1,game.sceneTotal)>=.85&&!game.transitioning){
@@ -773,7 +818,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     let best=null,bestMetric=Infinity;
     for(const c of collectibles){
       if(c.eaten||c.tier>game.level||!c.el.isConnected)continue;
-      const r=c.el.getBoundingClientRect();
+      const r=screenRect(c.el);
       if(!r.width||!r.height)continue;
       const nearX=clamp(game.x,r.left-fr.left,r.right-fr.left),nearY=clamp(game.y,r.top-fr.top,r.bottom-fr.top);
       const dx=game.x-nearX,dy=game.y-nearY;
@@ -852,9 +897,14 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       if(game.status==='playing'&&game.scene===0)discoverCollectibles(true);
     });
   }
+  function scrollTarget(){
+    const frame=wikiIframe();
+    if(frame?.contentDocument?.body){return frame.contentDocument.scrollingElement||frame.contentDocument.documentElement;}
+    return site.querySelector('.wiki-page');
+  }
   field.addEventListener('wheel', e=>{
-    const article=site.querySelector('.wiki-page');
-    if(!article||game.scene!==0)return;
+    if(game.scene!==0)return;
+    const article=scrollTarget();if(!article)return;
     const before=article.scrollTop;
     article.scrollTop+=e.deltaY;
     if(article.scrollTop!==before){e.preventDefault();rescanVisibleArticle();}
@@ -862,7 +912,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   window.addEventListener('keydown',e=>{
     if(game.status!=='playing'||game.scene!==0)return;
     if(!['pageup','pagedown'].includes(e.key.toLowerCase()))return;
-    const article=site.querySelector('.wiki-page');if(!article)return;
+    const article=scrollTarget();if(!article)return;
     e.preventDefault();article.scrollTop+=e.key.toLowerCase()==='pagedown'?300:-300;
     rescanVisibleArticle();
   });
@@ -918,6 +968,17 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       const p=site.querySelector('.wiki-page p');
       if(p)p.textContent='Could not load the local article. Check levels/product-lifecycle.html.';
     });
+
+  // If present, display the archived original page. Keep the shorter built-in
+  // adaptation as fallback so the game works before a snapshot is supplied.
+  fetch('./levels/product-lifecycle-snapshot.html',{method:'HEAD',cache:'no-cache'})
+    .then(response=>{
+      if(!response.ok)return;
+      wikiSnapshotAvailable=true;
+      if(game.status==='intro'&&game.scene===0)resetToIntro();
+      console.info('Using locally archived Wikipedia page (HTML/CSS/assets).');
+    })
+    .catch(()=>{});
 
   requestAnimationFrame(frame);
 })();
