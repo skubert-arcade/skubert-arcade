@@ -89,3 +89,6 @@ audio {
   top: 2%;
   right: 2%;
 }
+#Level {
+  display: none !important;
+}
