@@ -1,6 +1,6 @@
-// Optional Three.js Skubert mascot for Skubert Weball v4.
+// Skubert Weball 3D renderer — direction tracking + actual distance-based rolling.
 // Reuses the same optimized GLB already uploaded for Typing Frenzy.
-// If the CDN or GLB cannot load, the original 2D avatar stays visible.
+// If the CDN or GLB cannot load, the lightweight image placeholder stays visible.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
@@ -12,8 +12,13 @@ const MODEL_SCALE = 2.7;     // Visible height in scene units; camera is at z=5.
 const TURN_RESPONSE = 5.5;   // Higher = more responsive turning.
 const MAX_YAW = 0.42;       // Head turns as it travels horizontally.
 const MAX_PITCH = 0.30;     // Tilts slightly when moving vertically.
-const MAX_ROLL = 0.13;      // Subtle side tilt while moving.
-const RENDER_MAX_FPS = 30;  // Limits GPU work on a 500k-triangle GLB.
+const MAX_BANK = 0.13;      // Gentle directional lean; separate from full 3D rolling.
+
+// ROLL SETTINGS — change these values to customize the physical feel.
+const ROLL_STRENGTH = 0.80;  // 1 = physically proportionate rolling, 0.5 = slower spin, 0 = off.
+const ROLL_RADIUS_FACTOR = 0.48; // Effective ball radius as a fraction of avatar width.
+const MAX_ROLL_STEP = 0.75; // Clamp sudden large wheel-scroll jumps (~43 degrees/frame).
+const RENDER_MAX_FPS = 30;  // Limits GPU work on a ~550k-triangle GLB.
 
 const avatar = document.getElementById('avatar');
 const inner = avatar?.querySelector('.avatar-inner');
@@ -52,16 +57,26 @@ function start3D() {
   fill.position.set(-3, -1, 1);
   scene.add(fill);
 
-  const pivot = new THREE.Group();
-  pivot.rotation.order='YXZ';
-  scene.add(pivot);
+  // Parent quaternion accumulates a real, unbounded 3D roll. Its axis is
+  // perpendicular to travel across the webpage, not merely a small face tilt.
+  const rollingPivot = new THREE.Group();
+  scene.add(rollingPivot);
+  const facingPivot = new THREE.Group();
+  facingPivot.rotation.order='YXZ';
+  rollingPivot.add(facingPivot);
+  const rollAxis = new THREE.Vector3();
+  const rollStep = new THREE.Quaternion();
+
   let loaded = false;
   let previousX = null;
   let previousY = null;
+  let previousScene = null;
+  let previousScrollNode = null;
+  let previousScrollTop = 0;
   let previousTime = performance.now();
   let previousRender = 0;
   let lastW=0,lastH=0;
-  let yaw=0,pitch=0,roll=0;
+  let yaw=0,pitch=0,bank=0;
 
   const loader = new GLTFLoader();
   console.time('Skubert Weball GLB load');
@@ -78,7 +93,7 @@ function start3D() {
     base.scale.setScalar(MODEL_SCALE/maxDim);
     base.rotation.y = MODEL_BASE_YAW;
     base.add(model);
-    pivot.add(base);
+    facingPivot.add(base);
     loaded = true;
     resizeToAvatar();
     renderer.render(scene, camera); // prevent a black/empty first frame
@@ -101,26 +116,73 @@ function start3D() {
   }
   window.addEventListener('resize', resizeToAvatar);
 
+  function articleScroller(game) {
+    if (!game || game.scene !== 0) return null;
+    // The saved Wikipedia snapshot uses a same-origin iframe; the local
+    // rewritten article instead uses an overflow-scrolling .wiki-page.
+    const frame = document.getElementById('wikiSnapshot');
+    try {
+      const doc = frame?.contentDocument;
+      if (doc?.body) return doc.scrollingElement || doc.documentElement || doc.body;
+    } catch (_) { /* Cross-origin frame: omit scroll tracking safely. */ }
+    return document.querySelector('#siteContent > .wiki-page');
+  }
+
   function animate(now) {
     const dt = Math.min(0.06, Math.max(0.001, (now-previousTime)/1000));
     previousTime=now;
     const game=window.skubertWeballState;
     if (game && loaded) {
       resizeToAvatar();
-      if (previousX===null || previousY===null || game.status!=='playing') {
-        previousX=game.x;previousY=game.y;
+      const playing = game.status === 'playing';
+      const sceneChanged = previousScene !== game.scene;
+      previousScene = game.scene;
+
+      // Track actual page scrolling as traveled distance too. At the screen
+      // edge, Skubert's x/y stop changing while the article travels beneath.
+      const scrollNode = articleScroller(game);
+      const scrollTop = scrollNode ? scrollNode.scrollTop : 0;
+      if (scrollNode !== previousScrollNode || sceneChanged) {
+        previousScrollTop = scrollTop;
+        previousScrollNode = scrollNode;
       }
-      const dx=game.status==='playing'?game.x-previousX:0;
-      const dy=game.status==='playing'?game.y-previousY:0;
-      previousX=game.x;previousY=game.y;
-      // Relative movement drives head tracking. Keep the face mostly forward.
+      const scrollDelta = playing ? scrollTop-previousScrollTop : 0;
+      previousScrollTop = scrollTop;
+
+      if (previousX === null || previousY === null || !playing || sceneChanged) {
+        previousX = game.x;
+        previousY = game.y;
+      }
+      const dx = playing ? game.x-previousX : 0;
+      // Page moves upward when scrolling down: relative to its surface,
+      // Skubert is rolling downward even if his screen position is fixed.
+      const dy = playing ? game.y-previousY+scrollDelta : 0;
+      previousX=game.x;
+      previousY=game.y;
+
+      const distance = Math.hypot(dx,dy);
+      if (playing && distance > 0.01 && ROLL_STRENGTH > 0) {
+        // Screen y points DOWN, Three.js y points UP. Rolling axis is the
+        // cross product of travel direction and the surface normal (+Z).
+        // Thus moving right turns around -Y; moving down turns around -X.
+        rollAxis.set(-dy, -dx, 0).multiplyScalar(1/distance);
+        const radius = Math.max(22, avatar.clientWidth * ROLL_RADIUS_FACTOR);
+        const angle = Math.min(MAX_ROLL_STEP, distance/radius * ROLL_STRENGTH);
+        rollStep.setFromAxisAngle(rollAxis,angle);
+        // Premultiply means the rolling axis stays aligned to the webpage,
+        // regardless of the model's accumulated orientation.
+        rollingPivot.quaternion.premultiply(rollStep).normalize();
+      }
+
+      // Keep subtle directional expression without replacing the true roll.
       const targetYaw=THREE.MathUtils.clamp(-dx*0.065,-MAX_YAW,MAX_YAW);
       const targetPitch=THREE.MathUtils.clamp(-dy*0.045,-MAX_PITCH,MAX_PITCH);
-      const targetRoll=THREE.MathUtils.clamp(-dx*0.022,-MAX_ROLL,MAX_ROLL);
+      const targetBank=THREE.MathUtils.clamp(-dx*0.022,-MAX_BANK,MAX_BANK);
       yaw=THREE.MathUtils.damp(yaw,targetYaw,TURN_RESPONSE,dt);
       pitch=THREE.MathUtils.damp(pitch,targetPitch,TURN_RESPONSE,dt);
-      roll=THREE.MathUtils.damp(roll,targetRoll,TURN_RESPONSE,dt);
-      pivot.rotation.set(pitch,yaw,roll,'YXZ');
+      bank=THREE.MathUtils.damp(bank,targetBank,TURN_RESPONSE,dt);
+      facingPivot.rotation.set(pitch,yaw,bank,'YXZ');
+
       if (now-previousRender >= 1000/RENDER_MAX_FPS) {
         renderer.render(scene,camera);
         previousRender=now;
