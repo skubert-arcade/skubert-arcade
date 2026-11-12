@@ -196,13 +196,31 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 .launch-card .btn-green{background:#d6ff72!important;border-color:#d6ff72!important;color:#17372e!important}
 .launch-card .subtle{font-weight:550;opacity:.75}
 .launch-card .launch-help{font-size:10px;margin:6px 0 0;color:#c5dbe0}
-/* Hover in place before launch; enter with a fixed, nonrepeating drop animation. */
-#avatar.drop-ready{width:104px!important;height:104px!important;filter:drop-shadow(0 14px 14px #182f4180)}
+/* Cinematic intro. Reparent the SAME #avatar into this larger stage so
+   both the real Three.js GLB and the fallback image appear close to camera.
+   There is no second GLB download or duplicate WebGL renderer. */
+#introSkubertStage{
+  position:absolute;left:50%;top:40%;
+  width:clamp(250px,min(56vw,62vh),560px);aspect-ratio:1;
+  z-index:26;transform:translate(-50%,-50%);
+  pointer-events:none;isolation:isolate;will-change:transform;
+  filter:drop-shadow(0 22px 22px rgba(7,22,42,.40));
+}
+#introSkubertStage[hidden]{display:none!important}
+#introSkubertStage::before{
+  content:"";position:absolute;inset:4%;border-radius:50%;z-index:-1;
+  background:radial-gradient(circle,rgba(223,245,255,.20) 0%,rgba(223,245,255,.07) 38%,transparent 72%);
+}
+#introSkubertStage #avatar{
+  position:absolute!important;left:0!important;top:0!important;
+  width:100%!important;height:100%!important;
+  translate:0 0!important;transform:none!important;
+  filter:none!important;
+}
 #avatar.drop-ready .avatar-inner{animation:skubert-wait 2.4s ease-in-out infinite;transform-origin:center}
-#avatar.dropping{animation:skubert-drop .7s cubic-bezier(.25,.65,.3,1) both}
-#avatar.dropping .avatar-inner{animation:none}
-@keyframes skubert-wait{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-13px) rotate(4deg)}}
-@keyframes skubert-drop{0%{opacity:0;transform:translate(-50%,-320px) scale(.58)}48%{opacity:1}72%{transform:translate(-50%,8px) scale(1.09)}88%{transform:translate(-50%,-7px) scale(.97)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+@keyframes skubert-wait{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-11px) rotate(3deg)}}
+@media(max-width:480px){#introSkubertStage{top:36%;width:clamp(240px,68vw,320px)}}
+@media(prefers-reduced-motion:reduce){#avatar.drop-ready .avatar-inner{animation:none}}
 @media(max-width:800px){
   .topbar{top:10px;left:10px;right:10px}
   .stats{top:11px;left:10px;right:auto}
@@ -431,7 +449,10 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     </div>
     <div id="playfield" tabindex="0" aria-label="Game area. Move your mouse or arrow keys to guide Skubert over page elements.">
       <div id="siteContent"></div>
-      <canvas id="attachmentBack" class="attachment-layer" aria-hidden="true"></canvas><div id="avatar" aria-hidden="true" style="--turn:0deg">
+      <canvas id="attachmentBack" class="attachment-layer" aria-hidden="true"></canvas>
+      <!-- Enlarged presentation stage: the existing avatar is moved here during intro. -->
+      <div id="introSkubertStage" aria-hidden="true"></div>
+      <div id="avatar" aria-hidden="true" style="--turn:0deg">
         <div class="avatar-inner">
           <!-- Preview rendered from the real Skubert GLB; fades out when WebGL is ready. -->
           <img class="skubert-fallback" src="./assets/skubert-loading.png" alt="" decoding="async" draggable="false">
@@ -489,6 +510,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const field = $('playfield');
   const site = $('siteContent');
   const avatar = $('avatar');
+  const introSkubertStage = $('introSkubertStage');
   const attachmentBack = $('attachmentBack');
   const attachmentFront = $('attachmentFront');
   const intro = $('introOverlay');
@@ -734,40 +756,88 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   }
   function setToast(text){const el=$('toast');el.textContent=text;el.classList.add('show');clearTimeout(setToast.timer);setToast.timer=setTimeout(()=>el.classList.remove('show'),1850)}
   let launchToken=0;
-  function resetToIntro(){
-    launchToken++;
+  let dropAnimation=null;
+
+  // One persistent Three.js canvas / GLB is reused in both views. Moving its
+  // containing avatar within the document does not reload the 3D model.
+  function showCloseupAvatar(){
+    if(dropAnimation){dropAnimation.cancel();dropAnimation=null;}
+    introSkubertStage.hidden=false;
+    // The GLB renderer's resize loop detects this larger stage automatically.
+    if(avatar.parentElement!==introSkubertStage)introSkubertStage.appendChild(avatar);
     avatar.classList.remove('dropping');
     avatar.classList.add('drop-ready');
+    avatar.style.opacity='1';
+  }
+  function moveAvatarToGame(){
+    // #attachmentFront is the original DOM anchor for the avatar's layer.
+    if(avatar.parentElement!==field)field.insertBefore(avatar,attachmentFront);
+    introSkubertStage.hidden=true;
+    avatar.classList.remove('drop-ready','dropping');
+    avatar.style.opacity='1';
+    positionAvatar();
+  }
+  function resetToIntro(){
+    launchToken++;
     closeMenu();
     game.status='intro';game.score=0;game.mass=0;game.level=1;game.eaten=0;game.total=0;game.scene=0;game.sceneEaten=0;game.combo=0;game.remaining=DURATION;game.transitioning=false;game.saved=false;game.pointer=false;
     attachments.reset();
     game.x=field.clientWidth*.50;game.y=field.clientHeight*.35;game.tx=game.x;game.ty=game.y;game.vx=0;game.vy=0;
-    renderScene();positionAvatar();show(intro,true);show(pauseOverlay,false);show(finishOverlay,false);show(helpOverlay,false);$('pauseBtn').disabled=true;avatar.style.opacity='1';
+    showCloseupAvatar();
+    renderScene();positionAvatar();
+    show(intro,true);show(pauseOverlay,false);show(finishOverlay,false);show(helpOverlay,false);
+    $('pauseBtn').disabled=true;
   }
   function start(mode){
     if(!localProductLifecycle && !wikiSnapshotAvailable){setToast('ARTICLE IS STILL LOADING');return;}
     if(wikiSnapshotAvailable && !wikiIframe()?.contentDocument?.body){setToast('SNAPSHOT IS STILL LOADING');return;}
-    // The intro already has a fully loaded snapshot. Avoid re-creating its iframe.
     if(game.status!=='intro')resetToIntro();
     game.mode=mode;game.status='dropping';
     game.remaining=mode==='relaxed'?Infinity:DURATION;
-    game.x=field.clientWidth*.5;game.y=field.clientHeight*.44;game.tx=game.x;game.ty=game.y;game.vx=0;game.vy=0;
+    game.x=field.clientWidth*.5;game.y=field.clientHeight*.44;
+    game.tx=game.x;game.ty=game.y;game.vx=0;game.vy=0;
     positionAvatar();
     show(intro,false);
     avatar.classList.remove('drop-ready');
-    // Force a fresh CSS drop animation each time a run begins.
-    void avatar.offsetWidth;
-    avatar.classList.add('dropping');
     updateHud();
     const token=++launchToken;
-    setTimeout(()=>{
+
+    function finishDrop(){
       if(token!==launchToken||game.status!=='dropping')return;
-      avatar.classList.remove('dropping');
+      moveAvatarToGame();
+      if(dropAnimation){dropAnimation.cancel();dropAnimation=null;}
       game.status='playing';game.previous=performance.now();
       $('pauseBtn').disabled=false;updateHud();
       setToast('STAGE 1 · PRODUCT LIFECYCLE');
       field.focus({preventScroll:true});
-    },700);
+    }
+
+    // Animate the large GLB/fallback into the same world-space position that
+    // the gameplay avatar uses. Its size stays large during the flight, so
+    // WebGL renders sharply rather than stretching a small texture.
+    const introBox=introSkubertStage.getBoundingClientRect();
+    const fieldBox=field.getBoundingClientRect();
+    const originX=introBox.left+introBox.width/2;
+    const originY=introBox.top+introBox.height/2;
+    const destinationX=fieldBox.left+game.x;
+    const destinationY=fieldBox.top+game.y;
+    const dx=destinationX-originX,dy=destinationY-originY;
+    const gameSize=Math.min(220,65+Math.sqrt(Math.max(0,game.mass))*13);
+    const endScale=gameSize/Math.max(1,introBox.width);
+    const reduceMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if(reduceMotion || !introSkubertStage.animate){finishDrop();return;}
+
+    // A brief lift, fast fall, and gentle landing imitate a camera zoom-out.
+    const flight=[
+      {offset:0,transform:'translate(-50%,-50%) translate(0px,0px) scale(1)'},
+      {offset:.24,transform:`translate(-50%,-50%) translate(${dx*.18}px,${dy*.06-44}px) scale(${1-(1-endScale)*.15})`},
+      {offset:.82,transform:`translate(-50%,-50%) translate(${dx*.88}px,${dy*.92+12}px) scale(${endScale+(1-endScale)*.06})`},
+      {offset:1,transform:`translate(-50%,-50%) translate(${dx}px,${dy}px) scale(${endScale})`}
+    ];
+    dropAnimation=introSkubertStage.animate(flight,{
+      duration:1050,easing:'cubic-bezier(.20,.70,.14,1)',fill:'forwards'
+    });
+    dropAnimation.addEventListener('finish',finishDrop,{once:true});
   }
   function togglePause(){
     if(game.status==='playing'){game.status='paused';game.vx=0;game.vy=0;show(pauseOverlay,true);$('pauseBtn').textContent='▶ Resume'}
