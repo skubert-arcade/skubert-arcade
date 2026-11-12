@@ -52,7 +52,7 @@ function sizeAndPosition() {
   // Parent is #Wrapper, not #GameContent: the game's game-over code
   // replaces #GameContent.innerHTML, and would destroy an embedded canvas.
   mount.style.left = `${area.left - parent.left + (area.width - width) / 2}px`;
-  mount.style.top = `${area.bottom - parent.top - height - 5}px`;
+  mount.style.top = `${area.top - parent.top + (area.height - height) / 2}px`;
 
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
