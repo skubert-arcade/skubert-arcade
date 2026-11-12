@@ -124,6 +124,139 @@
       color: #a3afc5;
       font-size: 13px;
     }
+
+
+    /* === PRESS START / GAME SELECTOR STAGES === */
+    body.arcade-unlocked {
+      background: #030015;
+      padding: 12px 16px;
+      align-items: center;
+    }
+
+    body.arcade-unlocked .container {
+      max-width: none;
+    }
+
+    #arcadeScreen {
+      width: 100%;
+    }
+
+    .arcade-artwork {
+      position: relative;
+      width: min(94vw, calc(100svh - 28px), 940px);
+      max-width: 100%;
+      aspect-ratio: 1;
+      margin: 0 auto;
+      transition: width 420ms cubic-bezier(.22,.75,.27,1);
+    }
+
+    .arcade-artwork img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      user-select: none;
+      -webkit-user-drag: none;
+      pointer-events: none;
+    }
+
+    /* An actual button placed over the 'PRESS START' artwork in the image.
+       Coordinates are percentages of the square source, so scaling stays aligned. */
+    .press-start-hitbox {
+      position: absolute;
+      left: 26.5%;
+      top: 84%;
+      width: 47%;
+      height: 8.5%;
+      min-height: 40px;
+      padding: 0;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      background: transparent;
+      color: transparent;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .press-start-hitbox:hover {
+      background: rgba(255, 190, 35, .09);
+      border-color: rgba(255, 198, 65, .24);
+    }
+
+    .press-start-hitbox:focus-visible {
+      outline: 3px solid #ffcb50;
+      outline-offset: 3px;
+      background: rgba(255, 190, 35, .11);
+    }
+
+    /* After pressing START, keep the rotating Skubert art above game choices. */
+    #arcadeScreen.started .arcade-artwork {
+      width: min(75vw, 49svh, 560px);
+    }
+
+    .arcade-choices {
+      width: min(100%, 720px);
+      margin: 0 auto 22px;
+      text-align: center;
+      animation: choices-appear 360ms ease-out both;
+    }
+
+    .arcade-choices h2 {
+      margin: 6px 0 12px;
+      color: #f4e7ff;
+      font-size: clamp(22px, 3.6vw, 31px);
+      letter-spacing: .025em;
+      text-shadow: 0 0 18px #3d2bdc85;
+    }
+
+    .arcade-choices .games {
+      margin: 16px auto 19px;
+    }
+
+    .arcade-choices .game {
+      background: #17133b;
+      border: 1px solid #443995;
+      box-shadow: inset 0 0 12px #2e217138;
+    }
+
+    .arcade-choices .game:hover,
+    .arcade-choices .game:focus-visible {
+      background: #282054;
+      border-color: #9673fa;
+    }
+
+    .arcade-choices .game h2 {
+      font-size: 20px;
+      margin: 0 0 9px;
+      text-shadow: none;
+    }
+
+    .arcade-choices #lockButton {
+      background: #28204e;
+      color: #f1e9ff;
+      border: 1px solid #55488e;
+    }
+
+    .arcade-choices #lockButton:hover {
+      background: #382c69;
+    }
+
+    @keyframes choices-appear {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 460px) {
+      body.arcade-unlocked { padding: 8px 8px 18px; }
+      .arcade-artwork { width: min(97vw, calc(100svh - 16px)); }
+      #arcadeScreen.started .arcade-artwork { width: min(88vw, 42svh); }
+      .arcade-choices .games { margin-top: 12px; gap: 12px; }
+      .arcade-choices .game { padding: 18px 14px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .arcade-artwork, .arcade-choices { transition: none; animation: none; }
+    }
   </style>
 </head>
 
@@ -161,31 +294,45 @@
     </form>
   </section>
 
-  <!-- GAME LINKS (HIDDEN INITIALLY) -->
+  <!-- UNLOCKED ARCADE: first the poke image, then games after PRESS START. -->
   <main id="arcadeScreen" hidden>
-
-    <h2>Choose Your Game</h2>
-
-    <div class="games">
-
-      <a class="game" href="games/rollup/">
-        <div class="game-icon">📦</div>
-        <h2>Roll Up</h2>
-        <p>Help Skubert explore the product lifecycle.</p>
-      </a>
-
-      <a class="game" href="games/typing/">
-        <div class="game-icon">⌨️</div>
-        <h2>Typing Frenzy</h2>
-        <p>Help Skubert brush up on his product data terminology.</p>
-      </a>
-
+    <div class="arcade-artwork" id="arcadeArtwork">
+      <img
+        id="arcadeImage"
+        src="assets/Skubert64_poke_compressed.png"
+        alt="Skubert Arcade title screen featuring Skubert and PRESS START"
+        width="1254"
+        height="1254"
+        draggable="false"
+      >
+      <!-- Real HTML button over the existing PRESS START text in the artwork. -->
+      <button
+        id="pressStartButton"
+        class="press-start-hitbox"
+        type="button"
+        aria-label="Press Start to choose a game"
+        aria-controls="gameChoices"
+        aria-expanded="false"
+        title="Press Start"
+      ></button>
     </div>
 
-    <button id="lockButton" type="button">
-      Lock Arcade
-    </button>
-
+    <section class="arcade-choices" id="gameChoices" hidden>
+      <h2 id="chooseGameHeading" tabindex="-1">Choose Your Game</h2>
+      <div class="games">
+        <a class="game" href="games/rollup/">
+          <div class="game-icon" aria-hidden="true">📦</div>
+          <h2>Roll Up</h2>
+          <p>Help Skubert explore the product lifecycle.</p>
+        </a>
+        <a class="game" href="games/typing/">
+          <div class="game-icon" aria-hidden="true">⌨️</div>
+          <h2>Typing Frenzy</h2>
+          <p>Help Skubert brush up on his product data terminology.</p>
+        </a>
+      </div>
+      <button id="lockButton" type="button">Lock Arcade</button>
+    </section>
   </main>
 
 
@@ -193,62 +340,73 @@
 </div>
 
 <script>
-  // =========================================
-  // CONFIGURATION - CHANGE PASSWORD HERE
-  // =========================================
+  // Existing client-side password gate retained from the supplied homepage.
+  // Note: this is not secure access control on a public GitHub Pages site.
   const TEAM_PASSWORD = "SKUBERT";
+  const UNLOCKED_KEY = "skubertArcadeUnlocked";
+  const STARTED_KEY = "skubertArcadeStarted";
+  const POKE_IMAGE = "assets/Skubert64_poke_compressed.png";
+  const ROTATE_IMAGE = "assets/Skubert64_rotate_compressed.png";
 
-  // Elements
-  const loginScreen =
-    document.getElementById("loginScreen");
+  const loginScreen = document.getElementById("loginScreen");
+  const arcadeScreen = document.getElementById("arcadeScreen");
+  const loginForm = document.getElementById("loginForm");
+  const passwordInput = document.getElementById("passwordInput");
+  const errorMessage = document.getElementById("errorMessage");
+  const lockButton = document.getElementById("lockButton");
+  const pressStartButton = document.getElementById("pressStartButton");
+  const arcadeImage = document.getElementById("arcadeImage");
+  const gameChoices = document.getElementById("gameChoices");
+  const chooseGameHeading = document.getElementById("chooseGameHeading");
 
-  const arcadeScreen =
-    document.getElementById("arcadeScreen");
+  // Preload the second image while the user sees the first, avoiding a flash.
+  const rotatePreload = new Image();
+  rotatePreload.src = ROTATE_IMAGE;
 
-  const loginForm =
-    document.getElementById("loginForm");
-
-  const passwordInput =
-    document.getElementById("passwordInput");
-
-  const errorMessage =
-    document.getElementById("errorMessage");
-
-  const lockButton =
-    document.getElementById("lockButton");
-
-  // Reveal game links
-  function unlockArcade() {
-    loginScreen.hidden = true;
-    arcadeScreen.hidden = false;
-
-    sessionStorage.setItem(
-      "skubertArcadeUnlocked", "true"
-    );
+  function showPhase(started) {
+    arcadeScreen.classList.toggle("started", started);
+    arcadeImage.src = started ? ROTATE_IMAGE : POKE_IMAGE;
+    arcadeImage.alt = started
+      ? "Skubert Arcade rotating Skubert artwork"
+      : "Skubert Arcade title screen featuring Skubert and PRESS START";
+    pressStartButton.hidden = started;
+    pressStartButton.setAttribute("aria-expanded", String(started));
+    gameChoices.hidden = !started;
   }
 
-  // Return to password screen
-  function lockArcade() {
-    sessionStorage.removeItem(
-      "skubertArcadeUnlocked"
-    );
+  function unlockArcade(resume = false) {
+    loginScreen.hidden = true;
+    arcadeScreen.hidden = false;
+    document.body.classList.add("arcade-unlocked");
+    sessionStorage.setItem(UNLOCKED_KEY, "true");
+    showPhase(resume && sessionStorage.getItem(STARTED_KEY) === "true");
+  }
 
+  function pressStart() {
+    sessionStorage.setItem(STARTED_KEY, "true");
+    showPhase(true);
+    chooseGameHeading.focus({ preventScroll: true });
+  }
+
+  function lockArcade() {
+    sessionStorage.removeItem(UNLOCKED_KEY);
+    sessionStorage.removeItem(STARTED_KEY);
+    showPhase(false);
     arcadeScreen.hidden = true;
     loginScreen.hidden = false;
-
+    document.body.classList.remove("arcade-unlocked");
     passwordInput.value = "";
     errorMessage.hidden = true;
     passwordInput.focus();
   }
 
-  // Process password submission
-  loginForm.addEventListener("submit", function(event) {
+  loginForm.addEventListener("submit", function (event) {
     event.preventDefault();
-
-    const enteredPassword = passwordInput.value;
-
-    if (enteredPassword === TEAM_PASSWORD) {
-      unlockArcade();
+    if (passwordInput.value === TEAM_PASSWORD) {
+      sessionStorage.removeItem(STARTED_KEY);
+      errorMessage.hidden = true;
+      unlockArcade(false);
+      pressStartButton.focus({ preventScroll: true });
     } else {
       errorMessage.hidden = false;
       passwordInput.value = "";
@@ -256,15 +414,12 @@
     }
   });
 
-  // Lock button
+  pressStartButton.addEventListener("click", pressStart);
   lockButton.addEventListener("click", lockArcade);
 
-  // Remember unlock during current browser tab session
-  if (
-    sessionStorage.getItem("skubertArcadeUnlocked")
-      === "true"
-  ) {
-    unlockArcade();
+  // Returning from a game (or refreshing the tab) preserves the current phase.
+  if (sessionStorage.getItem(UNLOCKED_KEY) === "true") {
+    unlockArcade(true);
   }
 </script>
 
