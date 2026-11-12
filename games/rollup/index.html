@@ -102,7 +102,9 @@
   .dispatch-row small{font-size:9px;color:#789188;font-weight:700}
   .dispatch-row b{color:#2b7765;font-size:9px}
   .dispatch-head{display:grid;grid-template-columns:1fr 1.3fr .7fr .8fr;gap:8px;padding:3px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:#6a8882;font-weight:950}
-  #avatar{position:absolute;left:26%;top:64%;width:72px;height:72px;z-index:8;pointer-events:none;transform:translate(-50%,-50%);filter:drop-shadow(0 9px 9px #14283c44)}
+  #avatar{position:absolute;left:0;top:0;width:72px;height:72px;z-index:8;pointer-events:none;transform:translate(-50%,-50%);filter:drop-shadow(0 9px 9px #14283c44);will-change:translate}
+  /* Skubert moves via the independent CSS translate property, so motion does
+     not invalidate webpage layout. Existing drop-in transform animation remains. */
   .attachment-layer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
   #attachmentBack{z-index:7}
   #attachmentFront{z-index:9}
@@ -633,6 +635,21 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     const area=r.width*r.height;
     return area>=17000||r.width>=350?3:area>=4200||r.width>=130?2:1;
   }
+  function articleScrollPosition(){
+    return game.scene===0?(scrollTarget()?.scrollTop||0):0;
+  }
+  function cacheCollectibleRect(c,scrollY){
+    c.cachedRect=screenRect(c.el);
+    c.cachedAtScroll=scrollY;
+    const css=(c.el.ownerDocument.defaultView||window).getComputedStyle(c.el);
+    c.dynamicPosition=(css.position==='fixed'||css.position==='sticky');
+  }
+  function collectibleRect(c,scrollY){
+    if(!c.cachedRect || c.dynamicPosition)return screenRect(c.el);
+    const dy=game.scene===0?c.cachedAtScroll-scrollY:0;
+    const r=c.cachedRect;
+    return {left:r.left,right:r.right,top:r.top+dy,bottom:r.bottom+dy,width:r.width,height:r.height};
+  }
   function discoverCollectibles(append=false){
     // Text splitting changes the DOM, so temporarily disconnect the observer
     // to avoid triggering an endless mutation/re-scan loop.
@@ -651,6 +668,8 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       c.el.dataset.tier=String(c.tier);
     }
     collectibles.push(...discovered);
+    const scanScroll=articleScrollPosition();
+    for(const c of discovered)cacheCollectibleRect(c,scanScroll);
     if(append && discovered.length){
       game.sceneTotal+=discovered.length;game.total+=discovered.length;
       refreshLocks();updateHud();
@@ -662,7 +681,9 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     if(!records.some(r=>[...r.addedNodes].some(n=>n.nodeType===Node.ELEMENT_NODE||n.nodeType===Node.TEXT_NODE)))return;
     if(queuedRescan||game.status!=='playing')return;
     queuedRescan=true;
-    requestAnimationFrame(()=>{queuedRescan=false;if(game.status==='playing')discoverCollectibles(true)});
+    const rescan=()=>{queuedRescan=false;if(game.status==='playing')discoverCollectibles(true)};
+    if('requestIdleCallback' in window)requestIdleCallback(rescan,{timeout:200});
+    else setTimeout(rescan,50);
   });
   function renderScene(){
     siteObserver.disconnect();
@@ -748,7 +769,17 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     else if(game.status==='paused'){game.status='playing';game.previous=performance.now();show(pauseOverlay,false);$('pauseBtn').textContent='Ⅱ Pause'}
     updateHud();
   }
-  function positionAvatar(){const size=Math.min(220,65+Math.sqrt(Math.max(0,game.mass))*13);avatar.style.width=`${size}px`;avatar.style.height=`${size}px`;avatar.style.setProperty('--avatar-size',`${size}px`);avatar.style.left=`${game.x}px`;avatar.style.top=`${game.y}px`;}
+  let lastAvatarSize=-1;
+  function positionAvatar(){
+    const size=Math.min(220,65+Math.sqrt(Math.max(0,game.mass))*13);
+    if(size!==lastAvatarSize){
+      lastAvatarSize=size;
+      avatar.style.width=`${size}px`;
+      avatar.style.height=`${size}px`;
+      avatar.style.setProperty('--avatar-size',`${size}px`);
+    }
+    avatar.style.translate=`${game.x}px ${game.y}px`;
+  }
   function soundEat(tier){if(!game.sound)return;try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;if(!soundEat.context)soundEat.context=new Ctx();const ctx=soundEat.context;if(ctx.state==='suspended')ctx.resume();const o=ctx.createOscillator(),g=ctx.createGain(),t=ctx.currentTime;o.type='sine';o.frequency.setValueAtTime(380+tier*100,t);o.frequency.exponentialRampToValueAtTime(145,t+.12);g.gain.setValueAtTime(.05,t);g.gain.exponentialRampToValueAtTime(.001,t+.14);o.connect(g).connect(ctx.destination);o.start(t);o.stop(t+.15)}catch(e){}}
   function puff(x,y,tier){
     for(let i=0;i<Math.min(tier+3,7);i++){const part=document.createElement('div');part.className='particle';part.style.left=`${x}px`;part.style.top=`${y}px`;part.style.setProperty('--dx',`${Math.cos(i*2.4)* (27+Math.random()*28)}px`);part.style.setProperty('--dy',`${Math.sin(i*2.4)* (27+Math.random()*28)}px`);part.style.setProperty('--part-color',i%2?'#ffd16a':'#a4df69');field.appendChild(part);setTimeout(()=>part.remove(),700)}
@@ -761,6 +792,8 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     const MAX_ITEMS=110;
     const golden=Math.PI*(3-Math.sqrt(5));
     let phase=0, dpr=1, w=0, h=0, lastX=null, lastY=null;
+    let captureQueue=[], captureScheduled=false, captureEpoch=0;
+    const MAX_CAPTURE_QUEUE=32;
     const back=attachmentBack.getContext('2d');
     const front=attachmentFront.getContext('2d');
     const canvas=document.createElement('canvas');
@@ -822,7 +855,10 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       }
       return img;
     }
-    function reset(){items.length=0;phase=0;lastX=null;lastY=null;clear()}
+    function reset(){
+      captureEpoch++;captureQueue.length=0;
+      items.length=0;phase=0;lastX=null;lastY=null;clear();
+    }
     function clear(){for(const ctx of [back,front])ctx.clearRect(0,0,w,h)}
     function resize(){
       const width=Math.max(1,field.clientWidth),height=Math.max(1,field.clientHeight);
@@ -832,9 +868,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       for(const cnv of [attachmentBack,attachmentFront]){cnv.width=Math.round(w*dpr);cnv.height=Math.round(h*dpr);cnv.style.width=w+'px';cnv.style.height=h+'px'}
       for(const ctx of [back,front])ctx.setTransform(dpr,0,0,dpr,0,0);
     }
-    function collect(el,type){
-      let sprite;
-      try{sprite=snapshot(el,type)}catch(err){return}
+    function addSprite(sprite,type){
       const n=phase++;
       // Golden-angle spiral populates front AND back surface uniformly.
       const z=1-2*((n*.61803398875)%1);
@@ -843,6 +877,33 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       items.push({sprite,vector:{x:rr*Math.cos(theta),y:rr*Math.sin(theta),z},
         kind:type,born:performance.now(),spin:(n%7-3)*.085});
       if(items.length>MAX_ITEMS)items.shift();
+    }
+    function scheduleCapture(){
+      if(captureScheduled || !captureQueue.length)return;
+      captureScheduled=true;
+      const process=()=>{
+        captureScheduled=false;
+        // Do no more than one canvas capture per idle opportunity.
+        const job=captureQueue.shift();
+        if(job && job.epoch===captureEpoch && job.el.isConnected){
+          try{addSprite(snapshot(job.el,job.type),job.type)}catch(err){
+            console.debug('Skipped attachment snapshot',err);
+          }
+        }
+        if(captureQueue.length)scheduleCapture();
+      };
+      if('requestIdleCallback' in window){
+        requestIdleCallback(process,{timeout:250});
+      }else{
+        setTimeout(process,24);
+      }
+    }
+    function collect(el,type){
+      // The source is only hidden (not removed), so its styling and dimensions
+      // remain available when an idle callback captures it after this frame.
+      captureQueue.push({el,type,epoch:captureEpoch});
+      if(captureQueue.length>MAX_CAPTURE_QUEUE)captureQueue.shift();
+      scheduleCapture();
     }
     function rotate(v,ax,ay,az,angle){
       const co=Math.cos(angle),si=Math.sin(angle),dot=v.x*ax+v.y*ay+v.z*az;
@@ -862,7 +923,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       ctx.save();ctx.globalAlpha=age*(v.z<0?.73:1);
       ctx.translate(x,y);
       ctx.rotate(item.spin+Math.atan2(v.y,v.x)*.16);
-      ctx.shadowColor='rgba(13,37,41,.27)';ctx.shadowBlur=3;ctx.shadowOffsetY=2;
+      // Shadow is baked into each attachment snapshot, not recomputed every frame.
       ctx.drawImage(image,-sw/2,-sh/2,sw,sh);ctx.restore();
     }
     function render(now,deltaX,deltaY){
@@ -893,12 +954,19 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     // Consuming a parent automatically consumes its remaining descendant words
     // and surfaces. We count each only once, preventing duplicate score farming.
     let removed=0;
-    for(const other of collectibles){
-      if(other.eaten)continue;
-      if(other===candidate||el.contains(other.el)){
-        other.eaten=true;removed++;
-        other.el.classList.add('eaten');
-        other.el.style.visibility='hidden'; // preserve box layout and hit coordinates
+    if(candidate.type==='word'){
+      // A single word has no child collectibles. Avoid scanning the entire
+      // article (potentially thousands of elements) for each word pickup.
+      candidate.eaten=true;
+      candidate.el.classList.add('eaten');
+      removed=1;
+    }else{
+      for(const other of collectibles){
+        if(other.eaten)continue;
+        if(other===candidate||el.contains(other.el)){
+          other.eaten=true;removed++;
+          other.el.classList.add('eaten'); // visibility hidden; layout stays intact
+        }
       }
     }
     game.combo=now-game.lastEatTime<1700?game.combo+1:1;game.lastEatTime=now;
@@ -909,8 +977,19 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     game.eaten+=removed;game.sceneEaten+=removed;
     game.mass+=tier+Math.min(6,(removed-1)*.28);
     const oldLevel=game.level;game.level=levelFromMass(game.mass);
-    avatar.classList.remove('chomping');void avatar.offsetWidth;avatar.classList.add('chomping');
-    if(game.level>oldLevel){avatar.classList.remove('growing');void avatar.offsetWidth;avatar.classList.add('growing');refreshLocks();setToast(`LEVEL ${game.level}! BIGGER BITES UNLOCKED`)}
+    // Pickup animation is allowed to finish before restarting. Forcing a
+    // reflow with offsetWidth here used to pause movement on EVERY pickup.
+    if(!avatar.classList.contains('chomping')){
+      avatar.classList.add('chomping');
+      setTimeout(()=>avatar.classList.remove('chomping'),390);
+    }
+    if(game.level>oldLevel){
+      if(!avatar.classList.contains('growing')){
+        avatar.classList.add('growing');
+        setTimeout(()=>avatar.classList.remove('growing'),320);
+      }
+      refreshLocks();setToast(`LEVEL ${game.level}! BIGGER BITES UNLOCKED`);
+    }
     puff(x,y,tier);soundEat(tier);updateHud();
     // Finish a stage at 85% collection: text fragments at the edge of a
     // clipped dashboard are otherwise tedious or physically unreachable.
@@ -927,12 +1006,16 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   }
   function checkCollisions(now){
     if(game.transitioning)return;
-    const fr=field.getBoundingClientRect(),radius=avatar.getBoundingClientRect().width*.43;
+    const fr=field.getBoundingClientRect();
+    const radius=Math.min(220,65+Math.sqrt(Math.max(0,game.mass))*13)*.43;
+    const scrollY=articleScrollPosition();
     let best=null,bestMetric=Infinity;
     for(const c of collectibles){
       if(c.eaten||c.tier>game.level||!c.el.isConnected)continue;
-      const r=screenRect(c.el);
+      const r=collectibleRect(c,scrollY);
       if(!r.width||!r.height)continue;
+      // Fast reject for off-screen elements before doing precise collision math.
+      if(r.right<fr.left-radius||r.left>fr.right+radius||r.bottom<fr.top-radius||r.top>fr.bottom+radius)continue;
       const nearX=clamp(game.x,r.left-fr.left,r.right-fr.left),nearY=clamp(game.y,r.top-fr.top,r.bottom-fr.top);
       const dx=game.x-nearX,dy=game.y-nearY;
       if(dx*dx+dy*dy>=radius*radius)continue;
@@ -1011,13 +1094,23 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   // Scroll the local article with a mouse wheel or trackpad, while the pointer
   // continues to steer Skubert within the fixed gameplay viewport.
   let articleScrollScanScheduled=false;
+  let lastArticleScan=0;
   function rescanVisibleArticle(){
     if(articleScrollScanScheduled || game.status!=='playing')return;
     articleScrollScanScheduled=true;
-    requestAnimationFrame(()=>{
-      articleScrollScanScheduled=false;
-      if(game.status==='playing'&&game.scene===0)discoverCollectibles(true);
-    });
+    const delay=Math.max(0,240-(performance.now()-lastArticleScan));
+    setTimeout(()=>{
+      const scan=()=>{
+        articleScrollScanScheduled=false;
+        if(game.status==='playing'&&game.scene===0){
+          lastArticleScan=performance.now();
+          discoverCollectibles(true);
+        }
+      };
+      // Full article scans are not permitted to run during movement frames.
+      if('requestIdleCallback' in window)requestIdleCallback(scan,{timeout:180});
+      else setTimeout(scan,24);
+    },delay);
   }
   function scrollTarget(){
     const frame=wikiIframe();
