@@ -269,6 +269,91 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 /* Optional saved Wikipedia snapshot, completely separate from game UI styles. */
 .wiki-snapshot-stage{padding:0!important;overflow:hidden!important;background:#fff!important;display:block!important;}
 .wiki-snapshot-stage iframe{border:0;display:block;width:100%;height:100%;background:#fff;pointer-events:none;}
+
+/* ==========================================
+   SKUBERT WEBALL — CUSTOM UI COLORS
+   ========================================== */
+
+:root {
+  --ui-panel: #0032b1;
+  --ui-menu: #0032b1;
+  --ui-accent: #0032b1;
+  --ui-text: #0032b1;
+  --ui-border: #0032b1;
+}
+
+/* Top-right menu button */
+.menu-toggle {
+  background: var(--ui-panel);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+}
+
+.menu-toggle:hover {
+  background: var(--ui-menu);
+}
+
+/* Expanded menu */
+.right-actions {
+  background: var(--ui-panel);
+  border-color: var(--ui-border);
+}
+
+.right-actions .btn {
+  color: var(--ui-text);
+}
+
+.right-actions .btn:hover:not(:disabled) {
+  background: var(--ui-menu);
+}
+
+/* Score and timer indicators */
+.stats .stat {
+  background: var(--ui-panel) !important;
+  color: var(--ui-text);
+  border-color: var(--ui-border) !important;
+}
+
+.stats .stat-value.accent {
+  color: var(--ui-accent);
+}
+
+/* Start screen panel */
+.launch-screen .launch-card {
+  background: var(--ui-panel);
+  color: var(--ui-text);
+  border-color: var(--ui-border);
+}
+
+/* Primary start buttons */
+.launch-card .btn-green {
+  background: var(--ui-accent) !important;
+  border-color: var(--ui-accent) !important;
+  color: var(--ui-panel) !important;
+}
+
+/* Bottom-left information indicator */
+.shell-bar {
+  background: var(--ui-panel);
+  border-color: var(--ui-border);
+}
+
+/* Help, results and leaderboard panels */
+.screen-card {
+  border-color: var(--ui-border);
+}
+
+.screen .btn {
+  background: var(--ui-menu);
+  border-color: var(--ui-menu);
+}
+
+.screen .btn.btn-green {
+  background: var(--ui-accent);
+  border-color: var(--ui-accent);
+  color: var(--ui-panel);
+}
+
 </style>
 </head>
 <body>
