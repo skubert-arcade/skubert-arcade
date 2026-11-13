@@ -133,7 +133,7 @@ function getWord() {
   let inputValue = inputElementID.value.toLowerCase();
   inputElementID.value = '';
   if (arrWords.includes(inputValue)) {
-    updateScore();
+    updateScore(inputValue);
     let indexWord = arrWords.indexOf(inputValue);
     let wordDivIndex = arrWordsDiv[indexWord];
     arrWords.splice(indexWord, 1);
@@ -168,7 +168,7 @@ function updateWordPosition() {
 }
 
 // UPDATE SCORE
-function updateScore() {
+function updateScore(completedWord) {
   score += completedWord.length;
   scoreElementID.innerHTML = `<p>Score ${score}</p>`;
 }
