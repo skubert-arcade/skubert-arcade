@@ -120,13 +120,6 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 .topbar .menu-toggle,.topbar .right-actions{pointer-events:auto}
 .menu-toggle{background:#0d2532e8;border:1px solid #ffffff42;color:white;border-radius:50px;font-size:12px;padding:9px 13px;font-weight:800;box-shadow:0 6px 24px #0e293e2b;backdrop-filter:blur(12px)}
 .menu-toggle:hover{background:#28445c}
-  a.menu-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
-  color: #FFFFFF;
-}
 .right-actions{position:absolute;top:42px;right:0;display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:9px;width:210px;background:#102937f5;border:1px solid #ffffff2e;border-radius:15px;box-shadow:0 16px 35px #05172550;backdrop-filter:blur(16px)}
 .right-actions .btn{display:block!important;width:100%;text-align:left;color:white;background:transparent;border:0;border-radius:8px;font-size:12px;padding:11px 12px;transform:none!important;text-decoration:none}
 .right-actions .btn:hover:not(:disabled){background:#ffffff1b}
@@ -342,95 +335,90 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 }
 
 
-/* Arcade-style primary start button */
 
-.launch-card .screen-buttons {
-  flex-direction: column;
-  gap: 9px;
+/* ===== Roll Up intro: showman-style Drop In and mascot motion ===== */
+.topbar a.menu-toggle{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;color:#fff!important;min-height:36px}
+.launch-card .screen-buttons{display:flex;flex-direction:column;gap:9px}
+#startTimed{
+  width:100%;min-height:62px;display:inline-flex;align-items:center;justify-content:center;gap:9px;
+  padding:14px 18px;border:2px solid #fff0b5!important;border-radius:15px;
+  background:linear-gradient(135deg,#ffe38a,#ffca4f)!important;color:#183250!important;
+  font-size:19px!important;font-weight:950;letter-spacing:.08em;
+  box-shadow:0 5px 20px #ffcb5680;animation:rollup-cta-glow 2.5s ease-in-out infinite;
+  transition:transform .2s ease, filter .2s ease;
 }
+#startTimed:hover:not(:disabled),#startTimed:focus-visible{filter:brightness(1.07);transform:translateY(-2px) scale(1.025)}
+#startTimed .subtle{color:#28475c!important;font-size:12px;letter-spacing:0;font-weight:850;opacity:.85}
+#startTimed .drop-arrow{display:inline-block;animation:rollup-arrow-bounce 1.25s ease-in-out infinite}
+#startZen{width:100%;background:#ffffff0d!important;color:#fff!important;border:1px solid #ffffff5f!important}
+#startZen:hover{background:#ffffff24!important}
+@keyframes rollup-cta-glow{0%,100%{box-shadow:0 4px 14px #ffcb5659}50%{box-shadow:0 5px 30px #ffcc55ae,0 0 0 5px #ffcc5524}}
+@keyframes rollup-arrow-bounce{0%,100%{transform:translateY(-2px)}50%{transform:translateY(5px)}}
 
-#startTimed {
-  position: relative;
-  width: 100%;
-  min-height: 62px;
-  padding: 15px 24px;
-  border-radius: 15px;
-
-  background: linear-gradient(
-    135deg,
-    #FFE58B,
-    #FFCC55
-  ) !important;
-
-  border: 2px solid #FFF1B4 !important;
-  color: #17304A !important;
-
-  font-size: 19px !important;
-  font-weight: 950;
-  letter-spacing: 0.065em;
-
-  box-shadow: 0 5px 20px #FFCC5566;
-  animation: drop-button-glow 2.5s ease-in-out infinite;
+/* The one persistent avatar still moves into the world on landing. */
+#introSkubertStage{perspective:800px}
+#introSkubertStage #avatar{z-index:2}
+#avatar.drop-ready .avatar-inner{transform-origin:center 58%;animation:rollup-intro-bob 2.5s ease-in-out infinite}
+@keyframes rollup-intro-bob{0%,100%{transform:translateY(2px) rotateZ(-2.5deg)}50%{transform:translateY(-13px) rotateZ(2.5deg)}}
+/* Button pointer-hover and keyboard focus invite Skubert to peek down. */
+#avatar.drop-ready.hover-drop .avatar-inner{
+  animation:rollup-look-down .42s cubic-bezier(.2,.75,.2,1) both;
 }
-
-#startTimed:hover:not(:disabled) {
-  background: #FFE68C !important;
-  transform: translateY(-3px) scale(1.03);
+@keyframes rollup-look-down{
+  from{transform:translateY(-6px) rotateX(0deg) rotateZ(0deg) scale(1)}
+  to{transform:translateY(16px) rotateX(-17deg) rotateZ(6deg) scale(1.05)}
 }
-
-#startTimed .drop-arrow {
-  display: inline-block;
-  margin-right: 7px;
-  animation: drop-arrow-bounce 1.25s ease-in-out infinite;
+/* Spin is on the inner avatar, leaving the stage free for the EXISTING drop flight. */
+#avatar.drop-ready.launch-windup .avatar-inner{
+  animation:rollup-intro-spin .78s cubic-bezier(.17,.62,.22,.97) both!important;
 }
-
-#startTimed .subtle {
-  font-size: 13px;
-  font-weight: 750;
+@keyframes rollup-intro-spin{
+  0%{transform:translateY(0) rotateZ(0deg) scale(1)}
+  32%{transform:translateY(-25px) rotateZ(390deg) scale(1.12)}
+  68%{transform:translateY(-8px) rotateZ(810deg) scale(1.04)}
+  100%{transform:translateY(0) rotateZ(1080deg) scale(1)}
 }
-
-#startZen {
-  width: 100%;
-  background: transparent !important;
-  border: 1px solid #FFFFFF55 !important;
-  color: #FFFFFF !important;
+/* Sparkles render above the avatar but never block the button or pointer. */
+#introSkubertStage .skubert-launch-fx{
+  position:absolute;inset:-27%;z-index:4;overflow:visible;pointer-events:none;
 }
-
-@keyframes drop-button-glow {
-  0%, 100% {
-    box-shadow: 0 4px 14px #FFCC5544;
+.skubert-launch-fx .launch-spark{
+  position:absolute;left:50%;top:50%;width:var(--sz,14px);height:var(--sz,14px);
+  background:var(--spark-color,#ffe072);opacity:0;
+  clip-path:polygon(50% 0%,61% 34%,100% 50%,61% 66%,50% 100%,39% 66%,0% 50%,39% 34%);
+  filter:drop-shadow(0 0 5px var(--spark-color,#ffe072));
+  animation:rollup-spark-burst var(--dur,790ms) cubic-bezier(.17,.62,.34,1) var(--delay,0ms) both;
+}
+@keyframes rollup-spark-burst{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.35) rotate(0deg)}
+  20%{opacity:1}
+  40%{opacity:1;transform:translate(calc(-50% + var(--half-dx)),calc(-50% + var(--half-dy))) scale(1.2) rotate(75deg)}
+  68%{opacity:1;transform:translate(calc(-50% + var(--threequarter-dx)),calc(-50% + var(--threequarter-dy))) scale(.9) rotate(160deg)}
+  100%{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(.09) rotate(var(--rot,250deg))}
+}
+.skubert-launch-fx .launch-ring{
+  position:absolute;left:50%;top:50%;width:34%;aspect-ratio:1;border:4px solid #ffdc78;
+  border-radius:50%;box-shadow:0 0 25px #ffcc55b3,inset 0 0 15px #ffeab0a3;
+  animation:rollup-ring-flash .76s ease-out var(--delay,0ms) both;
+}
+@keyframes rollup-ring-flash{
+  0%{transform:translate(-50%,-50%) scale(.12);opacity:0}
+  20%{opacity:1}
+  100%{transform:translate(-50%,-50%) scale(4.1);opacity:0}
+}
+@media(max-width:480px){#startTimed{min-height:56px;padding:10px 12px;font-size:17px!important}}
+@media(prefers-reduced-motion:reduce){
+  #startTimed,#startTimed .drop-arrow,#avatar.drop-ready .avatar-inner,#avatar.drop-ready.hover-drop .avatar-inner,
+  #avatar.drop-ready.launch-windup .avatar-inner,.skubert-launch-fx .launch-spark,.skubert-launch-fx .launch-ring{
+    animation:none!important;
   }
-  50% {
-    box-shadow:
-      0 5px 28px #FFCC55AA,
-      0 0 0 5px #FFCC5522;
-  }
 }
-
-@keyframes drop-arrow-bounce {
-  0%, 100% { transform: translateY(-2px); }
-  50% { transform: translateY(5px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  #startTimed,
-  #startTimed .drop-arrow {
-    animation: none !important;
-  }
-}
-
 </style>
 </head>
 <body>
 <div class="wrap">
   <header class="topbar" id="arcadeTopbar">
-    <a
-  class="menu-toggle"
-  id="menuBtn"
-  href="https://skubert-arcade.github.io/skubert-arcade/index.html"
->
-  Arcade
-</a>
+    <a class="menu-toggle" id="menuBtn" href="https://skubert-arcade.github.io/skubert-arcade/index.html" aria-label="Return to Skubert Arcade">Arcade</a>
     <div class="right-actions" id="gameMenu" hidden>
       <button id="helpBtn" class="btn btn-sm" type="button">? How to play</button>
       <button id="soundBtn" class="btn btn-sm" type="button" aria-pressed="false">♪ Sound off</button>
@@ -454,7 +442,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       <div id="siteContent"></div>
       <canvas id="attachmentBack" class="attachment-layer" aria-hidden="true"></canvas>
       <!-- Enlarged presentation stage: the existing avatar is moved here during intro. -->
-      <div id="introSkubertStage" aria-hidden="true"></div>
+      <div id="introSkubertStage" aria-hidden="true"><div class="skubert-launch-fx" id="skubertLaunchFx"></div></div>
       <div id="avatar" aria-hidden="true" style="--turn:0deg">
         <div class="avatar-inner">
           <!-- Preview rendered from the real Skubert GLB; fades out when WebGL is ready. -->
@@ -466,14 +454,10 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       <div class="screen launch-screen" id="introOverlay">
         <div class="screen-card launch-card">
           <p class="launch-eyebrow"></p>
-          <h2>Skubert Roll UP</h2>
-          <p>Roll over HTML objects, grow, and explore the Product Lifecycle.</p>
+          <h2>Ready to drop in?</h2>
+          <p>Roll over HTML objects, grow, and explore the Product Lifecycle page.</p>
           <div class="screen-buttons">
-            <button id="startTimed" class="btn btn-green" type="button">
-  <span class="drop-arrow" aria-hidden="true">↓</span>
-  DROP IN
-  <span class="subtle">· 1:00</span>
-</button>
+            <button id="startTimed" class="btn btn-green" type="button"><span class="drop-arrow" aria-hidden="true">↓</span> DROP IN <span class="subtle">· 1:00</span></button>
             <button id="startZen" class="btn" type="button">Explore freely</button>
           </div>
           <p class="launch-help">Move mouse or use WASD / arrows</p>
@@ -765,11 +749,55 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   function setToast(text){const el=$('toast');el.textContent=text;el.classList.add('show');clearTimeout(setToast.timer);setToast.timer=setTimeout(()=>el.classList.remove('show'),1850)}
   let launchToken=0;
   let dropAnimation=null;
+  let launchWindupTimer=null;
+  const launchFx=$('skubertLaunchFx');
+  const LAUNCH_WINDUP_MS=780;
+
+  function clearLaunchEffects(){
+    if(launchWindupTimer!==null){clearTimeout(launchWindupTimer);launchWindupTimer=null;}
+    launchFx.replaceChildren();
+    avatar.classList.remove('hover-drop','launch-windup');
+  }
+  function throwLaunchSparkles(){
+    launchFx.replaceChildren();
+    // Match the Find Skubert pickup feel: luminous gold, blue, and white stars
+    // plus expanding rings; particles live above the intro avatar only.
+    const colors=['#ffd75d','#6edcff','#fff6d5'];
+    for(let i=0;i<34;i++){
+      const star=document.createElement('span');star.className='launch-spark';
+      const angle=(i/34)*Math.PI*2 + (Math.random()-.5)*.25;
+      // Start on the OUTER edge of the avatar, not behind the face.
+      // The intro FX layer is 154% of the stage, so ~22% maps to the
+      // visible hat/cheek outline while leaving room for outward motion.
+      const sourceRadius=21+Math.random()*4;
+      const distance=85+Math.random()*145;
+      star.style.left=`${50+Math.cos(angle)*sourceRadius}%`;
+      star.style.top=`${50+Math.sin(angle)*sourceRadius}%`;
+      star.style.setProperty('--dx',`${Math.cos(angle)*distance}px`);
+      star.style.setProperty('--dy',`${Math.sin(angle)*distance}px`);
+      star.style.setProperty('--half-dx',`${Math.cos(angle)*distance*.42}px`);
+      star.style.setProperty('--half-dy',`${Math.sin(angle)*distance*.42}px`);
+      star.style.setProperty('--threequarter-dx',`${Math.cos(angle)*distance*.78}px`);
+      star.style.setProperty('--threequarter-dy',`${Math.sin(angle)*distance*.78}px`);
+      star.style.setProperty('--sz',`${17+Math.random()*14}px`);
+      star.style.setProperty('--spark-color',colors[i%colors.length]);
+      star.style.setProperty('--rot',`${240+Math.random()*280}deg`);
+      star.style.setProperty('--dur',`${610+Math.random()*270}ms`);
+      star.style.setProperty('--delay',`${(i%4)*18}ms`);
+      launchFx.appendChild(star);
+    }
+    for(let i=0;i<2;i++){
+      const ring=document.createElement('span');ring.className='launch-ring';
+      ring.style.setProperty('--delay',`${i*140}ms`);
+      launchFx.appendChild(ring);
+    }
+  }
 
   // One persistent Three.js canvas / GLB is reused in both views. Moving its
   // containing avatar within the document does not reload the 3D model.
   function showCloseupAvatar(){
     if(dropAnimation){dropAnimation.cancel();dropAnimation=null;}
+    clearLaunchEffects();
     introSkubertStage.hidden=false;
     // The GLB renderer's resize loop detects this larger stage automatically.
     if(avatar.parentElement!==introSkubertStage)introSkubertStage.appendChild(avatar);
@@ -781,12 +809,14 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     // #attachmentFront is the original DOM anchor for the avatar's layer.
     if(avatar.parentElement!==field)field.insertBefore(avatar,attachmentFront);
     introSkubertStage.hidden=true;
-    avatar.classList.remove('drop-ready','dropping');
+    avatar.classList.remove('drop-ready','dropping','launch-windup','hover-drop');
+    clearLaunchEffects();
     avatar.style.opacity='1';
     positionAvatar();
   }
   function resetToIntro(){
     launchToken++;
+    clearLaunchEffects();
     closeMenu();
     game.status='intro';game.score=0;game.mass=0;game.level=1;game.eaten=0;game.total=0;game.scene=0;game.sceneEaten=0;game.combo=0;game.remaining=DURATION;game.transitioning=false;game.saved=false;game.pointer=false;
     attachments.reset();
@@ -811,9 +841,10 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     game.tx=game.x;game.ty=game.y;game.vx=0;game.vy=0;
     positionAvatar();
     show(intro,false);
-    avatar.classList.remove('drop-ready');
+    avatar.classList.remove('hover-drop');
     updateHud();
     const token=++launchToken;
+    const reduceMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
     function finishDrop(){
       if(token!==launchToken||game.status!=='dropping')return;
@@ -837,9 +868,6 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     const dx=destinationX-originX,dy=destinationY-originY;
     const gameSize=avatarSize();
     const endScale=gameSize/Math.max(1,introBox.width);
-    const reduceMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    if(reduceMotion || !introSkubertStage.animate){finishDrop();return;}
-
     // A brief lift, fast fall, and gentle landing imitate a camera zoom-out.
     const flight=[
       {offset:0,transform:'translate(-50%,-50%) translate(0px,0px) scale(1)'},
@@ -847,10 +875,24 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       {offset:.82,transform:`translate(-50%,-50%) translate(${dx*.88}px,${dy*.92+12}px) scale(${endScale+(1-endScale)*.06})`},
       {offset:1,transform:`translate(-50%,-50%) translate(${dx}px,${dy}px) scale(${endScale})`}
     ];
-    dropAnimation=introSkubertStage.animate(flight,{
-      duration:1050,easing:'cubic-bezier(.20,.70,.14,1)',fill:'forwards'
-    });
-    dropAnimation.addEventListener('finish',finishDrop,{once:true});
+    function beginOriginalDrop(){
+      if(token!==launchToken||game.status!=='dropping')return;
+      launchWindupTimer=null;
+      avatar.classList.remove('drop-ready','launch-windup');
+      // Keep the same existing fall animation; the GLB fades in here as before.
+      if(reduceMotion || !introSkubertStage.animate){finishDrop();return;}
+      dropAnimation=introSkubertStage.animate(flight,{
+        duration:1050,easing:'cubic-bezier(.20,.70,.14,1)',fill:'forwards'
+      });
+      dropAnimation.addEventListener('finish',finishDrop,{once:true});
+    }
+    if(mode==='timed'&&!reduceMotion){
+      throwLaunchSparkles();
+      avatar.classList.add('launch-windup');
+      launchWindupTimer=setTimeout(beginOriginalDrop,LAUNCH_WINDUP_MS);
+    }else{
+      beginOriginalDrop();
+    }
   }
   function togglePause(){
     if(game.status==='playing'){game.status='paused';game.vx=0;game.vy=0;show(pauseOverlay,true);$('pauseBtn').textContent='▶ Resume'}
@@ -1399,9 +1441,19 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const menuButton=$('menuBtn'), menu=$('gameMenu'), topbar=$('arcadeTopbar');
   function closeMenu(){menu.hidden=true;menuButton.setAttribute('aria-expanded','false');topbar.classList.remove('menu-open')}
   function toggleMenu(){const open=menu.hidden;menu.hidden=!open;menuButton.setAttribute('aria-expanded',String(open));topbar.classList.toggle('menu-open',open)}
+  // The former Menu control is now a direct Arcade link; do not intercept its click.
+
   document.addEventListener('pointerdown',e=>{if(!menu.hidden&&!topbar.contains(e.target))closeMenu()});
   menu.addEventListener('click',e=>{if(e.target.closest('button,a'))closeMenu()});
-  $('startTimed').addEventListener('click',()=>start('timed'));
+  const dropInButton=$('startTimed');
+  const setDropHover=(active)=>{
+    if(game.status==='intro')avatar.classList.toggle('hover-drop',active);
+  };
+  dropInButton.addEventListener('pointerenter',()=>setDropHover(true));
+  dropInButton.addEventListener('pointerleave',()=>setDropHover(false));
+  dropInButton.addEventListener('focus',()=>setDropHover(true));
+  dropInButton.addEventListener('blur',()=>setDropHover(false));
+  dropInButton.addEventListener('click',()=>start('timed'));
   $('startZen').addEventListener('click',()=>start('relaxed'));
   $('pauseBtn').addEventListener('click',togglePause);
   $('resumeBtn').addEventListener('click',togglePause);
