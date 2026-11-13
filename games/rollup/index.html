@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#FFFFFF">
-<title>Skubert Weball · Skubert Arcade</title>
+<title>Roll Up</title>
 <link rel="preload" href="../typing/models/skubert.glb" as="fetch" crossorigin="anonymous">
 <script type="importmap">
 {
@@ -52,9 +52,9 @@
   #playfield{position:relative;width:100%;height:575px;overflow:hidden;background:#eaf0eb;touch-action:none;cursor:default;isolation:isolate}
   #siteContent{width:100%;height:100%;position:relative;color:#172c38;user-select:none;pointer-events:none}
   .site-page{width:100%;height:100%;background:radial-gradient(circle at 95% 10%,#f3f7ef,#e8efe9 56%,#e1ece7);padding:16px 18px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
-  .dom-word{display:inline;transition:opacity .16s,color .16s;white-space:inherit}
+  .dom-word{display:inline;white-space:inherit}
   .dom-word.eaten{opacity:0;visibility:hidden}
-  .dom-object{transition:opacity .18s ease}
+  .dom-object{transition:none}
   .dom-object.eaten{opacity:0;visibility:hidden}
   .dom-object.locked{outline:1px dashed #df9560;outline-offset:-2px}
   .dom-object.locked::after{content:"LV " attr(data-tier);position:absolute;right:5px;top:4px;background:#233645;color:#fff8d9;font-size:8px;font-weight:900;padding:2px 5px;border-radius:5px;z-index:1}
@@ -369,7 +369,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     <div class="stat"><div class="stat-label">Score</div><div class="stat-value accent" id="scoreLabel">0</div></div>
     <div class="stat"><div class="stat-label">Elements eaten</div><div class="stat-value" id="eatenLabel">0 <span class="stat-suffix">/ 0</span></div></div>
     <div class="stat"><div class="stat-label">Skubert size</div><div class="stat-value" id="sizeLabel">LV 1</div></div>
-    <div class="stat"><div class="stat-label">Time left</div><div class="stat-value" id="timeLabel">1:30</div></div>
+    <div class="stat"><div class="stat-label">Time left</div><div class="stat-value" id="timeLabel">1:00</div></div>
   </section>
   <div class="game-shell">
     <div class="shell-bar">
@@ -393,9 +393,9 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
         <div class="screen-card launch-card">
           <p class="launch-eyebrow">Skubert Roll Up</p>
           <h2>Ready to drop in?</h2>
-          <p>Roll over HTML objects, grow, and roll through Product Lifecycle, then enjoy 15 bonus seconds on Space Jam.</p>
+          <p>Roll over HTML objects, grow, and roll through Product Lifecycle, then enjoy 10 bonus seconds on Space Jam.</p>
           <div class="screen-buttons">
-            <button id="startTimed" class="btn btn-green" type="button">↓ Drop in <span class="subtle">· 1:30 + 0:15</span></button>
+            <button id="startTimed" class="btn btn-green" type="button">↓ Drop in <span class="subtle">· 1:00 + 0:10</span></button>
             <button id="startZen" class="btn" type="button">Explore freely</button>
           </div>
           <p class="launch-help">Move mouse or use WASD / arrows</p>
@@ -405,7 +405,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       <div class="screen" id="helpOverlay" hidden>
         <div class="screen-card">
           <div class="figure">🍽️</div><h2>How to play</h2>
-          <p>Roll through two locally saved webpages. Absorb words and other HTML elements to grow. Timed play gives you 90 seconds on Product Lifecycle, followed by 15 seconds on Space Jam.</p>
+          <p>Roll through two locally saved webpages. Absorb words and other HTML elements to grow. Timed play gives you 60 seconds on Product Lifecycle, followed by 10 seconds on Space Jam.</p>
           <div class="instructions">
             <div class="instruction"><strong>🖱️ Mouse / touch</strong>Move or drag within the game area. Push Skubert against the top or bottom edge to scroll the article.</div>
             <div class="instruction"><strong>⌨️ Keyboard</strong>Use arrows or WASD to move and scroll at the edges; P pauses.</div>
@@ -448,8 +448,8 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const helpOverlay = $('helpOverlay');
   const keys = new Set();
   const KEY = 'skubert-dom-dash-scores-v1';
-  // TIMED RUN: 90 seconds on the Wikipedia snapshot, then 15 seconds on Space Jam.
-  const STAGE_DURATIONS = [90, 15];
+  // TIMED RUN: 60 seconds on the Product Lifecycle snapshot, then 10 seconds on Space Jam.
+  const STAGE_DURATIONS = [60, 10];
   const DURATION = STAGE_DURATIONS[0];
   // MOVEMENT SETTINGS — change these values to customize the ball-like feel.
   const MOVE_SPEED = 450;          // Maximum speed (pixels/second).
@@ -463,7 +463,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const AVATAR_GROWTH_RATE = 21;      // Size gained per square root of mass (previously 13).
   const AVATAR_MAX_SIZE = 520;        // Maximum desktop diameter (previously 220).
   const AVATAR_MAX_VIEWPORT = 0.90;  // Limit on narrow screens to 90% of field width.
-  const COLLECT_RADIUS_FACTOR = 0.85; // Pickup radius as a fraction of avatar diameter.
+  const COLLECT_RADIUS_FACTOR = 0.58; // Pickup radius as a fraction of avatar diameter.
   const SCENES = [
     {name:'PRODUCT LIFECYCLE', url:'./levels/product-lifecycle-snapshot.html'},
     {name:'SPACE JAM', url:'./levels/space-jam-snapshot.html'}
@@ -478,6 +478,8 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   let collectibles=[];
   let siteObserver;
   let queuedRescan=false;
+  // Snapshot levels are static; tokenize each document only once.
+  const tokenizedPages=new WeakSet();
   const game={mode:'timed',status:'intro',scene:0,score:0,eaten:0,total:0,sceneTotal:0,sceneEaten:0,mass:0,level:1,remaining:DURATION,x:120,y:260,tx:120,ty:260,vx:0,vy:0,pointer:false,combo:0,lastEatTime:0,transitioning:false,sound:false,previous:0,lastCheck:0,lastHudTime:0,saved:false};
   // Read-only for the optional 3D renderer; gameplay owns movement and growth.
   window.skubertWeballState = game;
@@ -585,7 +587,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     if(siteObserver)siteObserver.disconnect();
     const root=collectRoot();
     if(!root){collectibles=[];return;}
-    splitWords(root);
+    if(!tokenizedPages.has(root)){splitWords(root);tokenizedPages.add(root);}
     const existing=new Set(append?collectibles.map(c=>c.el):[]);
     const words=[...root.querySelectorAll('.dom-word')].filter(el=>!existing.has(el)&&isVisible(el));
     const objects=[...root.querySelectorAll('*')].filter(el=>!existing.has(el)&&isVisualObject(el));
@@ -643,12 +645,12 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
         refreshLocks();updateHud();
         frame.dataset.snapshotReady='true';
         console.info('Offline snapshot ready:',SCENES[renderedScene].name,game.sceneTotal,'collectibles');
-        // The 15-second bonus clock starts AFTER the new saved page is ready.
+        // The 10-second bonus clock starts AFTER the new saved page is ready.
         if(game.status==='loading' && renderedScene===1){
           game.status='playing';game.transitioning=false;
           game.remaining=game.mode==='relaxed'?Infinity:STAGE_DURATIONS[1];
           game.previous=performance.now();
-          updateHud();setToast('SPACE JAM · 15 SECOND BONUS!');
+          updateHud();setToast('SPACE JAM · 10 SECOND BONUS!');
         }
       },{once:true});
     }
@@ -728,7 +730,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       if(dropAnimation){dropAnimation.cancel();dropAnimation=null;}
       game.status='playing';game.previous=performance.now();
       $('pauseBtn').disabled=false;updateHud();
-      setToast('STAGE 1 · PRODUCT LIFECYCLE · 1:30');
+      setToast('STAGE 1 · PRODUCT LIFECYCLE · 1:00');
       field.focus({preventScroll:true});
     }
 
@@ -785,9 +787,18 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const attachments = (() => {
     const items=[];
     const MAX_ITEMS=110;
+    // Collectible logic resolves the entire collision in one batch; expensive
+    // attachment sprites are produced over multiple animation frames instead.
+    const MAX_PENDING_SPRITES=110;
+    const SPRITES_PER_FRAME=4;
+    const SPRITE_FRAME_BUDGET_MS=3;
+    const ATTACHMENT_MAX_FPS=90; // Skip excessive 120/144 Hz redraws without reducing 60/75 Hz cadence.
+    const SPRITE_FADE_MS=140; // Smoothly upgrade a quick preview to a detailed object sprite.
     const golden=Math.PI*(3-Math.sqrt(5));
-    let phase=0, dpr=1, w=0, h=0, lastX=null, lastY=null;
+    let phase=0, dpr=1, w=0, h=0;
+    let lastAttachmentFrame=0, pendingDX=0, pendingDY=0;
     let captureQueue=[], captureScheduled=false, captureEpoch=0;
+    let spriteQueue=[];
     const MAX_CAPTURE_QUEUE=32;
     const back=attachmentBack.getContext('2d');
     const front=attachmentFront.getContext('2d');
@@ -798,8 +809,8 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       r=Math.max(0,Math.min(r,ww/2,hh/2));
       ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+ww,y,x+ww,y+hh,r);ctx.arcTo(x+ww,y+hh,x,y+hh,r);ctx.arcTo(x,y+hh,x,y,r);ctx.arcTo(x,y,x+ww,y,r);ctx.closePath();
     }
-    function snapshot(el,type){
-      const rect=screenRect(el);
+    function snapshot(el,type,cachedRect){
+      const rect=cachedRect||screenRect(el);
       const width=type==='word'?Math.min(118,Math.max(25,Math.ceil(rect.width)+12)):Math.min(156,Math.max(34,Math.ceil(rect.width*.65)));
       const height=type==='word'?24:Math.min(102,Math.max(28,Math.ceil(rect.height*.65)));
       const scale=2;
@@ -854,14 +865,33 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       }
       return img;
     }
+    // Produce an immediate, inexpensive attachment BEFORE the source is hidden.
+    // This avoids an empty gap while the more detailed object preview is made
+    // during browser idle time. Word sprites are already cheap enough as-is.
+    function quickSprite(el,type,rect){
+      if(type==='word')return snapshot(el,type,rect);
+      const width=Math.min(156,Math.max(34,Math.ceil(rect.width*.65)));
+      const height=Math.min(102,Math.max(28,Math.ceil(rect.height*.65)));
+      const img=document.createElement('canvas');img.width=width;img.height=height;
+      const g=img.getContext('2d');
+      g.fillStyle='#f5f8fa';roundRect(g,1,1,width-2,height-2,7);g.fill();
+      g.strokeStyle='#98aab9';g.lineWidth=1;g.stroke();
+      const label=asText(el);
+      g.fillStyle='#29465c';g.font='700 10px system-ui, sans-serif';
+      g.textBaseline='middle';
+      let trimmed=label.slice(0,100);
+      while(trimmed.length>2 && g.measureText(trimmed).width>width-12)trimmed=trimmed.slice(0,-2)+'…';
+      g.fillText(trimmed,6,height/2);
+      return img;
+    }
     function reset(){
-      captureEpoch++;captureQueue.length=0;
-      items.length=0;phase=0;lastX=null;lastY=null;clear();
+      captureEpoch++;captureQueue.length=0;spriteQueue.length=0;
+      items.length=0;phase=0;pendingDX=0;pendingDY=0;lastAttachmentFrame=0;clear();
     }
     function clear(){for(const ctx of [back,front])ctx.clearRect(0,0,w,h)}
     function resize(){
       const width=Math.max(1,field.clientWidth),height=Math.max(1,field.clientHeight);
-      const ratio=Math.min(2,window.devicePixelRatio||1);
+      const ratio=Math.min(1.5,window.devicePixelRatio||1); // Lighter full-screen canvases.
       if(width===w&&height===h&&ratio===dpr)return;
       w=width;h=height;dpr=ratio;
       for(const cnv of [attachmentBack,attachmentFront]){cnv.width=Math.round(w*dpr);cnv.height=Math.round(h*dpr);cnv.style.width=w+'px';cnv.style.height=h+'px'}
@@ -876,6 +906,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       items.push({sprite,vector:{x:rr*Math.cos(theta),y:rr*Math.sin(theta),z},
         kind:type,born:performance.now(),spin:(n%7-3)*.085});
       if(items.length>MAX_ITEMS)items.shift();
+      return items[items.length-1];
     }
     function scheduleCapture(){
       if(captureScheduled || !captureQueue.length)return;
@@ -884,9 +915,14 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
         captureScheduled=false;
         // Do no more than one canvas capture per idle opportunity.
         const job=captureQueue.shift();
-        if(job && job.epoch===captureEpoch && job.el.isConnected){
-          try{addSprite(snapshot(job.el,job.type),job.type)}catch(err){
-            console.debug('Skipped attachment snapshot',err);
+        if(job && job.epoch===captureEpoch && job.el.isConnected && items.includes(job.item)){
+          try{
+            const detailed=snapshot(job.el,job.type,job.rect);
+            job.item.previousSprite=job.item.sprite;
+            job.item.sprite=detailed;
+            job.item.blendStart=performance.now();
+          }catch(err){
+            console.debug('Kept quick attachment preview after snapshot issue',err);
           }
         }
         if(captureQueue.length)scheduleCapture();
@@ -897,12 +933,39 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
         setTimeout(process,24);
       }
     }
-    function collect(el,type){
-      // The source is only hidden (not removed), so its styling and dimensions
-      // remain available when an idle callback captures it after this frame.
-      captureQueue.push({el,type,epoch:captureEpoch});
-      if(captureQueue.length>MAX_CAPTURE_QUEUE)captureQueue.shift();
-      scheduleCapture();
+    function collect(el,type,rect){
+      // Each pickup appears on Skubert immediately; the more expensive full
+      // object snapshot replaces the quick preview later with a short crossfade.
+      const sourceRect=rect||screenRect(el);
+      const item=addSprite(quickSprite(el,type,sourceRect),type);
+      if(type!=='word'){
+        captureQueue.push({el,type,rect:sourceRect,item,epoch:captureEpoch});
+        if(captureQueue.length>MAX_CAPTURE_QUEUE)captureQueue.shift();
+        scheduleCapture();
+      }
+    }
+    function queueCollect(el,type,rect){
+      // No canvas creation or expensive text drawing occurs during a collision.
+      // Source HTML is hidden but remains in the DOM, so its content/style is
+      // still available when the sprite is built on a later animation frame.
+      spriteQueue.push({el,type,rect,epoch:captureEpoch});
+      if(spriteQueue.length>MAX_PENDING_SPRITES){
+        // Absorption/scoring is never limited; only the number of visible
+        // decorations is capped to protect rendering performance.
+        spriteQueue.splice(0,spriteQueue.length-MAX_PENDING_SPRITES);
+      }
+    }
+    function flushQueuedSprites(){
+      const started=performance.now();
+      let made=0;
+      while(spriteQueue.length && made<SPRITES_PER_FRAME){
+        if(performance.now()-started>SPRITE_FRAME_BUDGET_MS)break;
+        const job=spriteQueue.shift();
+        if(job.epoch!==captureEpoch || !job.el.isConnected)continue;
+        try{collect(job.el,job.type,job.rect)}
+        catch(err){console.debug('Attachment preview skipped:',err)}
+        made++;
+      }
     }
     function rotate(v,ax,ay,az,angle){
       const co=Math.cos(angle),si=Math.sin(angle),dot=v.x*ax+v.y*ay+v.z*az;
@@ -922,16 +985,34 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       ctx.save();ctx.globalAlpha=age*(v.z<0?.73:1);
       ctx.translate(x,y);
       ctx.rotate(item.spin+Math.atan2(v.y,v.x)*.16);
-      // Shadow is baked into each attachment snapshot, not recomputed every frame.
-      ctx.drawImage(image,-sw/2,-sh/2,sw,sh);ctx.restore();
+      // Blend the inexpensive immediate preview into the detailed snapshot.
+      // Never clear an item while waiting for an idle callback.
+      if(item.previousSprite){
+        const blend=Math.min(1,(now-item.blendStart)/SPRITE_FADE_MS);
+        ctx.globalAlpha=age*(v.z<0?.73:1)*(1-blend);
+        ctx.drawImage(item.previousSprite,-sw/2,-sh/2,sw,sh);
+        ctx.globalAlpha=age*(v.z<0?.73:1)*blend;
+        ctx.drawImage(image,-sw/2,-sh/2,sw,sh);
+        if(blend>=1)item.previousSprite=null;
+      }else ctx.drawImage(image,-sw/2,-sh/2,sw,sh);
+      ctx.restore();
     }
     function render(now,deltaX,deltaY){
-      resize();clear();
+      flushQueuedSprites();
+      pendingDX+=deltaX;pendingDY+=deltaY;
+      // High-refresh browsers can otherwise redraw both full-window canvases
+      // 120-240 times per second, competing with the 3D renderer.
+      if(now-lastAttachmentFrame<1000/ATTACHMENT_MAX_FPS)return;
+      lastAttachmentFrame=now;
+      const travelX=pendingDX,travelY=pendingDY;
+      pendingDX=0;pendingDY=0;
+      if(!w || !h)resize(); // Window resize events refresh the canvas size later.
+      clear();
       if(!items.length)return;
       const radius=avatarSize()*.53;
-      const dist=Math.hypot(deltaX,deltaY);
+      const dist=Math.hypot(travelX,travelY);
       if(dist>.01){
-        const axisX=deltaY/dist,axisY=-deltaX/dist;
+        const axisX=travelY/dist,axisY=-travelX/dist;
         const radians=Math.min(.4,dist/Math.max(22,radius));
         for(const item of items)item.vector=rotate(item.vector,axisX,axisY,0,radians);
       }
@@ -942,42 +1023,67 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       const sorted=items.slice().sort((a,b)=>a.vector.z-b.vector.z);
       for(const item of sorted)drawItem(item.vector.z<0?back:front,item,radius,now);
     }
-    return {collect,render,reset,resize,get count(){return items.length}};
+    return {queueCollect,render,reset,resize,get count(){return items.length}};
   })();
-  function eat(candidate,now){
-    if(candidate.eaten)return;
-    const {el,tier}=candidate;
-    const rect=screenRect(el),fr=field.getBoundingClientRect();
-    const x=rect.left-fr.left+rect.width/2,y=rect.top-fr.top+rect.height/2;
-    attachments.collect(el,candidate.type);
-    // Consuming a parent automatically consumes its remaining descendant words
-    // and surfaces. We count each only once, preventing duplicate score farming.
-    let removed=0;
-    if(candidate.type==='word'){
-      // A single word has no child collectibles. Avoid scanning the entire
-      // article (potentially thousands of elements) for each word pickup.
-      candidate.eaten=true;
-      candidate.el.classList.add('eaten');
-      removed=1;
-    }else{
-      for(const other of collectibles){
-        if(other.eaten)continue;
-        if(other===candidate||el.contains(other.el)){
-          other.eaten=true;removed++;
-          other.el.classList.add('eaten'); // visibility hidden; layout stays intact
+  // Collect every appropriately sized item in the pickup circle in one pass.
+  // Nested HTML objects are handled as a single parent pickup: descendants
+  // disappear and count toward progress, but never generate duplicate sprites.
+  function eatBatch(inRange,now,scrollY,fieldRect){
+    if(!inRange.length || game.transitioning || game.status!=='playing')return;
+    const inRangeElements=new Set(inRange.map(c=>c.el));
+    const roots=inRange.filter(c=>{
+      for(let parent=c.el.parentElement;parent;parent=parent.parentElement){
+        if(inRangeElements.has(parent))return false;
+      }
+      return true;
+    });
+    const rootByElement=new Map(roots.map(c=>[c.el,c]));
+    const removedPerRoot=new Map(roots.map(c=>[c,1]));
+    const consumed=new Set(roots);
+    if(roots.some(c=>c.type==='object')){
+      // One pass through the catalogue rather than a full descendant scan for
+      // every collected word or object (important on long Wikipedia pages).
+      for(const c of collectibles){
+        if(c.eaten || consumed.has(c))continue;
+        for(let parent=c.el.parentElement;parent;parent=parent.parentElement){
+          const ancestor=rootByElement.get(parent);
+          if(ancestor && ancestor.type==='object'){
+            consumed.add(c);
+            removedPerRoot.set(ancestor,removedPerRoot.get(ancestor)+1);
+            break;
+          }
         }
       }
     }
-    game.combo=now-game.lastEatTime<1700?game.combo+1:1;game.lastEatTime=now;
-    const mult=clamp(Math.floor(game.combo/5)+1,1,4);
-    const base=tier===3?70:tier===2?30:10;
-    const points=(base+Math.min(25,(removed-1)*2))*mult;
-    game.score+=points;
-    game.eaten+=removed;game.sceneEaten+=removed;
-    game.mass+=tier+Math.min(6,(removed-1)*.28);
-    const oldLevel=game.level;game.level=levelFromMass(game.mass);
-    // Pickup animation is allowed to finish before restarting. Forcing a
-    // reflow with offsetWidth here used to pause movement on EVERY pickup.
+    // Schedule lightweight visual work; never create dozens of canvases in
+    // the collision callback. Drawing is spread over subsequent frames.
+    for(const c of roots){
+      attachments.queueCollect(c.el,c.type,collectibleRect(c,scrollY));
+    }
+    // Hide all consumed elements together; visibility:hidden preserves layout.
+    // Each catalogue entry is counted once, even if nested in a parent pickup.
+    for(const c of consumed){
+      c.eaten=true;
+      c.el.classList.add('eaten');
+    }
+    let earned=0,massEarned=0;
+    let nextCombo=now-game.lastEatTime<1700?game.combo:0;
+    let maxTier=1;
+    for(const c of roots){
+      nextCombo++;
+      const mult=clamp(Math.floor(nextCombo/5)+1,1,4);
+      const removed=removedPerRoot.get(c);
+      const base=c.tier===3?70:c.tier===2?30:10;
+      earned+=(base+Math.min(25,(removed-1)*2))*mult;
+      massEarned+=c.tier+Math.min(6,(removed-1)*.28);
+      maxTier=Math.max(maxTier,c.tier);
+    }
+    game.combo=nextCombo;game.lastEatTime=now;
+    game.score+=earned;
+    game.eaten+=consumed.size;game.sceneEaten+=consumed.size;
+    game.mass+=massEarned;
+    const oldLevel=game.level;
+    game.level=levelFromMass(game.mass);
     if(!avatar.classList.contains('chomping')){
       avatar.classList.add('chomping');
       setTimeout(()=>avatar.classList.remove('chomping'),390);
@@ -987,37 +1093,44 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
         avatar.classList.add('growing');
         setTimeout(()=>avatar.classList.remove('growing'),320);
       }
-      refreshLocks();setToast(`LEVEL ${game.level}! BIGGER BITES UNLOCKED`);
+      refreshLocks();
+      setToast(`LEVEL ${game.level}! BIGGER BITES UNLOCKED`);
     }
-    puff(x,y,tier);soundEat(tier);updateHud();
-    // Timed stages advance ONLY when their clocks expire, not at 85% collection.
-    // Explore Freely remains untimed and uses the 85% threshold to advance.
+    // Only one particle burst, sound and HUD refresh per collision batch.
+    const first=roots[0];
+    const center=collectibleRect(first,scrollY);
+    puff(center.left-fieldRect.left+center.width/2,
+         center.top-fieldRect.top+center.height/2,maxTier);
+    soundEat(maxTier);
+    updateHud();
+    // Timed stages advance only at expiry. Untimed mode retains the original
+    // 85% completion rule, evaluated after the whole batch has been counted.
     if(game.mode==='relaxed' && game.sceneEaten/Math.max(1,game.sceneTotal)>=.85 && !game.transitioning){
       if(game.scene===0)enterSpaceJam();
       else finish('cleared');
     }
   }
   function checkCollisions(now){
-    if(game.transitioning)return;
+    if(game.transitioning || game.status!=='playing')return;
     const fr=field.getBoundingClientRect();
     const radius=collectRadius();
+    const radiusSquared=radius*radius;
     const scrollY=articleScrollPosition();
-    let best=null,bestMetric=Infinity;
+    const inRange=[];
     for(const c of collectibles){
-      if(c.eaten||c.tier>game.level||!c.el.isConnected)continue;
+      if(c.eaten || c.tier>game.level || !c.el.isConnected)continue;
       const r=collectibleRect(c,scrollY);
-      if(!r.width||!r.height)continue;
-      // Fast reject for off-screen elements before doing precise collision math.
-      if(r.right<fr.left-radius||r.left>fr.right+radius||r.bottom<fr.top-radius||r.top>fr.bottom+radius)continue;
-      const nearX=clamp(game.x,r.left-fr.left,r.right-fr.left),nearY=clamp(game.y,r.top-fr.top,r.bottom-fr.top);
+      if(!r.width || !r.height)continue;
+      // Fast viewport reject before testing circle/rectangle overlap.
+      if(r.right<fr.left-radius || r.left>fr.right+radius ||
+         r.bottom<fr.top-radius || r.top>fr.bottom+radius)continue;
+      const nearX=clamp(game.x,r.left-fr.left,r.right-fr.left);
+      const nearY=clamp(game.y,r.top-fr.top,r.bottom-fr.top);
       const dx=game.x-nearX,dy=game.y-nearY;
-      if(dx*dx+dy*dy>=radius*radius)continue;
-      // Prefer fine-grained text over the enclosing card while small.
-      // At higher levels allow a product card to be eaten whole.
-      const metric=(c.type==='word'?0:c.tier===1?2:c.tier===2?4:6)+Math.sqrt(dx*dx+dy*dy)/100;
-      if(metric<bestMetric){best=c;bestMetric=metric}
+      if(dx*dx+dy*dy>=radiusSquared)continue;
+      inRange.push(c);
     }
-    if(best)eat(best,now);
+    if(inRange.length)eatBatch(inRange,now,scrollY,fr);
   }
   function enterSpaceJam(){
     if(game.scene!==0 || game.transitioning || game.status!=='playing')return;
@@ -1032,7 +1145,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     setToast('LOADING SPACE JAM…');
     renderScene();
     // If a browser cannot access the required local page, do not silently run
-    // the 15-second timer against a blank iframe.
+    // the 10-second timer against a blank iframe.
   }
   function finish(reason){
     if(game.status==='finished'||game.status==='intro')return;
@@ -1041,7 +1154,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     $('finishTitle').textContent=reason==='cleared'?'Total page destruction!':'Time is up!';
     $('finishMessage').textContent=reason==='cleared'?'Both saved webpages have been devoured!':'You played Product Lifecycle and the Space Jam bonus. Can you beat your score?';
     $('finalScore').textContent=game.score.toLocaleString();
-    $('finishStats').textContent=`${game.eaten} elements · ${game.mode==='relaxed'?'relaxed mode':'1:30 + 0:15 challenge'}`;
+    $('finishStats').textContent=`${game.eaten} elements · ${game.mode==='relaxed'?'relaxed mode':'1:00 + 0:10 challenge'}`;
     $('initialsInput').value='';$('scoreForm').hidden=false;$('saveMessage').textContent='Scores are saved only on this browser.';
     renderLeaders();updateHud();
   }
@@ -1128,7 +1241,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   function rescanVisibleArticle(){
     if(articleScrollScanScheduled || game.status!=='playing')return;
     articleScrollScanScheduled=true;
-    const delay=Math.max(0,240-(performance.now()-lastArticleScan));
+    const delay=Math.max(0,500-(performance.now()-lastArticleScan)); // Avoid frequent full-page DOM scans.
     setTimeout(()=>{
       const scan=()=>{
         articleScrollScanScheduled=false;
