@@ -559,7 +559,7 @@
     const braking=heldSpeedKeys.has('ArrowLeft');
     const accelerating=heldSpeedKeys.has('ArrowRight');
     if(braking===accelerating)return 1; // neither or both held
-    return braking?.5:1.5;
+    return braking?.5:2.0;
   }
   function clearSpeedKeys(){heldSpeedKeys.clear();}
   function updateProgress(){
