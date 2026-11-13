@@ -27,7 +27,25 @@
     .tile img{width:100%;height:100%;display:block;object-fit:fill;user-select:none;-webkit-user-drag:none;pointer-events:none}
     .character-layer{position:absolute;inset:0;z-index:3;pointer-events:none}
     .skubert-marker{position:absolute;z-index:1;aspect-ratio:1;transform:translate(-50%,-50%);padding:0;border:0;background:transparent;pointer-events:auto;touch-action:none;cursor:pointer;user-select:none;filter:drop-shadow(0 3px 5px #36231850)}
-    .skubert-marker img{width:100%;height:100%;display:block;object-fit:contain;pointer-events:none;user-select:none;transform:perspective(480px) rotateX(var(--marker-pitch,0deg)) rotateZ(var(--marker-rotation,0deg));transition:opacity .22s ease}
+    /* The marker itself stays at the EXACT visual size recorded in the location JSON.
+       Glow and hit area are separate children: neither changes GLB scale or placement. */
+    .skubert-marker img{position:relative;z-index:1;width:100%;height:100%;display:block;object-fit:contain;pointer-events:none;user-select:none;transform:perspective(480px) rotateX(var(--marker-pitch,0deg)) rotateZ(var(--marker-rotation,0deg));transition:opacity .22s ease}
+    /* The transparent halo remains behind both the PNG fallback and the 3D model.
+       It is deliberately outside the PNG so it stays visible after the PNG hides. */
+    .skubert-halo{position:absolute;inset:-27%;z-index:0;border-radius:50%;pointer-events:none;
+      background:radial-gradient(circle,transparent 24%,#84caff29 40%,#77c9ff91 55%,#ffe09f99 68%,transparent 83%);
+      box-shadow:0 0 11px 3px #5db9ff80,0 0 23px 8px #ffd97966;
+      filter:blur(3px);animation:skubert-halo-pulse 2.4s ease-in-out infinite alternate}
+    @keyframes skubert-halo-pulse{from{opacity:.78;transform:scale(.96)}to{opacity:1;transform:scale(1.09)}}
+    /* 150% of the visible head's width AND height = 25% extra on each edge.
+       In Placement Mode keep the target at its original size for accurate editing. */
+    .skubert-hitbox{position:absolute;inset:0;z-index:3;pointer-events:auto;background:transparent;border-radius:50%}
+    .game:not(.placement) .skubert-hitbox{inset:-25%}
+    .skubert-marker.collecting .skubert-halo{animation:skubert-halo-collect 1500ms linear forwards}
+    .skubert-marker.collecting .skubert-hitbox{pointer-events:none}
+    @keyframes skubert-halo-collect{0%{transform:scale(1);opacity:1}62%{transform:scale(3);opacity:1}100%{transform:scale(0);opacity:0}}
+    .skubert-marker.selected:before{z-index:4}
+    .skubert-marker.selected:after{z-index:4}
     .skubert-marker.selected:before{content:"";position:absolute;inset:0;border:2px dashed #2c6ad3;border-radius:50%;box-shadow:0 0 0 3px #fff8;pointer-events:none}
     .skubert-marker.selected:after{content:"⇄";position:absolute;top:-16px;right:-14px;font-size:16px;color:#103766;text-shadow:0 1px white}
     /* Only remove the PNG after a successful WebGL frame for this exact head.
@@ -146,9 +164,8 @@
   </div>
   <div class="game-overlay" id="startOverlay" hidden>
     <div class="overlay-card">
-      <h1>Find Skubert?</h1>
-      <p>Skubert has gotten lost in the Bayeux Tapesty, a 230-foot depiction of the events leading up to the Norman Conquest of England in 1066, led by Willian, Duke of Normandy, challenging Harold II, King of England, and culminating in the Battle of Hastings! Woopsie!</p>
-      <p>Find and click the hidden 3D Skuberts across the Bayeux Tapestry. Earn points in <strong>60 seconds</strong> and gain <strong>+2 seconds</strong> for every head you find.</p>
+      <h1>Where’s Skubert?</h1>
+      <p>Find and click the hidden 3D Skubert heads across the Bayeux Tapestry. Earn points in <strong>60 seconds</strong> and gain <strong>+2 seconds</strong> for every head you find.</p>
       <p id="gameReadyMessage">Loading head locations…</p>
       <button class="overlay-action" id="beginGame" type="button" disabled>Start Searching</button>
     </div>
@@ -205,6 +222,6 @@
   </aside>
   <div class="status" id="status" role="status" hidden></div>
 </main>
-<script src="./tapestry-game.js?v=20261113-countdown-bonus" defer></script>
+<script src="./tapestry-game.js?v=20261113-glow-hitbox" defer></script>
 </body>
 </html>

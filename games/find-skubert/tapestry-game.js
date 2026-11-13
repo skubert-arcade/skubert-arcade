@@ -167,8 +167,12 @@
       const marker=document.createElement('button');marker.className='skubert-marker';
       marker.type='button';marker.dataset.headId=h.id;
       marker.setAttribute('aria-label',`Skubert head at scene ${h.scene}, ${Math.round(h.xPercent)} percent; ${h.points} points`);
+      // Visual head size and 3D geometry remain unchanged. The halo is always
+      // visible, while the transparent hitbox can extend 25% past each side.
+      const halo=document.createElement('span');halo.className='skubert-halo';halo.setAttribute('aria-hidden','true');
       const img=document.createElement('img');img.src=PLACEHOLDER;img.alt='';img.draggable=false;
-      marker.appendChild(img);
+      const hitbox=document.createElement('span');hitbox.className='skubert-hitbox';hitbox.setAttribute('aria-hidden','true');
+      marker.append(halo,img,hitbox);
       marker.addEventListener('pointerdown',e=>{
         e.stopPropagation();
         if(!EDITOR_MODE)return;
