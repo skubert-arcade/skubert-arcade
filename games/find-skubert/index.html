@@ -27,7 +27,7 @@
     .tile img{width:100%;height:100%;display:block;object-fit:fill;user-select:none;-webkit-user-drag:none;pointer-events:none}
     .character-layer{position:absolute;inset:0;z-index:3;pointer-events:none}
     .skubert-marker{position:absolute;z-index:1;aspect-ratio:1;transform:translate(-50%,-50%);padding:0;border:0;background:transparent;pointer-events:auto;touch-action:none;cursor:pointer;user-select:none;filter:drop-shadow(0 3px 5px #36231850)}
-    .skubert-marker img{width:100%;height:100%;display:block;object-fit:contain;pointer-events:none;user-select:none;transform:rotate(var(--marker-rotation,0deg));transition:opacity .22s ease}
+    .skubert-marker img{width:100%;height:100%;display:block;object-fit:contain;pointer-events:none;user-select:none;transform:perspective(480px) rotateX(var(--marker-pitch,0deg)) rotateZ(var(--marker-rotation,0deg));transition:opacity .22s ease}
     .skubert-marker.selected:before{content:"";position:absolute;inset:0;border:2px dashed #2c6ad3;border-radius:50%;box-shadow:0 0 0 3px #fff8;pointer-events:none}
     .skubert-marker.selected:after{content:"⇄";position:absolute;top:-16px;right:-14px;font-size:16px;color:#103766;text-shadow:0 1px white}
     .game.three-active .skubert-marker[data-three-visible="true"] img{opacity:0}
@@ -100,8 +100,10 @@
       <div class="editor-fields">
         <label for="headSize">Head size</label><output id="headSizeOut">9%</output>
         <input type="range" id="headSize" min="2" max="27" step="0.5" value="9">
-        <label for="headYaw">3D yaw / image tilt</label><output id="headYawOut">0°</output>
+        <label for="headYaw">Yaw — look left / right</label><output id="headYawOut">0°</output>
         <input type="range" id="headYaw" min="-180" max="180" step="5" value="0">
+        <label for="headPitch">Pitch — look up / down</label><output id="headPitchOut">0° · level</output>
+        <input type="range" id="headPitch" min="-85" max="85" step="5" value="0" aria-label="Look up or down: negative looks up, positive looks down">
         <label for="headPoints">Future point value</label><input type="number" id="headPoints" min="1" max="9999" step="25" value="100">
       </div>
       <div class="editor-actions">
@@ -120,6 +122,7 @@
       <button class="editor-btn" type="button" id="importJson">Import JSON</button>
       <input type="file" id="jsonInput" accept=".json,application/json" hidden>
     </div>
+    <div class="editor-hint">Yaw turns the head left/right. Pitch tilts it up/down (negative = up, positive = down). The PNG approximates pitch; use <strong>Preview real 3D</strong> to see the true model rotation.</div>
     <div class="editor-hint">Your draft auto-saves in this browser. To publish placements, download the JSON and replace <code>skubert-locations.json</code> in GitHub. This editor does not edit the tapestry images.</div>
   </aside>
   <div class="status" id="status" role="status" hidden></div>

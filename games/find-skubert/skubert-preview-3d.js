@@ -81,8 +81,11 @@ export async function createThreePreview({gameEl,viewport,modelPath,getHeads,get
       const x=(b.left+b.right)*.5-left-lastWidth/2;
       const y=lastHeight/2-((b.top+b.bottom)*.5-top);
       pivot.position.set(x,y,0);
-      // The rotationDeg field is the viewer's yaw setting for the real model.
-      pivot.rotation.set(0,THREE.MathUtils.degToRad(h.rotationDeg)+Math.sin(now*.001)*.06,0);
+      // Yaw turns left/right around the vertical axis. Pitch tilts up/down
+      // around the model's horizontal X axis; YXZ applies yaw before local pitch.
+      const yaw=THREE.MathUtils.degToRad(h.rotationDeg)+Math.sin(now*.001)*.06;
+      const pitch=THREE.MathUtils.degToRad(h.pitchDeg||0);
+      pivot.rotation.set(pitch,yaw,0,'YXZ');
       marker.dataset.threeVisible='true';
     });
     for(let i=Math.min(MAX_VISIBLE_3D,visible.length);i<pool.length;i++)pool[i].visible=false;

@@ -28,7 +28,7 @@
   function serializable(){
     return {
       version: 1, coordinateSystem: 'row-percent',
-      notes: 'scene is 1–9. xPercent/yPercent are relative to that scene. sizePercent is percent of displayed tapestry height. rotationDeg is yaw.',
+      notes: 'scene is 1–9. xPercent/yPercent are relative to that scene. sizePercent is percent of displayed tapestry height. rotationDeg is yaw; pitchDeg is tilt around the horizontal X axis (negative = up, positive = down).',
       heads: heads.map(h=>({...h}))
     };
   }
@@ -53,12 +53,13 @@
     let id = String(h.id||`skubert-${i+1}`).replace(/[^a-zA-Z0-9_-]/g,'').slice(0,36) || `skubert-${i+1}`;
     while(seen.has(id))id=`${id}-${i+1}`;
     seen.add(id);
-    const size=Number(h.sizePercent), rot=Number(h.rotationDeg), pts=Number(h.points);
+    const size=Number(h.sizePercent), rot=Number(h.rotationDeg), pitch=Number(h.pitchDeg), pts=Number(h.points);
     return {
       id,scene,
       xPercent:round(clamp(xp,0,100)),yPercent:round(clamp(yp,0,100)),
       sizePercent:round(Number.isFinite(size)?clamp(size,2,27):9,2),
       rotationDeg:round(Number.isFinite(rot)?clamp(rot,-180,180):0,1),
+      pitchDeg:round(Number.isFinite(pitch)?clamp(pitch,-85,85):0,1),
       points:Number.isFinite(pts)?Math.round(clamp(pts,1,9999)):100
     };
   }
@@ -142,6 +143,7 @@
     marker.style.width=`${size}px`;
     marker.style.height=`${size}px`;
     marker.style.setProperty('--marker-rotation',`${h.rotationDeg}deg`);
+    marker.style.setProperty('--marker-pitch',`${h.pitchDeg||0}deg`);
     marker.classList.toggle('selected',EDITOR_MODE&&h.id===selectedId);
     marker.title=EDITOR_MODE?`${h.id} — drag to reposition`:'Skubert preview';
   }
@@ -224,13 +226,15 @@
     if(!h)return;
     $('headSize').value=h.sizePercent;$('headSizeOut').textContent=h.sizePercent+'%';
     $('headYaw').value=h.rotationDeg;$('headYawOut').textContent=h.rotationDeg+'°';
+    $('headPitch').value=h.pitchDeg||0;
+    $('headPitchOut').textContent=h.pitchDeg<0?`${Math.abs(h.pitchDeg)}° · up`:h.pitchDeg>0?`${h.pitchDeg}° · down`:'0° · level';
     $('headPoints').value=h.points;
   }
   function addHead(position){
     if(!position)return;
     remember();
     let n=1;while(heads.some(h=>h.id===`skubert-${String(n).padStart(2,'0')}`))n++;
-    const h={id:`skubert-${String(n).padStart(2,'0')}`,...position,sizePercent:9,rotationDeg:0,points:100};
+    const h={id:`skubert-${String(n).padStart(2,'0')}`,...position,sizePercent:9,rotationDeg:0,pitchDeg:0,points:100};
     heads.push(h);selectedId=h.id;renderMarkers();saveDraft();
   }
   function deleteSelected(){
@@ -245,15 +249,17 @@
   function controlEvents(){
     $('headSize').addEventListener('pointerdown',remember);
     $('headYaw').addEventListener('pointerdown',remember);
+    $('headPitch').addEventListener('pointerdown',remember);
     $('headPoints').addEventListener('focus',remember);
     $('headSize').addEventListener('input',e=>updateHeadSetting('sizePercent',Number(e.target.value)));
     $('headYaw').addEventListener('input',e=>updateHeadSetting('rotationDeg',Number(e.target.value)));
+    $('headPitch').addEventListener('input',e=>updateHeadSetting('pitchDeg',Number(e.target.value)));
     $('headPoints').addEventListener('change',e=>updateHeadSetting('points',Math.round(clamp(Number(e.target.value)||100,1,9999))));
     $('deleteHead').addEventListener('click',deleteSelected);
     $('duplicateHead').addEventListener('click',()=>{
       const h=markerHead(selectedId);if(!h)return;
       addHead({scene:h.scene,xPercent:clamp(h.xPercent+0.7,0,100),yPercent:clamp(h.yPercent+2,0,100)});
-      const copy=markerHead(selectedId);copy.sizePercent=h.sizePercent;copy.rotationDeg=h.rotationDeg;copy.points=h.points;
+      const copy=markerHead(selectedId);copy.sizePercent=h.sizePercent;copy.rotationDeg=h.rotationDeg;copy.pitchDeg=h.pitchDeg||0;copy.points=h.points;
       updateMarkerPlacement(copy);updateSelectedDisplay();saveDraft();
     });
     $('undo').addEventListener('click',()=>{
