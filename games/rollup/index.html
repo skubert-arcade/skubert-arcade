@@ -342,6 +342,83 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 }
 
 
+/* Arcade-style primary start button */
+
+.launch-card .screen-buttons {
+  flex-direction: column;
+  gap: 9px;
+}
+
+#startTimed {
+  position: relative;
+  width: 100%;
+  min-height: 62px;
+  padding: 15px 24px;
+  border-radius: 15px;
+
+  background: linear-gradient(
+    135deg,
+    #FFE58B,
+    #FFCC55
+  ) !important;
+
+  border: 2px solid #FFF1B4 !important;
+  color: #17304A !important;
+
+  font-size: 19px !important;
+  font-weight: 950;
+  letter-spacing: 0.065em;
+
+  box-shadow: 0 5px 20px #FFCC5566;
+  animation: drop-button-glow 2.5s ease-in-out infinite;
+}
+
+#startTimed:hover:not(:disabled) {
+  background: #FFE68C !important;
+  transform: translateY(-3px) scale(1.03);
+}
+
+#startTimed .drop-arrow {
+  display: inline-block;
+  margin-right: 7px;
+  animation: drop-arrow-bounce 1.25s ease-in-out infinite;
+}
+
+#startTimed .subtle {
+  font-size: 13px;
+  font-weight: 750;
+}
+
+#startZen {
+  width: 100%;
+  background: transparent !important;
+  border: 1px solid #FFFFFF55 !important;
+  color: #FFFFFF !important;
+}
+
+@keyframes drop-button-glow {
+  0%, 100% {
+    box-shadow: 0 4px 14px #FFCC5544;
+  }
+  50% {
+    box-shadow:
+      0 5px 28px #FFCC55AA,
+      0 0 0 5px #FFCC5522;
+  }
+}
+
+@keyframes drop-arrow-bounce {
+  0%, 100% { transform: translateY(-2px); }
+  50% { transform: translateY(5px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #startTimed,
+  #startTimed .drop-arrow {
+    animation: none !important;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -392,7 +469,11 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
           <h2>Skubert Roll UP</h2>
           <p>Roll over HTML objects, grow, and explore the Product Lifecycle.</p>
           <div class="screen-buttons">
-            <button id="startTimed" class="btn btn-green" type="button">↓ Drop in <span class="subtle">· 1:00</span></button>
+            <button id="startTimed" class="btn btn-green" type="button">
+  <span class="drop-arrow" aria-hidden="true">↓</span>
+  DROP IN
+  <span class="subtle">· 1:00</span>
+</button>
             <button id="startZen" class="btn" type="button">Explore freely</button>
           </div>
           <p class="launch-help">Move mouse or use WASD / arrows</p>
