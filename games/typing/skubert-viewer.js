@@ -19,26 +19,24 @@ if (!gameArea || !wrapper || !mount) {
   throw new Error('Missing #GameContent, #Wrapper, or #skubert-viewer.');
 }
 
-// Enlarge the complete viewer, including its PNG fallback, without changing
-// the camera framing or the GLB's head-tracking movement. The model grows by
-// 1% of its INITIAL display size for each correctly submitted letter.
-// Growth is linear: 20 correct letters = 120% of the initial model size.
+// Grow Skubert by 1% of ORIGINAL size per correctly typed letter. We still
+// scale the whole viewer for consistent positioning and placeholder behavior,
+// but also increase the WebGL backing resolution to prevent bitmap stretching.
+// The cap avoids allocating extremely large GPU buffers late in a long game.
+const MAX_RENDER_EDGE_PX = 1536;
+const MAX_NATIVE_PIXEL_RATIO = 2;
+let skubertDisplayScale = 1;
+let viewerWidth = 194;
+let viewerHeight = 194;
+
 mount.style.transformOrigin = 'center bottom';
-mount.style.transition = 'transform 180ms ease-out';
-function updateSkubertGrowth() {
-  const letters = Math.max(0, Number(window.skubertGrowthLetters) || 0);
-  const scale = 1 + letters * 0.01;
-  mount.style.transform = `scale(${scale})`;
-}
-window.addEventListener('skubert:word-correct', updateSkubertGrowth);
-updateSkubertGrowth();
+mount.style.transition = 'opacity 0.2s ease, transform 180ms ease-out';
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
 camera.position.set(0, 0, 5.0);
 
 const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.setClearColor(0x000000, 0);
 mount.appendChild(renderer.domElement);
@@ -54,11 +52,33 @@ skubertPivot.rotation.order = 'YXZ'; // Head-like yaw and pitch.
 scene.add(skubertPivot);
 let isLoaded = false;
 
+function updateRenderResolution() {
+  // A CSS-scaled 194px canvas at 300% needs ~582 CSS pixels of actual
+  // drawing-buffer detail. Multiply the native DPR by Skubert's growth.
+  const nativeDpr = Math.min(MAX_NATIVE_PIXEL_RATIO, Math.max(1, window.devicePixelRatio || 1));
+  const capRatio = MAX_RENDER_EDGE_PX / Math.max(viewerWidth, viewerHeight);
+  const renderPixelRatio = Math.min(nativeDpr * skubertDisplayScale, capRatio);
+
+  renderer.setPixelRatio(renderPixelRatio);
+  // Keep the canvas's CSS dimensions at its unscaled base size. The existing
+  // CSS transform displays it larger; the backing buffer is now sharp enough.
+  renderer.setSize(viewerWidth, viewerHeight, false);
+}
+
+function updateSkubertGrowth() {
+  const letters = Math.max(0, Number(window.skubertGrowthLetters) || 0);
+  skubertDisplayScale = 1 + letters * 0.01;
+  mount.style.transform = `scale(${skubertDisplayScale})`;
+  updateRenderResolution();
+}
+
 function sizeAndPosition() {
   const area = gameArea.getBoundingClientRect();
   const parent = wrapper.getBoundingClientRect();
   const width = Math.max(112, Math.min(194, area.width * 0.34));
   const height = width;
+  viewerWidth = width;
+  viewerHeight = height;
 
   mount.style.width = `${width}px`;
   mount.style.height = `${height}px`;
@@ -70,7 +90,7 @@ function sizeAndPosition() {
 
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
-  renderer.setSize(width, height, false);
+  updateRenderResolution();
 }
 
 sizeAndPosition();
@@ -78,6 +98,8 @@ window.addEventListener('resize', sizeAndPosition);
 if (window.ResizeObserver) {
   new ResizeObserver(sizeAndPosition).observe(gameArea);
 }
+window.addEventListener('skubert:word-correct', updateSkubertGrowth);
+updateSkubertGrowth();
 
 const loader = new GLTFLoader();
 console.time('Skubert GLB load and parse');
