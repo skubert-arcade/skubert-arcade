@@ -12,6 +12,8 @@
   const MODEL_FILE = '../typing/models/skubert.glb';
   const SCROLL_SPEED = 295;
   const RUN_SECONDS = 60;
+  const BONUS_SECONDS = 2;
+  const COUNTDOWN_SECONDS = 3;
   const COLLECT_ANIM_MS = 1500;
   const HIGH_SCORE_KEY = 'skubert-find-best-v1';
   const panels = [], markers = new Map(), images = [];
@@ -20,6 +22,7 @@
   let debounceSave = 0, timerMessage = 0;
   let phase = EDITOR_MODE ? 'editor' : 'ready';
   let score = 0, deadline = 0, secondsLeft = RUN_SECONDS, runToken = 0;
+  let countdownEnd = 0, countdownShown = 0;
   const scoredIds = new Set(), completedIds = new Set(), collectionEffects = new Map();
   const collectionTimers = new Set();
   const undoStack = [];
@@ -298,6 +301,11 @@
       effects.append(spark);
       spark.addEventListener('animationend',()=>spark.remove(),{once:true});
     }
+    const bonus=document.createElement('span');
+    bonus.className='time-bonus-pop';bonus.textContent=`+${BONUS_SECONDS}s`;
+    bonus.style.left=`${x}px`;bonus.style.top=`${y}px`;
+    effects.append(bonus);
+    bonus.addEventListener('animationend',()=>bonus.remove(),{once:true});
     // Concentric golden rings make the interaction legible even on busy imagery.
     for(let i=0;i<2;i++){
       const ring=document.createElement('span');ring.className='capture-ring';
@@ -313,6 +321,10 @@
     const h=markerHead(id),marker=markers.get(id);
     if(!h||!marker)return;
     scoredIds.add(id);score+=h.points;
+    // Extend the absolute deadline, not merely the displayed seconds, so the
+    // countdown is accurate even when the bonus arrives between timer ticks.
+    deadline+=BONUS_SECONDS*1000;
+    secondsLeft=Math.max(0,Math.ceil((deadline-performance.now())/1000));
     const token=runToken;
     collectionEffects.set(id,{start:performance.now()});
     marker.classList.add('collecting');marker.style.pointerEvents='none';
@@ -332,19 +344,46 @@
     for(const t of collectionTimers)clearTimeout(t);
     collectionTimers.clear();collectionEffects.clear();scoredIds.clear();completedIds.clear();
     $('effectLayer').replaceChildren();score=0;secondsLeft=RUN_SECONDS;deadline=0;
+    countdownEnd=0;countdownShown=0;$('countdownOverlay').hidden=true;
     for(const marker of markers.values()){
       marker.classList.remove('collecting','collected');marker.style.pointerEvents='';
     }
     if(three)three.refresh();updateGameHud();
   }
+  function showCountdownNumber(value){
+    if(countdownShown===value)return;
+    countdownShown=value;
+    const number=$('countdownNumber');
+    number.textContent=String(value);
+    // Restart the entrance animation each second, without rebuilding the DOM.
+    number.classList.remove('pulse');
+    void number.offsetWidth;
+    number.classList.add('pulse');
+  }
   function startGame(){
     if(EDITOR_MODE||!heads.length)return;
-    clearRun();phase='playing';
-    setAuto(false);viewport.scrollLeft=0;
+    clearRun();phase='countdown';
+    setAuto(false);viewport.scrollLeft=0;dismissNote();
+    // Remove both the popup and its semi-transparent full-screen backdrop.
     $('endOverlay').hidden=true;$('startOverlay').hidden=true;
-    deadline=performance.now()+RUN_SECONDS*1000;
+    $('countdownOverlay').hidden=false;
+    countdownEnd=performance.now()+COUNTDOWN_SECONDS*1000;
+    showCountdownNumber(COUNTDOWN_SECONDS);
     updateGameHud();
     viewport.focus({preventScroll:true});
+  }
+  function tickCountdown(now){
+    if(phase!=='countdown')return;
+    if(now>=countdownEnd){
+      $('countdownOverlay').hidden=true;
+      phase='playing';
+      deadline=now+RUN_SECONDS*1000;
+      secondsLeft=RUN_SECONDS;
+      updateGameHud();
+      setAuto(true);
+    }else{
+      showCountdownNumber(Math.max(1,Math.ceil((countdownEnd-now)/1000)));
+    }
   }
   function finishGame(){
     if(phase!=='playing')return;
@@ -354,7 +393,8 @@
       if(score>best){best=score;localStorage.setItem(HIGH_SCORE_KEY,String(best));}
     }catch(_){}
     $('endScore').textContent=score.toLocaleString();
-    $('endSummary').textContent=`Found ${scoredIds.size} of ${heads.length} Skubert heads in 60 seconds.`;
+    const earnedSeconds=scoredIds.size*BONUS_SECONDS;
+    $('endSummary').textContent=`Found ${scoredIds.size} of ${heads.length} Skubert heads · +${earnedSeconds} seconds earned.`;
     $('endBest').textContent=`Personal best: ${best.toLocaleString()} points`;
     $('endOverlay').hidden=false;$('restartGame').focus({preventScroll:true});
   }
@@ -462,10 +502,6 @@
 
   function updateProgress(){
     const max=totalScroll(),fraction=max?clamp(viewport.scrollLeft/max,0,1):0;
-    const middle=viewport.getBoundingClientRect().left+viewport.clientWidth*.5;
-    const found=panels.find(p=>p.node.getBoundingClientRect().left<=middle && p.node.getBoundingClientRect().right>middle);
-    const scene=found?Number(found.node.dataset.scene):panels.length;
-    $('positionLabel').textContent=`Scene ${scene} of ${panels.length} · ${Math.round(fraction*100)}%`;
     $('percent').textContent=`${Math.round(fraction*100)}%`;
     seek.value=Math.round(fraction*1000);
     seek.style.setProperty('--progress',`${fraction*100}%`);
@@ -532,6 +568,7 @@
     });
     let last=0;
     function tick(now){
+      tickCountdown(now);
       tickGameTimer(now);
       if(auto){const dt=Math.min(.05,Math.max(0,(now-last)/1000||0));viewport.scrollLeft+=SCROLL_SPEED*dt;}
       last=now;requestAnimationFrame(tick);

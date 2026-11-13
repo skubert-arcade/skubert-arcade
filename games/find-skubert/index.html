@@ -42,7 +42,6 @@
     .head-left,.head-right{display:flex;align-items:center;gap:10px;pointer-events:auto}
     .home{background:#231b16a8;border:1px solid #ffedc360;border-radius:999px;padding:7px 11px;color:#fff7e8;text-decoration:none;font-weight:750;font-size:12px;backdrop-filter:blur(6px)}
     .heading{font:700 15px/1.2 Georgia,serif;letter-spacing:.01em;text-shadow:0 1px 5px #100902bb}
-    .location{font-size:11px;font-weight:750;text-shadow:0 1px 5px #100902bb;white-space:nowrap}
     .mode-pill{background:#f5d99e;color:#3a2813;border:1px solid #fff1c4;border-radius:999px;font-weight:850;font-size:11px;padding:5px 9px;white-space:nowrap}
     .game-hud{display:flex;gap:6px;align-items:center;white-space:nowrap}
     .hud-item{padding:5px 9px;border:1px solid #ffedc360;border-radius:999px;background:#231b16c9;font-size:12px;font-weight:850;font-variant-numeric:tabular-nums;backdrop-filter:blur(6px)}
@@ -56,6 +55,14 @@
     .overlay-action{background:#f0c47c;color:#251b12;font-weight:900;border:0;border-radius:10px;padding:13px 24px;margin-top:10px;font-size:15px}
     .overlay-action:hover:not(:disabled){background:#ffdfa7}
     .overlay-action:disabled{opacity:.5;cursor:not-allowed}
+    /* The ready overlay and its dark scrim disappear before countdown starts.
+       Countdown is deliberately transparent and doesn't block the tapestry. */
+    .countdown-overlay{position:absolute;inset:0;z-index:23;display:grid;place-items:center;pointer-events:none;background:none}
+    .countdown-number{font-size:clamp(110px,25vw,260px);font-weight:950;line-height:1;color:#fff3c5;
+      font-variant-numeric:tabular-nums;text-shadow:0 5px 0 #6a3821,0 9px 25px #20130c,0 0 35px #20130cbd;
+      -webkit-text-stroke:2px #67411f}
+    .countdown-number.pulse{animation:countdown-pop 900ms cubic-bezier(.16,.85,.3,1) both}
+    @keyframes countdown-pop{0%{opacity:0;transform:scale(1.7)}18%{opacity:1}76%{opacity:1;transform:scale(.96)}100%{opacity:0;transform:scale(.83)}}
     /* Strong foreground effects: never behind WebGL, tapestry or heads. */
     .effect-layer{position:absolute;inset:0;z-index:18;pointer-events:none;overflow:hidden;isolation:isolate}
     .capture-spark{position:absolute;display:block;width:var(--spark-size,20px);height:var(--spark-size,20px);pointer-events:none;transform-origin:center;
@@ -71,10 +78,14 @@
       38%{transform:translate(calc(-50% + var(--half-dx)),calc(-50% + var(--half-dy))) rotate(105deg) scale(1.6);opacity:1}
       100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) rotate(230deg) scale(0);opacity:0}
     }
+    .time-bonus-pop{position:absolute;z-index:2;color:#fef6bf;font-weight:950;font-size:clamp(24px,4vw,40px);
+      white-space:nowrap;pointer-events:none;text-shadow:0 2px 1px #67401b,0 0 11px #261404;
+      animation:time-bonus-rise 1050ms ease-out both}
+    @keyframes time-bonus-rise{0%{opacity:0;transform:translate(-50%,-25%) scale(.75)}20%{opacity:1}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-145%) scale(1.15)}}
     .capture-ring{position:absolute;box-sizing:border-box;width:var(--ring-size,70px);height:var(--ring-size,70px);border:3px solid #fff1a3;border-radius:50%;
       pointer-events:none;box-shadow:0 0 12px #ffce58, inset 0 0 12px #fff8b2;animation:skubert-ring 750ms ease-out both;animation-delay:var(--ring-delay,0ms)}
     @keyframes skubert-ring{0%{transform:translate(-50%,-50%) scale(.18);opacity:0}17%{opacity:1}100%{transform:translate(-50%,-50%) scale(3);opacity:0}}
-    @media(max-width:700px){.game-hud{gap:3px}.hud-item{padding:4px 6px;font-size:10px}.location{display:none}}
+    @media(max-width:700px){.game-hud{gap:3px}.hud-item{padding:4px 6px;font-size:10px}}
 
     .arrow{position:absolute;top:50%;transform:translateY(-50%);width:36px;height:64px;z-index:8;border:1px solid #ffe8b56c;border-radius:12px;background:#23191092;backdrop-filter:blur(8px);color:#fff7e7;font-size:28px;opacity:.72}
     .arrow:hover{opacity:1}.arrow:disabled{opacity:.2;cursor:default}.arrow.prev{left:8px}.arrow.next{right:8px}
@@ -120,7 +131,7 @@
   </div>
   <header class="chromebar">
     <div class="head-left"><a href="../../index.html" class="home">← Arcade</a><strong class="heading">Where’s Skubert?</strong><span class="mode-pill" id="modeBadge" hidden>PLACEMENT MODE</span></div>
-    <div class="head-right"><span class="location" id="positionLabel">Scene 1 of 9 · 0%</span>
+    <div class="head-right">
       <div class="game-hud" id="gameHud" hidden aria-live="off">
         <span class="hud-item">Score <strong id="gameScore">0</strong></span>
         <span class="hud-item">Found <strong id="gameFound">0 / 0</strong></span>
@@ -130,12 +141,15 @@
   </header>
   <div class="note" id="introNote">Scroll horizontally to explore the tapestry.</div>
   <div class="effect-layer" id="effectLayer" aria-hidden="true"></div>
+  <div class="countdown-overlay" id="countdownOverlay" aria-live="off" aria-label="Starting in three, two, one" hidden>
+    <div class="countdown-number" id="countdownNumber">3</div>
+  </div>
   <div class="game-overlay" id="startOverlay" hidden>
     <div class="overlay-card">
       <h1>Where’s Skubert?</h1>
-      <p>Find and click the hidden 3D Skubert heads across the Bayeux Tapestry. Earn as many points as you can in <strong>60 seconds</strong>.</p>
+      <p>Find and click the hidden 3D Skubert heads across the Bayeux Tapestry. Earn points in <strong>60 seconds</strong> and gain <strong>+2 seconds</strong> for every head you find.</p>
       <p id="gameReadyMessage">Loading head locations…</p>
-      <button class="overlay-action" id="beginGame" type="button" disabled>Start searching · 1:00</button>
+      <button class="overlay-action" id="beginGame" type="button" disabled>Start Searching</button>
     </div>
   </div>
   <div class="game-overlay" id="endOverlay" hidden>
@@ -190,6 +204,6 @@
   </aside>
   <div class="status" id="status" role="status" hidden></div>
 </main>
-<script src="./tapestry-game.js" defer></script>
+<script src="./tapestry-game.js?v=20261113-countdown-bonus" defer></script>
 </body>
 </html>
