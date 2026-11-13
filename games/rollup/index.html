@@ -457,14 +457,14 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const CHASE_RESPONSE = 7.0;      // Higher = snappier; lower = heavier / more momentum.
   const SLOWDOWN_RADIUS = 105;     // Distance (px) over which Skubert brakes near the cursor.
   const EDGE_SCROLL_PUSH = 120;    // Target extension (px) near the top/bottom edge.
-  const EDGE_SCROLL_ZONE = 45;     // Width (px) of the edge-scroll activation area.
+  const EDGE_SCROLL_ZONE = 300;     // Width (px) of the edge-scroll activation area.
   // GROWTH SETTINGS — one size function controls the GLB/fallback, attached
   // items, drop-in landing, and the HTML pickup hitbox. Adjust here only.
-  const AVATAR_START_SIZE = 65;       // Diameter in CSS pixels at zero mass.
-  const AVATAR_GROWTH_RATE = 10;      // Size gained per square root of mass (previously 13).
-  const AVATAR_MAX_SIZE = 1000;        // Maximum desktop diameter (previously 220).
+  const AVATAR_START_SIZE = 50;       // Diameter in CSS pixels at zero mass.
+  const AVATAR_GROWTH_RATE = 5;      // Size gained per square root of mass (previously 13).
+  const AVATAR_MAX_SIZE = 1500;        // Maximum desktop diameter (previously 220).
   const AVATAR_MAX_VIEWPORT = 0.90;  // Limit on narrow screens to 90% of field width.
-  const COLLECT_RADIUS_FACTOR = 0.58; // Pickup radius as a fraction of avatar diameter.
+  const COLLECT_RADIUS_FACTOR = 0.80; // Pickup radius as a fraction of avatar diameter.
   // Keep a one-element stage list for compatibility with the existing collection engine.
   const SCENES = [
     {name:'PRODUCT LIFECYCLE', url:'./levels/product-lifecycle-snapshot.html'}
