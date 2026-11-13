@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#11152b">
+  <title>Find Skubert · Skubert Arcade</title>
+  <link rel="icon" href="../../assets/favicon.ico" type="image/x-icon">
+  <style>
+    :root{color-scheme:dark;--navy:#11152b;--deep:#080c1d;--gold:#edc17d;--cream:#f5ead9;--muted:#b7b8c9;--outline:#ffffff27;--panel:#1b2441}
+    *{box-sizing:border-box}
+    html,body{margin:0;min-height:100%;background:var(--deep);color:var(--cream);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+    body{background:radial-gradient(ellipse at 45% 0%,#333253 0%,transparent 48%),linear-gradient(#11152b 0%,#0a0c1e 75%);overflow-x:hidden}
+    button,a,input{font:inherit}
+    button{cursor:pointer}
+    button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #ffdf83;outline-offset:4px}
+    [hidden]{display:none!important}
+    .layout{width:100%;min-height:100dvh;display:flex;flex-direction:column}
+    .topbar{width:min(1400px,100%);margin:0 auto;padding:18px 24px 14px;display:flex;justify-content:space-between;align-items:center;gap:20px}
+    .back{display:inline-flex;align-items:center;gap:8px;color:#d5d4ea;text-decoration:none;font-size:13px;font-weight:700;white-space:nowrap}
+    .back:hover{color:#fff}
+    .badge{font:700 10px/1.2 system-ui,sans-serif;letter-spacing:.19em;text-transform:uppercase;color:var(--gold)}
+    .mast{display:flex;align-items:center;gap:14px}
+    .mast h1{font:700 clamp(22px,3.7vw,37px)/1.13 Georgia,"Times New Roman",serif;letter-spacing:.012em;margin:3px 0 0}
+    .righttools{display:flex;align-items:center;justify-content:end;gap:9px;flex-wrap:wrap}
+    .time,.stat{border:1px solid var(--outline);border-radius:12px;padding:7px 12px;min-width:94px;background:#ffffff0b}
+    .time strong,.stat strong{display:block;font-variant-numeric:tabular-nums;font-size:18px;line-height:1.2;color:var(--gold)}
+    .time small,.stat small{display:block;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-size:10px}
+    .introline{max-width:1390px;margin:0 auto;width:100%;padding:0 24px 16px;display:flex;gap:16px;justify-content:space-between;align-items:center}
+    .introline p{font-size:13px;color:#d3d2df;margin:0}
+    .reference{display:flex;align-items:center;gap:10px;font-size:12px;color:#d7d4df;white-space:nowrap}
+    .reference img{width:45px;height:45px;object-fit:contain;filter:drop-shadow(0 0 6px #16121a)}
+    .stage{position:relative;margin:0 0 0;flex:1;min-height:390px;display:flex;flex-direction:column;justify-content:center}
+    .scene-name{position:relative;z-index:3;width:min(1400px,100%);margin:0 auto;padding:0 24px 10px;color:#b6b5cd;font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+    .tapestry-frame{position:relative;width:100%;box-shadow:0 5px 80px #030610ba}
+    .tapestry-frame:before,.tapestry-frame:after{content:"";position:absolute;left:0;right:0;height:7px;z-index:4;pointer-events:none;background:linear-gradient(#5f392c,#b58a56,#4b2b29)}
+    .tapestry-frame:before{top:-7px}.tapestry-frame:after{bottom:-7px}
+    .tapestry-viewport{--tapestry-height:clamp(250px,48vh,565px);width:100%;height:var(--tapestry-height);overflow-x:auto;overflow-y:hidden;scroll-behavior:auto;overscroll-behavior-x:contain;scrollbar-color:#9a7259 #161327;scrollbar-width:thin;touch-action:pan-x;cursor:grab;background:#e7dac6}
+    .tapestry-viewport.dragging{cursor:grabbing;user-select:none}
+    .tapestry-strip{height:100%;display:flex;align-items:stretch;width:max-content}
+    .scene-panel{height:100%;aspect-ratio:2048/145;flex:none;position:relative}
+    .scene-panel img{display:block;width:100%;height:100%;object-fit:fill;user-select:none;-webkit-user-drag:none;pointer-events:none}
+    .target-hotspot{position:absolute;left:45.35%;top:40.5%;width:2.8%;height:34%;border:0;border-radius:40%;background:transparent;padding:0;touch-action:manipulation;z-index:2}
+    .target-hotspot:hover{cursor:pointer}
+    .target-hotspot:focus-visible{outline:2px dashed #eaa14a;outline-offset:3px}
+    .target-hotspot.found{outline:5px solid #ffcf68;outline-offset:7px;background:#ffdb5233;animation:found-glow .9s ease-in-out infinite alternate}
+    @keyframes found-glow{to{outline-offset:15px;background:#ffdb5200}}
+    .scroll-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:3;border:1px solid #fff8;color:#fff;background:#121930bb;backdrop-filter:blur(6px);border-radius:100px;width:45px;height:66px;display:grid;place-items:center;font-size:26px;box-shadow:0 8px 24px #0005;transition:.15s background}
+    .scroll-arrow:hover{background:#29385edd}
+    .scroll-arrow.prev{left:12px}.scroll-arrow.next{right:12px}
+    .edge-shadow{position:absolute;pointer-events:none;top:0;bottom:0;width:36px;z-index:2}
+    .edge-shadow.left{left:0;background:linear-gradient(90deg,#1014269c,transparent)}.edge-shadow.right{right:0;background:linear-gradient(270deg,#1014269c,transparent)}
+    .controls{width:min(1400px,100%);margin:17px auto 0;padding:0 24px 20px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 22px;align-items:center}
+    .scrub-labels{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:12px;color:#dad4d4}
+    #seek{appearance:none;-webkit-appearance:none;width:100%;height:7px;margin:13px 0;cursor:pointer;border-radius:12px;background:linear-gradient(to right,var(--gold) 0%,var(--gold) var(--progress,0%),#ffffff23 var(--progress,0%),#ffffff23 100%)}
+    #seek::-webkit-slider-thumb{appearance:none;width:19px;height:19px;background:#f0c883;border:3px solid #2b2540;border-radius:50%;box-shadow:0 0 0 1px #c59b73}
+    #seek::-moz-range-thumb{width:14px;height:14px;background:#f0c883;border:3px solid #2b2540;border-radius:50%}
+    .ticks{display:grid;grid-template-columns:repeat(9,1fr);gap:2px;color:#8c94ad;font-size:9px;text-align:center;letter-spacing:.05em}
+    .ticks span{border-top:1px solid #ffffff35;padding-top:4px}
+    .actions{display:flex;gap:9px;justify-content:end;flex-wrap:wrap}
+    .btn{border:1px solid #847392;color:var(--cream);border-radius:10px;background:#202443;padding:10px 14px;font-size:13px;font-weight:750;white-space:nowrap}
+    .btn:hover{background:#313959}
+    .btn.primary{background:#ddad68;border-color:#f0cb8f;color:#191b2a}.btn.primary:hover{background:#f6c780}
+    .status{font-size:11px;color:#b4b3c9;text-align:center;padding:0 16px 15px}
+    .overlay{position:fixed;inset:0;background:#050a1edc;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(6px)}
+    .overlay-card{width:min(100%,510px);text-align:center;background:linear-gradient(180deg,#29304d,#161b32);border:1px solid #a18d7759;border-radius:19px;box-shadow:0 30px 80px #0009;padding:28px 28px 25px}
+    .overlay-card h2{font:700 35px/1.1 Georgia,serif;margin:8px 0 12px;color:#fff1ce}
+    .overlay-card p{font-size:14px;color:#e0d8d8;line-height:1.6}
+    .overlay-card .sub{font-size:12px;color:#b9baca}
+    .overlay-card img{width:110px;height:110px;object-fit:contain;filter:drop-shadow(0 12px 10px #0006)}
+    .overlay-card .btn{font-size:15px;padding:13px 24px;margin-top:9px}
+    .result-time{font-size:30px;color:#f8d491;font-weight:800;font-variant-numeric:tabular-nums;margin:14px}
+    .hint{background:#e1b27116;border:1px solid #e1b2714d;padding:9px 14px;border-radius:9px;color:#ffe8c5;font-size:12px;max-width:520px;margin:5px auto 9px}
+    @media(max-width:720px){.topbar{padding:12px 13px}.mast h1{font-size:24px}.righttools{gap:5px}.time,.stat{padding:5px 7px;min-width:66px}.time strong,.stat strong{font-size:14px}.time small,.stat small{font-size:8px}.introline{padding:0 13px 12px;align-items:flex-start;flex-direction:column;gap:9px}.introline p{font-size:12px}.reference{font-size:11px;white-space:normal;align-items:center}.reference span br{display:none}.reference img{width:36px;height:36px}.mast .badge{font-size:9px;letter-spacing:.11em}.stage{min-height:300px}.scene-name{padding:0 13px 10px}.tapestry-viewport{--tapestry-height:clamp(245px,43vh,380px)}.controls{padding:0 13px 20px;grid-template-columns:1fr}.actions{justify-content:center}.scroll-arrow{width:37px;height:55px}.scroll-arrow.prev{left:5px}.scroll-arrow.next{right:5px}.overlay-card{padding:25px 19px}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;scroll-behavior:auto!important;transition:none!important}}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <header class="topbar">
+    <div class="mast"><div><div class="badge">Skubert Arcade · Game 03</div><h1>Where's Skubert?</h1></div></div>
+    <div class="righttools">
+      <div class="time"><small>Elapsed</small><strong id="elapsed">0:00</strong></div>
+      <div class="stat"><small>Tapestry</small><strong id="progressText">0%</strong></div>
+      <a class="back" href="../../index.html">← Arcade</a>
+    </div>
+  </header>
+  <div class="introline">
+    <p>Travel through the tapestry from left to right. Somewhere among its horses, ships, and soldiers, <strong>Skubert is hiding.</strong></p>
+    <div class="reference"><img src="assets/hidden-skubert.png" alt="Reference picture of Skubert"><span>Find the knitted hat,<br>round glasses and blue nose.</span></div>
+  </div>
+  <main class="stage">
+    <div class="scene-name"><span id="sceneLabel">Scene 1 of 9</span> · The Bayeux Tapestry</div>
+    <div class="tapestry-frame">
+      <div class="edge-shadow left"></div><div class="edge-shadow right"></div>
+      <button type="button" class="scroll-arrow prev" id="previous" aria-label="Scroll left">‹</button>
+      <div id="viewport" class="tapestry-viewport" role="region" tabindex="0" aria-label="Long horizontal tapestry. Scroll horizontally, or use left and right arrow keys, to search for Skubert.">
+        <div class="tapestry-strip" id="strip">
+          <div class="scene-panel"><img src="assets/tapestry-01.webp" alt="Bayeux Tapestry, section 1 of 9" draggable="false" width="2048" height="145"></div>
+          <div class="scene-panel"><img src="assets/tapestry-02.webp" alt="Bayeux Tapestry, section 2 of 9" draggable="false" width="2048" height="145"></div>
+          <div class="scene-panel"><img src="assets/tapestry-03.webp" alt="Bayeux Tapestry, section 3 of 9" draggable="false" width="2048" height="145"></div>
+          <div class="scene-panel"><img src="assets/tapestry-04.webp" alt="Bayeux Tapestry, section 4 of 9" draggable="false" width="2048" height="145"></div>
+          <div class="scene-panel"><img src="assets/tapestry-05.webp" alt="Bayeux Tapestry, section 5 of 9" draggable="false" width="2048" height="145"></div>
+          <div class="scene-panel"><img src="assets/tapestry-06.webp" alt="Bayeux Tapestry, section 6 of 9" draggable="false" width="2048" height="145"></div>
+          <div class="scene-panel"><img src="assets/tapestry-07.webp" alt="Bayeux Tapestry, section 7 of 9" draggable="false" width="2048" height="145"></div>
+          <div class="scene-panel"><img src="assets/tapestry-08.webp" alt="Bayeux Tapestry, section 8 of 9" draggable="false" width="2048" height="145"></div>
+          <div class="scene-panel"><img src="assets/tapestry-09.webp" alt="Bayeux Tapestry, section 9 of 9" draggable="false" width="2048" height="145">
+            <button class="target-hotspot" id="skubertTarget" type="button" aria-label="Select the hidden Skubert in this part of the tapestry"></button>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="scroll-arrow next" id="next" aria-label="Scroll right">›</button>
+    </div>
+    <div class="controls">
+      <div>
+        <div class="scrub-labels"><span>← Beginning</span><span id="seekText">Slide or scroll to explore</span><span>End →</span></div>
+        <input id="seek" type="range" min="0" max="1000" step="1" value="0" aria-label="Tapestry position" style="--progress:0%">
+        <div class="ticks" aria-hidden="true"><span>01</span><span>02</span><span>03</span><span>04</span><span>05</span><span>06</span><span>07</span><span>08</span><span>09</span></div>
+      </div>
+      <div class="actions">
+        <button class="btn" type="button" id="auto">▶ Auto-scroll</button>
+        <button class="btn" type="button" id="hint">Need a hint?</button>
+        <button class="btn" type="button" id="restart">↻ Restart</button>
+      </div>
+    </div>
+  </main>
+  <div class="status" id="status" aria-live="polite">Mouse wheel · drag sideways · swipe · arrow keys · position slider</div>
+</div>
+<div class="overlay" id="welcome">
+  <div class="overlay-card">
+    <div class="badge">A medieval hide-and-seek adventure</div>
+    <img src="assets/hidden-skubert.png" alt="Skubert with a knitted hat and round glasses">
+    <h2>Where's Skubert?</h2>
+    <p>The tapestry has been unrolled into one continuous journey. Explore its entire length, and click Skubert when you spot him.</p>
+    <p class="sub">Use your mouse wheel, drag the tapestry, swipe, or press the arrow keys. You can also use the slider to jump around.</p>
+    <button class="btn primary" type="button" id="start">Start searching →</button>
+  </div>
+</div>
+<div class="overlay" id="success" hidden>
+  <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="successTitle">
+    <div class="badge">YOU FOUND HIM!</div>
+    <img src="assets/hidden-skubert.png" alt="Found Skubert">
+    <h2 id="successTitle">Skubert discovered!</h2>
+    <p>He was hiding in the final stretch of the tapestry.</p>
+    <div class="result-time" id="resultTime">0:00</div>
+    <p class="sub" id="bestTime"></p>
+    <button class="btn primary" type="button" id="playAgain">Search again</button>
+    <button class="btn" type="button" id="seeSpot">View the spot</button>
+  </div>
+</div>
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const viewport = $('viewport');
+  const strip = $('strip');
+  const seek = $('seek');
+  const target = $('skubertTarget');
+  const panels = [...strip.querySelectorAll('.scene-panel')];
+  const STORAGE_KEY = 'skubert-tapestry-best-v1';
+  let started = false, found = false, startTime = 0, endTime = 0;
+  let autoScroll = false, lastFrame = 0, dragging = false, dragDistance = 0;
+  let dragStartX = 0, dragStartScroll = 0, pointerId = -1, hintLevel = 0;
+  const maxScroll = () => Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+  const formatTime = seconds => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2,'0')}`;
+
+  function updateProgress() {
+    const percent = maxScroll() ? viewport.scrollLeft / maxScroll() * 100 : 0;
+    $('progressText').textContent = `${Math.round(percent)}%`;
+    seek.value = String(Math.round(percent * 10));
+    seek.style.setProperty('--progress', `${percent}%`);
+    const panelW = panels[0].getBoundingClientRect().width || 1;
+    const scene = Math.min(9, Math.floor((viewport.scrollLeft + viewport.clientWidth * .45) / panelW) + 1);
+    $('sceneLabel').textContent = `Scene ${scene} of 9`;
+    $('seekText').textContent = `${Math.round(percent)}% explored`;
+    $('previous').disabled = viewport.scrollLeft <= 1;
+    $('next').disabled = viewport.scrollLeft >= maxScroll() - 1;
+    if (autoScroll && viewport.scrollLeft >= maxScroll() - 1) setAuto(false);
+  }
+  function setAuto(value) {
+    autoScroll = Boolean(value) && started && !found;
+    $('auto').textContent = autoScroll ? 'Ⅱ Pause auto-scroll' : '▶ Auto-scroll';
+  }
+  function moveBy(distance) {
+    if (!started || found) return;
+    setAuto(false);
+    viewport.scrollBy({left:distance,behavior:'smooth'});
+  }
+  function reset() {
+    setAuto(false);
+    started=false;found=false;hintLevel=0;endTime=0;startTime=0;
+    viewport.scrollLeft = 0;
+    target.classList.remove('found');
+    $('elapsed').textContent = '0:00';
+    $('status').textContent = 'Mouse wheel · drag sideways · swipe · arrow keys · position slider';
+    $('success').hidden=true;
+    $('welcome').hidden=false;
+    updateProgress();
+  }
+  function begin() {
+    $('welcome').hidden=true;
+    $('success').hidden=true;
+    started=true; found=false;
+    startTime=performance.now();
+    viewport.focus({preventScroll:true});
+    $('status').textContent='Keep looking! Skubert is blended into the tapestry artwork.';
+  }
+  function win() {
+    if (!started || found) return;
+    found=true;endTime=performance.now();setAuto(false);
+    const seconds=(endTime-startTime)/1000;
+    $('elapsed').textContent=formatTime(seconds);
+    $('resultTime').textContent=formatTime(seconds);
+    target.classList.add('found');
+    let best=null;
+    try {
+      const stored=Number(localStorage.getItem(STORAGE_KEY));
+      best=stored>0?stored:null;
+      if (best===null || seconds<best){localStorage.setItem(STORAGE_KEY,String(seconds));best=seconds;}
+    } catch (_) {}
+    $('bestTime').textContent=best===null?'':`Best time on this browser: ${formatTime(best)}`;
+    $('success').hidden=false;
+    $('playAgain').focus({preventScroll:true});
+    $('status').textContent='Found! You spotted Skubert hidden in the tapestry.';
+  }
+  function tick(now) {
+    if (started && !found) $('elapsed').textContent=formatTime((now-startTime)/1000);
+    if (autoScroll && started && !found) {
+      const dt=Math.min(.05,(now-lastFrame)/1000 || 0);
+      viewport.scrollLeft += 285 * dt;
+      updateProgress();
+    }
+    lastFrame=now;
+    requestAnimationFrame(tick);
+  }
+  viewport.addEventListener('scroll',updateProgress,{passive:true});
+  window.addEventListener('resize',updateProgress);
+  viewport.addEventListener('wheel',e=>{
+    if (!started || found) return;
+    e.preventDefault();
+    setAuto(false);
+    const delta = (Math.abs(e.deltaX)>Math.abs(e.deltaY)) ? e.deltaX : e.deltaY;
+    viewport.scrollLeft += delta * (e.deltaMode===1 ? 36 : 3.1);
+  },{passive:false});
+  viewport.addEventListener('pointerdown',e=>{
+    if(!started || found || e.target===target || (e.pointerType!=='mouse'&&e.pointerType!=='pen'))return;
+    setAuto(false);dragging=true;dragDistance=0;pointerId=e.pointerId;
+    dragStartX=e.clientX;dragStartScroll=viewport.scrollLeft;
+    viewport.classList.add('dragging');viewport.setPointerCapture(e.pointerId);
+  });
+  viewport.addEventListener('pointermove',e=>{
+    if (!dragging || e.pointerId!==pointerId) return;
+    dragDistance=Math.max(dragDistance, Math.abs(e.clientX-dragStartX));
+    viewport.scrollLeft=dragStartScroll+(dragStartX-e.clientX);
+  });
+  function endDrag(e){if(e.pointerId!==pointerId)return;dragging=false;pointerId=-1;viewport.classList.remove('dragging');}
+  viewport.addEventListener('pointerup',endDrag);
+  viewport.addEventListener('pointercancel',endDrag);
+  viewport.addEventListener('lostpointercapture',()=>{dragging=false;pointerId=-1;viewport.classList.remove('dragging');});
+  seek.addEventListener('input',()=>{if(!started || found)return;setAuto(false);viewport.scrollLeft=maxScroll()*Number(seek.value)/1000;});
+  target.addEventListener('click',win);
+  $('previous').addEventListener('click',()=>moveBy(-viewport.clientWidth*.83));
+  $('next').addEventListener('click',()=>moveBy(viewport.clientWidth*.83));
+  $('start').addEventListener('click',begin);
+  $('restart').addEventListener('click',reset);
+  $('playAgain').addEventListener('click',()=>{reset();begin();});
+  $('seeSpot').addEventListener('click',()=>{$('success').hidden=true;viewport.focus({preventScroll:true});});
+  $('auto').addEventListener('click',()=>setAuto(!autoScroll));
+  $('hint').addEventListener('click',()=>{
+    if(!started || found)return;
+    const hints=['Skubert is closer to the end than to the beginning.','Keep an eye on the final scene.','Look among the mounted soldiers, not the boats.'];
+    $('status').textContent='Hint: '+hints[Math.min(hintLevel,hints.length-1)];
+    hintLevel++;
+  });
+  document.addEventListener('keydown',e=>{
+    if(!started || found || ['INPUT','BUTTON','TEXTAREA'].includes(document.activeElement?.tagName)&&document.activeElement!==viewport)return;
+    const key=e.key.toLowerCase();
+    if (key==='arrowright'||key==='d') {e.preventDefault();moveBy(viewport.clientWidth*.28);}
+    else if(key==='arrowleft'||key==='a'){e.preventDefault();moveBy(-viewport.clientWidth*.28);}
+    else if(key==='pagedown'||key===' '){e.preventDefault();moveBy(viewport.clientWidth*.85);}
+    else if(key==='pageup'){e.preventDefault();moveBy(-viewport.clientWidth*.85);}
+    else if(key==='home'){e.preventDefault();moveBy(-maxScroll());}
+    else if(key==='end'){e.preventDefault();moveBy(maxScroll());}
+  });
+  updateProgress();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
