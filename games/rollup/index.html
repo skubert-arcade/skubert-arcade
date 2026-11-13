@@ -120,6 +120,13 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 .topbar .menu-toggle,.topbar .right-actions{pointer-events:auto}
 .menu-toggle{background:#0d2532e8;border:1px solid #ffffff42;color:white;border-radius:50px;font-size:12px;padding:9px 13px;font-weight:800;box-shadow:0 6px 24px #0e293e2b;backdrop-filter:blur(12px)}
 .menu-toggle:hover{background:#28445c}
+  a.menu-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: #FFFFFF;
+}
 .right-actions{position:absolute;top:42px;right:0;display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:9px;width:210px;background:#102937f5;border:1px solid #ffffff2e;border-radius:15px;box-shadow:0 16px 35px #05172550;backdrop-filter:blur(16px)}
 .right-actions .btn{display:block!important;width:100%;text-align:left;color:white;background:transparent;border:0;border-radius:8px;font-size:12px;padding:11px 12px;transform:none!important;text-decoration:none}
 .right-actions .btn:hover:not(:disabled){background:#ffffff1b}
@@ -340,7 +347,13 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 <body>
 <div class="wrap">
   <header class="topbar" id="arcadeTopbar">
-    <button class="menu-toggle" id="menuBtn" type="button" aria-expanded="false" aria-controls="gameMenu" aria-label="Open game menu">☰ <span>menu</span></button>
+    <a
+  class="menu-toggle"
+  id="menuBtn"
+  href="https://skubert-arcade.github.io/skubert-arcade/index.html"
+>
+  Arcade
+</a>
     <div class="right-actions" id="gameMenu" hidden>
       <button id="helpBtn" class="btn btn-sm" type="button">? How to play</button>
       <button id="soundBtn" class="btn btn-sm" type="button" aria-pressed="false">♪ Sound off</button>
@@ -375,7 +388,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       <div id="toast" aria-live="polite"></div>
       <div class="screen launch-screen" id="introOverlay">
         <div class="screen-card launch-card">
-          <p class="launch-eyebrow">📦</p>
+          <p class="launch-eyebrow"></p>
           <h2>Skubert Roll UP</h2>
           <p>Roll over HTML objects, grow, and explore the Product Lifecycle.</p>
           <div class="screen-buttons">
@@ -1305,7 +1318,6 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const menuButton=$('menuBtn'), menu=$('gameMenu'), topbar=$('arcadeTopbar');
   function closeMenu(){menu.hidden=true;menuButton.setAttribute('aria-expanded','false');topbar.classList.remove('menu-open')}
   function toggleMenu(){const open=menu.hidden;menu.hidden=!open;menuButton.setAttribute('aria-expanded',String(open));topbar.classList.toggle('menu-open',open)}
-  menuButton.addEventListener('click',e=>{e.stopPropagation();toggleMenu()});
   document.addEventListener('pointerdown',e=>{if(!menu.hidden&&!topbar.contains(e.target))closeMenu()});
   menu.addEventListener('click',e=>{if(e.target.closest('button,a'))closeMenu()});
   $('startTimed').addEventListener('click',()=>start('timed'));
