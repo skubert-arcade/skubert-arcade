@@ -169,7 +169,7 @@ function updateWordPosition() {
 
 // UPDATE SCORE
 function updateScore() {
-  score += 10;
+  score += completedWord.length;
   scoreElementID.innerHTML = `<p>Score ${score}</p>`;
 }
 
