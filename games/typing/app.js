@@ -94,6 +94,24 @@ const DICTIONARY = [
   'integration',
   'interopability',
   'granularity',
+  'master data',
+  'product family',
+  'product line',
+  'parent child',
+  'bundle',
+  'kit',
+  'component',
+  'accessory',
+  'compatibility',
+  'alternates',
+  'substitutes',
+  'crossreference',
+  'segmentation',
+  'partition',
+  'relationship',
+  'linkage',
+  'dependency',
+  'inheritance',
 ];
 
 // GAME START
@@ -124,7 +142,59 @@ function drawWord() {
 }
 
 // GET RANDOM WORD FROM DICTIONARY
+
+let unusedWords = [];
+let lastSpawnedWord = null;
+
 function generateRandomWord(words) {
+  // Refill only after every word has been selected.
+  if (unusedWords.length === 0) {
+    unusedWords = [...new Set(
+      words.map(word => word.toLowerCase().trim())
+    )];
+
+    // Fisher-Yates shuffle
+    for (let i = unusedWords.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [unusedWords[i], unusedWords[j]] =
+        [unusedWords[j], unusedWords[i]];
+    }
+  }
+
+  // Prefer a word not already on screen,
+  // and not the word most recently spawned.
+  let index = unusedWords.findLastIndex(
+    word =>
+      !arrWords.includes(word) &&
+      word !== lastSpawnedWord
+  );
+
+  // Allow the previous word only if necessary.
+  if (index === -1) {
+    index = unusedWords.findLastIndex(
+      word => !arrWords.includes(word)
+    );
+  }
+
+  // All remaining words are currently on screen.
+  if (index === -1) return null;
+
+  const [word] = unusedWords.splice(index, 1);
+  lastSpawnedWord = word;
+  return word;
+}
+function drawWord() {
+  const word = generateRandomWord(DICTIONARY);
+
+  // Skip this spawn if no eligible word is available.
+  if (word === null) return;
+
+  arrWords.push(word);
+
+  // Keep the rest of the existing drawWord()
+  // function unchanged.
+}
+{
   return words[Math.floor(Math.random() * words.length)];
 }
 
