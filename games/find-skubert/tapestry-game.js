@@ -17,6 +17,10 @@
   const BONUS_SECONDS = 2;
   const COUNTDOWN_SECONDS = 3;
   const COLLECT_ANIM_MS = 1500;
+  const FULL_SCORE_WINDOW_MS = 2000; // On-screen for <2 seconds: 100% of base points.
+  const MID_SCORE_WINDOW_MS = 3000;  // On-screen for 2 to <3 seconds: 75%.
+  // Heads in the placement JSON default to 100 base points. Custom base
+  // points are respected, so a 200-point head scores 200, 150, or 100.
   const HIGH_SCORE_KEY = 'skubert-find-best-v1';
   const panels = [], markers = new Map(), images = [];
   let heads = [], selectedId = null, auto = false, lastFrame = 0;
@@ -28,6 +32,9 @@
   let score = 0, deadline = 0, secondsLeft = RUN_SECONDS, runToken = 0;
   let countdownEnd = 0, countdownShown = 0;
   const scoredIds = new Set(), completedIds = new Set(), collectionEffects = new Map();
+  // Starts when the visible head first overlaps the viewport in actual play.
+  // The timestamp is retained if the head later leaves the screen.
+  const enteredScreenAt = new Map();
   const collectionTimers = new Set();
   const undoStack = [];
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -162,7 +169,10 @@
     marker.classList.toggle('selected',EDITOR_MODE&&h.id===selectedId);
     marker.classList.toggle('collecting',collectionEffects.has(h.id));
     marker.classList.toggle('collected',completedIds.has(h.id));
-    marker.title=EDITOR_MODE?`${h.id} — drag to reposition`: 'Find and click Skubert';
+    // Native HTML title tooltips can appear as a yellow rectangle after a
+    // pointer click. Never show one on a gameplay head.
+    if(EDITOR_MODE)marker.title=`${h.id} — drag to reposition`;
+    else marker.removeAttribute('title');
   }
   function renderMarkers(){
     for(const marker of markers.values())marker.remove();
@@ -171,8 +181,8 @@
       const marker=document.createElement('button');marker.className='skubert-marker';
       marker.type='button';marker.dataset.headId=h.id;
       marker.setAttribute('aria-label',`Skubert head at scene ${h.scene}, ${Math.round(h.xPercent)} percent; ${h.points} points`);
-      // Visual head size and 3D geometry remain unchanged. The halo is always
-      // visible, while the transparent hitbox can extend 25% past each side.
+      // Neither 3D model scale nor stored coordinates are changed by glow
+      // modulation or the enlarged 195%-size gameplay hit target.
       const halo=document.createElement('span');halo.className='skubert-halo';halo.setAttribute('aria-hidden','true');
       const img=document.createElement('img');img.src=PLACEHOLDER;img.alt='';img.draggable=false;
       const hitbox=document.createElement('span');hitbox.className='skubert-hitbox';hitbox.setAttribute('aria-hidden','true');
@@ -286,7 +296,7 @@
   // Foreground sparkle burst. Coordinates are measured in game viewport space
   // (not tapestry-world space) so the burst is visible above the 3D canvas.
   // Every element is decorative and cannot intercept pointer clicks.
-  function sparksAt(marker){
+  function sparksAt(marker,awardedPoints){
     const rect=marker.getBoundingClientRect(),bounds=gameEl.getBoundingClientRect();
     const x=(rect.left+rect.right)/2-bounds.left;
     const y=(rect.top+rect.bottom)/2-bounds.top;
@@ -310,7 +320,7 @@
       spark.addEventListener('animationend',()=>spark.remove(),{once:true});
     }
     const bonus=document.createElement('span');
-    bonus.className='time-bonus-pop';bonus.textContent=`+${BONUS_SECONDS}s`;
+    bonus.className='time-bonus-pop';bonus.textContent=`+${awardedPoints} pts · +${BONUS_SECONDS}s`;
     bonus.style.left=`${x}px`;bonus.style.top=`${y}px`;
     effects.append(bonus);
     bonus.addEventListener('animationend',()=>bonus.remove(),{once:true});
@@ -324,19 +334,31 @@
       ring.addEventListener('animationend',()=>ring.remove(),{once:true});
     }
   }
+  function pointsForHead(head,enteredAt,now){
+    const age=Math.max(0,now-enteredAt);
+    const fraction=age<FULL_SCORE_WINDOW_MS?1:age<MID_SCORE_WINDOW_MS?.75:.50;
+    return Math.max(1,Math.round(head.points*fraction));
+  }
   function collectHead(id){
     if(phase!=='playing'||scoredIds.has(id))return;
     const h=markerHead(id),marker=markers.get(id);
     if(!h||!marker)return;
-    scoredIds.add(id);score+=h.points;
+    const now=performance.now();
+    // If a click happens before the first animation-frame visibility sample,
+    // this click itself establishes the first seen time.
+    if(!enteredScreenAt.has(id))enteredScreenAt.set(id,now);
+    const awardedPoints=pointsForHead(h,enteredScreenAt.get(id),now);
+    scoredIds.add(id);score+=awardedPoints;
     // Extend the absolute deadline, not merely the displayed seconds, so the
     // countdown is accurate even when the bonus arrives between timer ticks.
     deadline+=BONUS_SECONDS*1000;
-    secondsLeft=Math.max(0,Math.ceil((deadline-performance.now())/1000));
+    secondsLeft=Math.max(0,Math.ceil((deadline-now)/1000));
     const token=runToken;
-    collectionEffects.set(id,{start:performance.now()});
+    collectionEffects.set(id,{start:now});
     marker.classList.add('collecting');marker.style.pointerEvents='none';
-    sparksAt(marker);updateGameHud();
+    // Clear the native button's focus so it cannot leave a yellow rectangle.
+    if(document.activeElement===marker)marker.blur();
+    sparksAt(marker,awardedPoints);updateGameHud();
     if(three)three.refresh();
     const timer=setTimeout(()=>{
       collectionTimers.delete(timer);
@@ -350,7 +372,7 @@
   function clearRun(){
     runToken++;
     for(const t of collectionTimers)clearTimeout(t);
-    collectionTimers.clear();collectionEffects.clear();scoredIds.clear();completedIds.clear();
+    collectionTimers.clear();collectionEffects.clear();scoredIds.clear();completedIds.clear();enteredScreenAt.clear();
     $('effectLayer').replaceChildren();score=0;secondsLeft=RUN_SECONDS;deadline=0;
     countdownEnd=0;countdownShown=0;$('countdownOverlay').hidden=true;
     for(const marker of markers.values()){
@@ -508,6 +530,27 @@
     await enableThree();
   }
 
+  function updateHeadScreenStates(now){
+    if(EDITOR_MODE)return; // Placement Mode always has full-strength halos.
+    const bounds=viewport.getBoundingClientRect();
+    const width=Math.max(1,bounds.width);
+    for(const [id,marker] of markers){
+      if(completedIds.has(id))continue;
+      const box=marker.getBoundingClientRect();
+      const centerX=(box.left+box.right)*.5;
+      // 0 at the RIGHT edge of the screen, 1 at the LEFT edge. This is
+      // independent of scroll speed, canvas rendering and the 2-second pulse.
+      const strength=clamp((bounds.right-centerX)/width,0,1);
+      // Avoid unnecessary style invalidation in 60fps animation frames.
+      const value=strength.toFixed(3);
+      if(marker.style.getPropertyValue('--glow-strength')!==value)
+        marker.style.setProperty('--glow-strength',value);
+      const onscreen=box.right>bounds.left && box.left<bounds.right &&
+        box.bottom>bounds.top && box.top<bounds.bottom;
+      if(phase==='playing' && onscreen && !enteredScreenAt.has(id))
+        enteredScreenAt.set(id,now);
+    }
+  }
   function updateSpeedReadout(){
     if(EDITOR_MODE)return;
     $('speedValue').textContent=`${speedMultiplier.toFixed(2)}×`;
@@ -626,6 +669,7 @@
         }
         viewport.scrollLeft+=SCROLL_SPEED*(EDITOR_MODE?1:speedMultiplier)*dt;
       }
+      updateHeadScreenStates(now);
       last=now;requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);

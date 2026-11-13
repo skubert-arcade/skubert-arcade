@@ -30,32 +30,38 @@
     .tile{height:100%;flex:none;position:relative;background:#e5d5b9;overflow:hidden}
     .tile img{width:100%;height:100%;display:block;object-fit:fill;user-select:none;-webkit-user-drag:none;pointer-events:none}
     .character-layer{position:absolute;inset:0;z-index:3;pointer-events:none}
-    .skubert-marker{position:absolute;z-index:1;aspect-ratio:1;transform:translate(-50%,-50%);padding:0;border:0;background:transparent;pointer-events:auto;touch-action:none;cursor:pointer;user-select:none;filter:drop-shadow(0 3px 5px #36231850)}
+    .skubert-marker{position:absolute;z-index:1;aspect-ratio:1;transform:translate(-50%,-50%);padding:0;border:0;background:transparent;pointer-events:auto;touch-action:none;cursor:pointer;user-select:none;filter:drop-shadow(0 3px 5px #36231850);appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent}
+    /* A clicked HTML button must not show the browser's rectangular yellow
+       focus/tap highlight. Keyboard focus retains a CIRCULAR accessible ring. */
+    .game:not(.placement) .skubert-marker:focus{outline:none!important}
+    .game:not(.placement) .skubert-marker:focus-visible .skubert-hitbox{outline:3px solid #fff1bf;outline-offset:3px}
     /* The marker itself stays at the EXACT visual size recorded in the location JSON.
        Glow and hit area are separate children: neither changes GLB scale or placement. */
     .skubert-marker img{position:relative;z-index:1;width:100%;height:100%;display:block;object-fit:contain;pointer-events:none;user-select:none;transform:perspective(480px) rotateX(var(--marker-pitch,0deg)) rotateZ(var(--marker-rotation,0deg));transition:opacity .22s ease}
     /* The transparent halo remains behind both the PNG fallback and the 3D model.
        It is deliberately outside the PNG so it stays visible after the PNG hides. */
-    /* Gold stays visible. Blue is its own layer, which reaches EXACTLY zero
-       opacity at the end of EVERY two-second pulse. Neither layer changes
-       head geometry, pointer targets, or placement coordinates. */
+    /* The whole halo is modulated by screen position (CSS custom property):
+       zero on the right edge, 100% on the left edge. The independent blue
+       two-second pulse is still applied INSIDE the position-scaled halo. */
     .skubert-halo{position:absolute;inset:-27%;z-index:0;border-radius:50%;pointer-events:none;
       background:radial-gradient(circle,transparent 28%,#ffd79726 43%,#ffce78a8 65%,transparent 84%);
       box-shadow:0 0 15px 5px #ffd97971,0 0 25px 7px #e9a84757;
-      filter:blur(3px);animation:skubert-halo-pulse 2.4s ease-in-out infinite alternate}
+      filter:blur(3px);animation:skubert-halo-pulse 2.4s ease-in-out infinite alternate;
+      opacity:var(--glow-strength,1)}
     .skubert-halo::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
       background:radial-gradient(circle,transparent 22%,#7bdaff25 37%,#64c6ffbf 55%,#449bff88 70%,transparent 84%);
       box-shadow:0 0 12px 3px #58bfffba,0 0 25px 8px #339bff87;
       animation:skubert-blue-glow-fade 2s ease-in-out infinite}
     @keyframes skubert-blue-glow-fade{0%,100%{opacity:0}37%,60%{opacity:1}}
-    @keyframes skubert-halo-pulse{from{opacity:.83;transform:scale(.96)}to{opacity:1;transform:scale(1.09)}}
-    /* 150% of the visible head's width AND height = 25% extra on each edge.
-       In Placement Mode keep the target at its original size for accurate editing. */
+    @keyframes skubert-halo-pulse{from{opacity:calc(var(--glow-strength,1) * .83);transform:scale(.96)}to{opacity:var(--glow-strength,1);transform:scale(1.09)}}
+    /* Previously 150% of head width/height. Increase that by another 30%:
+       150% * 1.30 = 195% total target width AND height (47.5% each edge).
+       Placement Mode retains original head size for precise dragging. */
     .skubert-hitbox{position:absolute;inset:0;z-index:3;pointer-events:auto;background:transparent;border-radius:50%}
-    .game:not(.placement) .skubert-hitbox{inset:-25%}
+    .game:not(.placement) .skubert-hitbox{inset:-47.5%}
     .skubert-marker.collecting .skubert-halo{animation:skubert-halo-collect 1500ms linear forwards}
     .skubert-marker.collecting .skubert-hitbox{pointer-events:none}
-    @keyframes skubert-halo-collect{0%{transform:scale(1);opacity:1}62%{transform:scale(3);opacity:1}100%{transform:scale(0);opacity:0}}
+    @keyframes skubert-halo-collect{0%{transform:scale(1);opacity:var(--glow-strength,1)}62%{transform:scale(3);opacity:var(--glow-strength,1)}100%{transform:scale(0);opacity:0}}
     .skubert-marker.selected:before{z-index:4}
     .skubert-marker.selected:after{z-index:4}
     .skubert-marker.selected:before{content:"";position:absolute;inset:0;border:2px dashed #2c6ad3;border-radius:50%;box-shadow:0 0 0 3px #fff8;pointer-events:none}
@@ -182,7 +188,7 @@
   <div class="game-overlay" id="startOverlay" hidden>
     <div class="overlay-card">
       <h1>Where’s Skubert?</h1>
-      <p>Find and click the hidden 3D Skubert heads across the Bayeux Tapestry. Earn points in <strong>60 seconds</strong> and gain <strong>+2 seconds</strong> for every head you find.</p>
+      <p>Find and click the hidden 3D Skubert heads across the Bayeux Tapestry. Find one quickly for <strong>100 points</strong> (first 2 seconds on screen), then <strong>75</strong> (next second), or <strong>50</strong> afterward. Each find adds <strong>+2 seconds</strong> to your 60-second timer.</p>
       <p>The tapestry scrolls automatically. Hold <strong>←</strong> to brake to half speed or <strong>→</strong> to accelerate to 1.5× speed. Release to smoothly return to normal.</p>
       <p id="gameReadyMessage">Loading head locations…</p>
       <button class="overlay-action" id="beginGame" type="button" disabled>Start Searching</button>
@@ -219,7 +225,7 @@
         <input type="range" id="headYaw" min="-180" max="180" step="5" value="0">
         <label for="headPitch">Pitch — look up / down</label><output id="headPitchOut">0° · level</output>
         <input type="range" id="headPitch" min="-85" max="85" step="5" value="0" aria-label="Look up or down: negative looks up, positive looks down">
-        <label for="headPoints">Future point value</label><input type="number" id="headPoints" min="1" max="9999" step="25" value="100">
+        <label for="headPoints">Starting points (100% / 75% / 50%)</label><input type="number" id="headPoints" min="1" max="9999" step="25" value="100">
       </div>
       <div class="editor-actions">
         <button class="editor-btn" type="button" id="duplicateHead">Duplicate</button>
@@ -242,6 +248,6 @@
   </aside>
   <div class="status" id="status" role="status" hidden></div>
 </main>
-<script src="./tapestry-game.js?v=20261113-inertial-blue-pulse" defer></script>
+<script src="./tapestry-game.js?v=20261113-time-value-glow-target" defer></script>
 </body>
 </html>
