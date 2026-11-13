@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#FFFFFF">
 <title>Roll Up</title>
+<!-- Site-wide favicon is stored at the root of the repository, outside /games/. -->
+<link rel="icon" type="image/png" href="../../assets/favicon.png">
 <link rel="preload" href="../typing/models/skubert.glb" as="fetch" crossorigin="anonymous">
 <script type="importmap">
 {
@@ -362,7 +364,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     </div>
   </header>
   <div class="header-title">
-    <div><div class="eyebrow">THE WEB IS YOUR BUFFET</div><h1>Eat the page. <em>Get huge.</em></h1><p class="subhead">Roll through two archived webpages, absorb HTML elements, and grow as you go.</p></div>
+    <div><div class="eyebrow">THE WEB IS YOUR BUFFET</div><h1>Eat the page. <em>Get huge.</em></h1><p class="subhead">Roll through Product Lifecycle, absorb HTML elements, and grow as you go.</p></div>
     <div class="meta">NO INSTALL · 100% BROWSER GAME</div>
   </div>
   <section class="stats" aria-label="Game statistics">
@@ -373,7 +375,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   </section>
   <div class="game-shell">
     <div class="shell-bar">
-      <div class="shell-title"><div class="traffic"><span></span><span></span><span></span></div><span id="shellSceneTitle">PRODUCT LIFECYCLE · STAGE 1 / 2</span></div>
+      <div class="shell-title"><div class="traffic"><span></span><span></span><span></span></div><span id="shellSceneTitle">PRODUCT LIFECYCLE</span></div>
       <div class="shell-status" id="shellStatus">READY TO CHOMP</div>
     </div>
     <div id="playfield" tabindex="0" aria-label="Game area. Move your mouse or arrow keys to guide Skubert over page elements.">
@@ -393,9 +395,9 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
         <div class="screen-card launch-card">
           <p class="launch-eyebrow">Skubert Roll Up</p>
           <h2>Ready to drop in?</h2>
-          <p>Roll over HTML objects, grow, and roll through Product Lifecycle, then enjoy 10 bonus seconds on Space Jam.</p>
+          <p>Roll over HTML objects, grow, and explore the Product Lifecycle page.</p>
           <div class="screen-buttons">
-            <button id="startTimed" class="btn btn-green" type="button">↓ Drop in <span class="subtle">· 1:00 + 0:10</span></button>
+            <button id="startTimed" class="btn btn-green" type="button">↓ Drop in <span class="subtle">· 1:00</span></button>
             <button id="startZen" class="btn" type="button">Explore freely</button>
           </div>
           <p class="launch-help">Move mouse or use WASD / arrows</p>
@@ -405,7 +407,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       <div class="screen" id="helpOverlay" hidden>
         <div class="screen-card">
           <div class="figure">🍽️</div><h2>How to play</h2>
-          <p>Roll through two locally saved webpages. Absorb words and other HTML elements to grow. Timed play gives you 60 seconds on Product Lifecycle, followed by 10 seconds on Space Jam.</p>
+          <p>Explore the locally saved Product Lifecycle webpage. Absorb words and other HTML elements to grow. Timed play gives you 60 seconds.</p>
           <div class="instructions">
             <div class="instruction"><strong>🖱️ Mouse / touch</strong>Move or drag within the game area. Push Skubert against the top or bottom edge to scroll the article.</div>
             <div class="instruction"><strong>⌨️ Keyboard</strong>Use arrows or WASD to move and scroll at the edges; P pauses.</div>
@@ -448,9 +450,8 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const helpOverlay = $('helpOverlay');
   const keys = new Set();
   const KEY = 'skubert-dom-dash-scores-v1';
-  // TIMED RUN: 60 seconds on the Product Lifecycle snapshot, then 10 seconds on Space Jam.
-  const STAGE_DURATIONS = [60, 10];
-  const DURATION = STAGE_DURATIONS[0];
+  // TIMED RUN: 60 seconds on the Product Lifecycle snapshot.
+  const DURATION = 60;
   // MOVEMENT SETTINGS — change these values to customize the ball-like feel.
   const MOVE_SPEED = 450;          // Maximum speed (pixels/second).
   const CHASE_RESPONSE = 7.0;      // Higher = snappier; lower = heavier / more momentum.
@@ -464,9 +465,9 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const AVATAR_MAX_SIZE = 520;        // Maximum desktop diameter (previously 220).
   const AVATAR_MAX_VIEWPORT = 0.90;  // Limit on narrow screens to 90% of field width.
   const COLLECT_RADIUS_FACTOR = 0.58; // Pickup radius as a fraction of avatar diameter.
+  // Keep a one-element stage list for compatibility with the existing collection engine.
   const SCENES = [
-    {name:'PRODUCT LIFECYCLE', url:'./levels/product-lifecycle-snapshot.html'},
-    {name:'SPACE JAM', url:'./levels/space-jam-snapshot.html'}
+    {name:'PRODUCT LIFECYCLE', url:'./levels/product-lifecycle-snapshot.html'}
   ];
   const snapshotState = SCENES.map(() => ({available:false,error:false}));
   function snapshotPage(){
@@ -478,8 +479,9 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   let collectibles=[];
   let siteObserver;
   let queuedRescan=false;
-  // Snapshot levels are static; tokenize each document only once.
-  const tokenizedPages=new WeakSet();
+  // Tokenize visible text incrementally. A full saved webpage may contain many
+  // thousands of words, so a one-time 650-word limit misses later sections.
+  const WORDS_PER_SCAN=400;
   const game={mode:'timed',status:'intro',scene:0,score:0,eaten:0,total:0,sceneTotal:0,sceneEaten:0,mass:0,level:1,remaining:DURATION,x:120,y:260,tx:120,ty:260,vx:0,vy:0,pointer:false,combo:0,lastEatTime:0,transitioning:false,sound:false,previous:0,lastCheck:0,lastHudTime:0,saved:false};
   // Read-only for the optional 3D renderer; gameplay owns movement and growth.
   window.skubertWeballState = game;
@@ -509,19 +511,36 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   function splitWords(root){
     const owner=root.ownerDocument||document;
     const walker=owner.createTreeWalker(root,NodeFilter.SHOW_TEXT);
-    const nodes=[];let node;
-    while((node=walker.nextNode()))if(eligibleWordText(node))nodes.push(node);
-    let count=0;
+    const nodes=[];
+    const viewport=field.getBoundingClientRect();
+    const frame=snapshotIframe();
+    const frameRect=frame?.getBoundingClientRect();
+    let node, capacity=WORDS_PER_SCAN;
+    // Search the whole DOM without altering off-screen text.  Wrap newly
+    // encountered words only where they can be collected on this screen.
+    while((node=walker.nextNode())){
+      const parent=node.parentElement;
+      if(!parent || !node.nodeValue?.trim() || parent.closest('.dom-word'))continue;
+      if(parent.closest('script,style,noscript,textarea,input,select,option,svg,canvas,[hidden],[aria-hidden="true"]'))continue;
+      const box=parent.getBoundingClientRect();
+      const top=box.top+(frameRect?.top||0),bottom=box.bottom+(frameRect?.top||0);
+      if(bottom<viewport.top-120||top>viewport.bottom+120 || box.width<2 || box.height<2)continue;
+      if(!eligibleWordText(node))continue;
+      nodes.push(node);
+      // Limit candidate text nodes as well as words to avoid collecting all
+      // of a long, paragraph-heavy snapshot in a single scan.
+      if(nodes.length>=2000)break;
+    }
     for(const textNode of nodes){
+      if(capacity<=0)break;
       const tokens=textNode.nodeValue.split(/(\s+)/);
-      if(tokens.length<2 && !textNode.nodeValue.trim())continue;
       const fragment=owner.createDocumentFragment();
       for(const part of tokens){
         if(!part)continue;
-        if(!part.trim() || count>=650){fragment.append(document.createTextNode(part));continue;}
+        if(!part.trim() || capacity<=0){fragment.append(owner.createTextNode(part));continue;}
         const span=owner.createElement('span');
         span.className='dom-word';span.textContent=part;
-        fragment.append(span);count++;
+        fragment.append(span);capacity--;
       }
       textNode.replaceWith(fragment);
     }
@@ -587,7 +606,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     if(siteObserver)siteObserver.disconnect();
     const root=collectRoot();
     if(!root){collectibles=[];return;}
-    if(!tokenizedPages.has(root)){splitWords(root);tokenizedPages.add(root);}
+    splitWords(root);
     const existing=new Set(append?collectibles.map(c=>c.el):[]);
     const words=[...root.querySelectorAll('.dom-word')].filter(el=>!existing.has(el)&&isVisible(el));
     const objects=[...root.querySelectorAll('*')].filter(el=>!existing.has(el)&&isVisualObject(el));
@@ -645,16 +664,9 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
         refreshLocks();updateHud();
         frame.dataset.snapshotReady='true';
         console.info('Offline snapshot ready:',SCENES[renderedScene].name,game.sceneTotal,'collectibles');
-        // The 10-second bonus clock starts AFTER the new saved page is ready.
-        if(game.status==='loading' && renderedScene===1){
-          game.status='playing';game.transitioning=false;
-          game.remaining=game.mode==='relaxed'?Infinity:STAGE_DURATIONS[1];
-          game.previous=performance.now();
-          updateHud();setToast('SPACE JAM · 10 SECOND BONUS!');
-        }
       },{once:true});
     }
-    $('shellSceneTitle').textContent=`${SCENES[game.scene].name} · STAGE ${game.scene+1} / ${SCENES.length}`;
+    $('shellSceneTitle').textContent=SCENES[game.scene].name;
     refreshLocks();updateHud();
   }
   function refreshLocks(){
@@ -667,7 +679,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     $('eatenLabel').innerHTML=`${game.eaten} <span class="stat-suffix">/ ${game.total}</span>`;
     $('sizeLabel').textContent=`LV ${game.level}`;
     $('timeLabel').textContent=game.mode==='relaxed'?'∞':timeText(game.remaining);
-    $('remainingLabel').textContent=`Stage ${game.scene+1}: ${game.sceneTotal-game.sceneEaten} DOM items remaining`;
+    $('remainingLabel').textContent=`${game.sceneTotal-game.sceneEaten} DOM items remaining`;
     $('progressFill').style.width=`${game.sceneTotal?(game.sceneEaten/game.sceneTotal)*100:0}%`;
     $('shellStatus').textContent=game.status==='playing'?'EATING · KEEP MOVING':game.status.toUpperCase();
   }
@@ -715,7 +727,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     if(snapshotIframe()?.dataset.snapshotReady!=='true'){setToast('SNAPSHOT IS STILL LOADING');return;}
     if(game.status!=='intro')resetToIntro();
     game.mode=mode;game.status='dropping';
-    game.remaining=mode==='relaxed'?Infinity:STAGE_DURATIONS[0];
+    game.remaining=mode==='relaxed'?Infinity:DURATION;
     game.x=field.clientWidth*.5;game.y=field.clientHeight*.44;
     game.tx=game.x;game.ty=game.y;game.vx=0;game.vy=0;
     positionAvatar();
@@ -730,7 +742,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       if(dropAnimation){dropAnimation.cancel();dropAnimation=null;}
       game.status='playing';game.previous=performance.now();
       $('pauseBtn').disabled=false;updateHud();
-      setToast('STAGE 1 · PRODUCT LIFECYCLE · 1:00');
+      setToast('PRODUCT LIFECYCLE · 1:00');
       field.focus({preventScroll:true});
     }
 
@@ -1025,43 +1037,67 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     }
     return {queueCollect,render,reset,resize,get count(){return items.length}};
   })();
-  // Collect every appropriately sized item in the pickup circle in one pass.
-  // Nested HTML objects are handled as a single parent pickup: descendants
-  // disappear and count toward progress, but never generate duplicate sprites.
-  function eatBatch(inRange,now,scrollY,fieldRect){
-    if(!inRange.length || game.transitioning || game.status!=='playing')return;
-    const inRangeElements=new Set(inRange.map(c=>c.el));
-    const roots=inRange.filter(c=>{
-      for(let parent=c.el.parentElement;parent;parent=parent.parentElement){
-        if(inRangeElements.has(parent))return false;
-      }
-      return true;
+  // Batch words without letting a large parent steal a whole paragraph just
+  // because one corner of the parent's bounding box touches the pickup circle.
+  function chooseBatchRoots(inRange,scrollY,fieldRect,radius){
+    const words=inRange.filter(c=>c.type==='word');
+    const objects=inRange.filter(c=>c.type==='object');
+    const squared=radius*radius;
+    const inside=(x,y)=>x*x+y*y<=squared;
+    const fullyInside=c=>{
+      const r=collectibleRect(c,scrollY);
+      const left=r.left-fieldRect.left-game.x,right=r.right-fieldRect.left-game.x;
+      const top=r.top-fieldRect.top-game.y,bottom=r.bottom-fieldRect.top-game.y;
+      return inside(left,top)&&inside(right,top)&&inside(left,bottom)&&inside(right,bottom);
+    };
+    // Smallest first: an image/card is not displaced by an unrelated wrapper.
+    objects.sort((a,b)=>{
+      const x=collectibleRect(a,scrollY),y=collectibleRect(b,scrollY);
+      return x.width*x.height-y.width*y.height;
     });
-    const rootByElement=new Map(roots.map(c=>[c.el,c]));
-    const removedPerRoot=new Map(roots.map(c=>[c,1]));
+    const chosenObjects=[];
+    for(const c of objects){
+      const rect=collectibleRect(c,scrollY);
+      // A word can be picked up when the circle touches it; a visual object
+      // requires its center to be in range (not merely a grazed corner).
+      const dx=rect.left-fieldRect.left+rect.width/2-game.x;
+      const dy=rect.top-fieldRect.top+rect.height/2-game.y;
+      if(!inside(dx,dy))continue;
+      // Do not absorb a containing element while it still contains words or
+      // objects outside Skubert's reach. A fully enclosed object is safe.
+      if(!fullyInside(c) && c.el.querySelector('.dom-word:not(.eaten), .dom-object:not(.eaten)'))continue;
+      // Prevent overlapping parent/child object pickups in the same batch.
+      if(chosenObjects.some(o=>o.el.contains(c.el)||c.el.contains(o.el)))continue;
+      chosenObjects.push(c);
+    }
+    const remainingWords=words.filter(w=>!chosenObjects.some(o=>o.el.contains(w.el)));
+    return [...remainingWords,...chosenObjects];
+  }
+  function eatBatch(inRange,now,scrollY,fieldRect,radius){
+    if(!inRange.length || game.transitioning || game.status!=='playing')return;
+    const roots=chooseBatchRoots(inRange,scrollY,fieldRect,radius);
+    if(!roots.length)return;
+    const rootObjects=roots.filter(c=>c.type==='object');
     const consumed=new Set(roots);
-    if(roots.some(c=>c.type==='object')){
-      // One pass through the catalogue rather than a full descendant scan for
-      // every collected word or object (important on long Wikipedia pages).
+    const removedPerRoot=new Map(roots.map(c=>[c,1]));
+    if(rootObjects.length){
+      // Account for descendants of collected complete objects exactly once.
+      // Words that are merely adjacent to the object remain independently
+      // eligible on the next collision check.
+      const rootByElement=new Map(rootObjects.map(c=>[c.el,c]));
       for(const c of collectibles){
         if(c.eaten || consumed.has(c))continue;
         for(let parent=c.el.parentElement;parent;parent=parent.parentElement){
-          const ancestor=rootByElement.get(parent);
-          if(ancestor && ancestor.type==='object'){
-            consumed.add(c);
-            removedPerRoot.set(ancestor,removedPerRoot.get(ancestor)+1);
-            break;
-          }
+          const owner=rootByElement.get(parent);
+          if(owner){consumed.add(c);removedPerRoot.set(owner,removedPerRoot.get(owner)+1);break;}
         }
       }
     }
-    // Schedule lightweight visual work; never create dozens of canvases in
-    // the collision callback. Drawing is spread over subsequent frames.
+    // Queue source information BEFORE hiding it. The queue paints the sprites
+    // over subsequent frames so a large batch does not stall character motion.
     for(const c of roots){
       attachments.queueCollect(c.el,c.type,collectibleRect(c,scrollY));
     }
-    // Hide all consumed elements together; visibility:hidden preserves layout.
-    // Each catalogue entry is counted once, even if nested in a parent pickup.
     for(const c of consumed){
       c.eaten=true;
       c.el.classList.add('eaten');
@@ -1096,18 +1132,15 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       refreshLocks();
       setToast(`LEVEL ${game.level}! BIGGER BITES UNLOCKED`);
     }
-    // Only one particle burst, sound and HUD refresh per collision batch.
     const first=roots[0];
     const center=collectibleRect(first,scrollY);
     puff(center.left-fieldRect.left+center.width/2,
          center.top-fieldRect.top+center.height/2,maxTier);
     soundEat(maxTier);
     updateHud();
-    // Timed stages advance only at expiry. Untimed mode retains the original
-    // 85% completion rule, evaluated after the whole batch has been counted.
-    if(game.mode==='relaxed' && game.sceneEaten/Math.max(1,game.sceneTotal)>=.85 && !game.transitioning){
-      if(game.scene===0)enterSpaceJam();
-      else finish('cleared');
+    if(game.mode==='relaxed' && game.sceneTotal>0 &&
+       game.sceneEaten/game.sceneTotal>=.85 && !game.transitioning){
+      finish('cleared');
     }
   }
   function checkCollisions(now){
@@ -1121,7 +1154,6 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       if(c.eaten || c.tier>game.level || !c.el.isConnected)continue;
       const r=collectibleRect(c,scrollY);
       if(!r.width || !r.height)continue;
-      // Fast viewport reject before testing circle/rectangle overlap.
       if(r.right<fr.left-radius || r.left>fr.right+radius ||
          r.bottom<fr.top-radius || r.top>fr.bottom+radius)continue;
       const nearX=clamp(game.x,r.left-fr.left,r.right-fr.left);
@@ -1130,31 +1162,16 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       if(dx*dx+dy*dy>=radiusSquared)continue;
       inRange.push(c);
     }
-    if(inRange.length)eatBatch(inRange,now,scrollY,fr);
-  }
-  function enterSpaceJam(){
-    if(game.scene!==0 || game.transitioning || game.status!=='playing')return;
-    game.transitioning=true;
-    game.status='loading'; // Freeze timer and movement while the new iframe loads.
-    game.scene=1;
-    game.remaining=game.mode==='relaxed'?Infinity:STAGE_DURATIONS[1];
-    game.vx=0;game.vy=0;game.pointer=false;
-    game.x=field.clientWidth*.5;game.y=field.clientHeight*.46;
-    game.tx=game.x;game.ty=game.y;
-    positionAvatar();
-    setToast('LOADING SPACE JAM…');
-    renderScene();
-    // If a browser cannot access the required local page, do not silently run
-    // the 10-second timer against a blank iframe.
+    if(inRange.length)eatBatch(inRange,now,scrollY,fr,radius);
   }
   function finish(reason){
     if(game.status==='finished'||game.status==='intro')return;
     game.status='finished';game.vx=0;game.vy=0;game.saved=false;$('pauseBtn').disabled=true;show(pauseOverlay,false);show(finishOverlay,true);
     $('finishIcon').textContent=reason==='cleared'?'🏆':'⏱️';
     $('finishTitle').textContent=reason==='cleared'?'Total page destruction!':'Time is up!';
-    $('finishMessage').textContent=reason==='cleared'?'Both saved webpages have been devoured!':'You played Product Lifecycle and the Space Jam bonus. Can you beat your score?';
+    $('finishMessage').textContent=reason==='cleared'?'You cleared the Product Lifecycle page!':'Your minute is up. Can you beat your score?';
     $('finalScore').textContent=game.score.toLocaleString();
-    $('finishStats').textContent=`${game.eaten} elements · ${game.mode==='relaxed'?'relaxed mode':'1:00 + 0:10 challenge'}`;
+    $('finishStats').textContent=`${game.eaten} elements · ${game.mode==='relaxed'?'relaxed mode':'1:00 challenge'}`;
     $('initialsInput').value='';$('scoreForm').hidden=false;$('saveMessage').textContent='Scores are saved only on this browser.';
     renderLeaders();updateHud();
   }
@@ -1172,7 +1189,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     const dt=clamp((now-game.previous)/1000,0,.06);game.previous=now;
     const previousX=game.x,previousY=game.y;
     if(game.status==='playing'){
-      if(game.mode==='timed'){game.remaining=Math.max(0,game.remaining-dt);if(game.remaining<=0){if(game.scene===0)enterSpaceJam();else finish('timeout')}}
+      if(game.mode==='timed'){game.remaining=Math.max(0,game.remaining-dt);if(game.remaining<=0)finish('timeout')}
       if(game.status==='playing'){
         const dx=(keys.has('arrowright')||keys.has('d')?1:0)-(keys.has('arrowleft')||keys.has('a')?1:0);
         const dy=(keys.has('arrowdown')||keys.has('s')?1:0)-(keys.has('arrowup')||keys.has('w')?1:0);
@@ -1314,9 +1331,8 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   window.addEventListener('resize',()=>{game.x=clamp(game.x,30,field.clientWidth-30);game.y=clamp(game.y,30,field.clientHeight-30);positionAvatar();attachments.resize()});
   resetToIntro();
 
-  // Both HTML snapshots must be uploaded separately alongside the game.
-  // Verify both before allowing a timed run to begin; no fictional levels or
-  // placeholder documents are ever substituted for missing files.
+  // The Product Lifecycle snapshot must be uploaded alongside the game.
+  // Do not substitute placeholder documents for a missing snapshot.
   for(const [sceneIndex,stage] of SCENES.entries()){
     fetch(stage.url,{method:'HEAD',cache:'no-cache'})
       .then(response=>{
