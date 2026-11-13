@@ -11,10 +11,17 @@
   const PLACEHOLDER = 'assets/skubert-preview.png';
   const MODEL_FILE = '../typing/models/skubert.glb';
   const SCROLL_SPEED = 295;
+  const RUN_SECONDS = 60;
+  const COLLECT_ANIM_MS = 1500;
+  const HIGH_SCORE_KEY = 'skubert-find-best-v1';
   const panels = [], markers = new Map(), images = [];
   let heads = [], selectedId = null, auto = false, lastFrame = 0;
   let draggingPan = null, draggingHead = null, three = null, threeBusy = false;
   let debounceSave = 0, timerMessage = 0;
+  let phase = EDITOR_MODE ? 'editor' : 'ready';
+  let score = 0, deadline = 0, secondsLeft = RUN_SECONDS, runToken = 0;
+  const scoredIds = new Set(), completedIds = new Set(), collectionEffects = new Map();
+  const collectionTimers = new Set();
   const undoStack = [];
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
   const round = (v, n = 3) => Number(v.toFixed(n));
@@ -83,6 +90,7 @@
       } catch(e){console.warn('Could not read local draft',e);}
     }
     renderMarkers();
+    locationsReady();
     if(EDITOR_MODE)toast('Placement Mode active — click the tapestry to add a head.');
   }
 
@@ -145,7 +153,9 @@
     marker.style.setProperty('--marker-rotation',`${h.rotationDeg}deg`);
     marker.style.setProperty('--marker-pitch',`${h.pitchDeg||0}deg`);
     marker.classList.toggle('selected',EDITOR_MODE&&h.id===selectedId);
-    marker.title=EDITOR_MODE?`${h.id} — drag to reposition`:'Skubert preview';
+    marker.classList.toggle('collecting',collectionEffects.has(h.id));
+    marker.classList.toggle('collected',completedIds.has(h.id));
+    marker.title=EDITOR_MODE?`${h.id} — drag to reposition`: 'Find and click Skubert';
   }
   function renderMarkers(){
     for(const marker of markers.values())marker.remove();
@@ -153,7 +163,7 @@
     for(const h of heads){
       const marker=document.createElement('button');marker.className='skubert-marker';
       marker.type='button';marker.dataset.headId=h.id;
-      marker.setAttribute('aria-label',`Skubert head at scene ${h.scene}, ${Math.round(h.xPercent)} percent`);
+      marker.setAttribute('aria-label',`Skubert head at scene ${h.scene}, ${Math.round(h.xPercent)} percent; ${h.points} points`);
       const img=document.createElement('img');img.src=PLACEHOLDER;img.alt='';img.draggable=false;
       marker.appendChild(img);
       marker.addEventListener('pointerdown',e=>{
@@ -194,6 +204,7 @@
       marker.addEventListener('click',e=>{
         e.preventDefault();e.stopPropagation();
         if(EDITOR_MODE)setSelected(h.id);
+        else collectHead(h.id);
       });
       markers.set(h.id,marker);
       updateMarkerPlacement(h);
@@ -246,6 +257,109 @@
     h[key]=val;updateMarkerPlacement(h);updateSelectedDisplay();saveDraft();
     if(three)three.refresh();
   }
+  function updateGameHud(){
+    if(EDITOR_MODE)return;
+    $('gameScore').textContent=score.toLocaleString();
+    $('gameFound').textContent=`${scoredIds.size} / ${heads.length}`;
+    $('gameTime').textContent=`${Math.floor(secondsLeft/60)}:${String(secondsLeft%60).padStart(2,'0')}`;
+    $('timePill').classList.toggle('urgent',secondsLeft<=10 && phase==='playing');
+  }
+  function collectionState(id,now){
+    const effect=collectionEffects.get(id);
+    if(!effect)return null;
+    const progress=clamp((now-effect.start)/COLLECT_ANIM_MS,0,1);
+    // 3x size by 62% of the 1500ms sequence; then shrink to zero.
+    const size=progress<=.62 ? 1+2*(progress/.62) : 3*(1-(progress-.62)/.38);
+    return {scale:Math.max(0,size),spin:progress*Math.PI*12,active:true};
+  }
+  function sparksAt(marker){
+    const rect=marker.getBoundingClientRect(),bounds=gameEl.getBoundingClientRect();
+    const x=(rect.left+rect.right)/2-bounds.left,y=(rect.top+rect.bottom)/2-bounds.top;
+    const effects=$('effectLayer');
+    for(let i=0;i<18;i++){
+      const angle=2*Math.PI*i/18+(Math.random()-.5)*.4;
+      const distance=34+Math.random()*95;
+      const spark=document.createElement('span');spark.className='capture-spark';spark.textContent=i%3===0?'✧':'✦';
+      spark.style.left=`${x}px`;spark.style.top=`${y}px`;
+      spark.style.setProperty('--dx',`${Math.cos(angle)*distance}px`);
+      spark.style.setProperty('--dy',`${Math.sin(angle)*distance}px`);
+      spark.style.setProperty('--spark-size',`${10+Math.random()*13}px`);
+      spark.style.setProperty('--spark-color',i%3===0?'#74c9f8':i%3===1?'#ffcc70':'#fff2b9');
+      effects.append(spark);
+      setTimeout(()=>spark.remove(),920);
+    }
+  }
+  function collectHead(id){
+    if(phase!=='playing'||scoredIds.has(id))return;
+    const h=markerHead(id),marker=markers.get(id);
+    if(!h||!marker)return;
+    scoredIds.add(id);score+=h.points;
+    const token=runToken;
+    collectionEffects.set(id,{start:performance.now()});
+    marker.classList.add('collecting');marker.style.pointerEvents='none';
+    sparksAt(marker);updateGameHud();
+    if(three)three.refresh();
+    const timer=setTimeout(()=>{
+      collectionTimers.delete(timer);
+      if(token!==runToken)return;
+      collectionEffects.delete(id);completedIds.add(id);
+      marker.classList.remove('collecting');marker.classList.add('collected');
+      if(three)three.refresh();
+    },COLLECT_ANIM_MS);
+    collectionTimers.add(timer);
+  }
+  function clearRun(){
+    runToken++;
+    for(const t of collectionTimers)clearTimeout(t);
+    collectionTimers.clear();collectionEffects.clear();scoredIds.clear();completedIds.clear();
+    $('effectLayer').replaceChildren();score=0;secondsLeft=RUN_SECONDS;deadline=0;
+    for(const marker of markers.values()){
+      marker.classList.remove('collecting','collected');marker.style.pointerEvents='';
+    }
+    if(three)three.refresh();updateGameHud();
+  }
+  function startGame(){
+    if(EDITOR_MODE||!heads.length)return;
+    clearRun();phase='playing';
+    setAuto(false);viewport.scrollLeft=0;
+    $('endOverlay').hidden=true;$('startOverlay').hidden=true;
+    deadline=performance.now()+RUN_SECONDS*1000;
+    updateGameHud();
+    viewport.focus({preventScroll:true});
+  }
+  function finishGame(){
+    if(phase!=='playing')return;
+    phase='finished';secondsLeft=0;setAuto(false);updateGameHud();
+    let best=0;
+    try {best=Number(localStorage.getItem(HIGH_SCORE_KEY))||0;
+      if(score>best){best=score;localStorage.setItem(HIGH_SCORE_KEY,String(best));}
+    }catch(_){}
+    $('endScore').textContent=score.toLocaleString();
+    $('endSummary').textContent=`Found ${scoredIds.size} of ${heads.length} Skubert heads in 60 seconds.`;
+    $('endBest').textContent=`Personal best: ${best.toLocaleString()} points`;
+    $('endOverlay').hidden=false;$('restartGame').focus({preventScroll:true});
+  }
+  function tickGameTimer(now){
+    if(phase!=='playing')return;
+    const remaining=Math.max(0,Math.ceil((deadline-now)/1000));
+    if(remaining!==secondsLeft){secondsLeft=remaining;updateGameHud();}
+    if(now>=deadline)finishGame();
+  }
+  function configureGameplay(){
+    if(EDITOR_MODE)return;
+    $('gameHud').hidden=false;$('startOverlay').hidden=false;
+    $('beginGame').addEventListener('click',startGame);
+    $('restartGame').addEventListener('click',startGame);
+    updateGameHud();
+  }
+  function locationsReady(){
+    if(EDITOR_MODE)return;
+    $('beginGame').disabled=heads.length===0;
+    $('gameReadyMessage').textContent=heads.length
+      ? `${heads.length} Skubert head${heads.length===1?'':'s'} hidden. Find them before time runs out!`
+      : 'No locations found. Add your skubert-locations.json using Placement Mode.';
+    updateGameHud();
+  }
   function controlEvents(){
     $('headSize').addEventListener('pointerdown',remember);
     $('headYaw').addEventListener('pointerdown',remember);
@@ -297,27 +411,34 @@
     $('exitEditor').addEventListener('click',()=>{const u=new URL(location.href);u.searchParams.delete('place');location.href=u.toString()});
     $('threePreview').addEventListener('click',toggleThree);
   }
-  async function toggleThree(){
-    if(threeBusy)return;
-    if(three){three.dispose();three=null;gameEl.classList.remove('three-active');
-      for(const m of markers.values())m.dataset.threeVisible='false';
-      $('threePreview').textContent='Preview real 3D';toast('Switched to lightweight image previews.');return;
-    }
-    threeBusy=true;$('threePreview').disabled=true;$('threePreview').textContent='Loading 3D…';
-    toast('Loading the existing Skubert GLB (about 24 MB)…');
+  async function enableThree(){
+    if(threeBusy||three)return;
+    threeBusy=true;
+    if(EDITOR_MODE){$('threePreview').disabled=true;$('threePreview').textContent='Loading 3D…';}
     try{
       const module=await import('./skubert-preview-3d.js');
       three=await module.createThreePreview({
-        gameEl, viewport, modelPath:MODEL_FILE,
-        getHeads:()=>heads, getMarkers:()=>markers
+        gameEl,viewport,modelPath:MODEL_FILE,
+        getHeads:()=>heads,getMarkers:()=>markers,
+        getEffect:collectionState,isCompleted:id=>completedIds.has(id)
       });
-      gameEl.classList.add('three-active');
-      three.refresh();$('threePreview').textContent='Use image previews';
-      toast('3D previews loaded. Drag markers to move them.');
+      gameEl.classList.add('three-active');three.refresh();
+      if(EDITOR_MODE){$('threePreview').textContent='Use image previews';toast('3D heads loaded. Drag markers to move them.');}
     }catch(err){
-      console.warn(err);three?.dispose();three=null;gameEl.classList.remove('three-active');
-      $('threePreview').textContent='Preview real 3D';toast('Could not load the 3D model; image previews still work.',true);
-    }finally{threeBusy=false;$('threePreview').disabled=false;}
+      console.warn('Skubert GLB could not load; keeping PNG fallback.',err);
+      three?.dispose();three=null;gameEl.classList.remove('three-active');
+      for(const m of markers.values())m.dataset.threeVisible='false';
+      if(EDITOR_MODE){$('threePreview').textContent='Preview real 3D';toast('Could not load 3D; image previews still work.',true);}
+    }finally{threeBusy=false;if(EDITOR_MODE)$('threePreview').disabled=false;}
+  }
+  async function toggleThree(){
+    if(threeBusy)return;
+    if(three){
+      three.dispose();three=null;gameEl.classList.remove('three-active');
+      for(const m of markers.values())m.dataset.threeVisible='false';
+      $('threePreview').textContent='Preview real 3D';toast('Switched to lightweight image previews.');return;
+    }
+    await enableThree();
   }
 
   function updateProgress(){
@@ -392,6 +513,7 @@
     });
     let last=0;
     function tick(now){
+      tickGameTimer(now);
       if(auto){const dt=Math.min(.05,Math.max(0,(now-last)/1000||0));viewport.scrollLeft+=SCROLL_SPEED*dt;}
       last=now;requestAnimationFrame(tick);
     }
@@ -403,8 +525,11 @@
     gameEl.classList.toggle('placement',EDITOR_MODE);
     panelEl.hidden=!EDITOR_MODE;$('modeBadge').hidden=!EDITOR_MODE;
     if(EDITOR_MODE)controlEvents();
+    configureGameplay();
     await loadLocations();
     updateProgress();scheduleImageWindow();
+    // In regular play, load the real GLB automatically. PNGs stay visible until ready.
+    if(!EDITOR_MODE && heads.length)void enableThree();
   }
   init().catch(err=>{console.error(err);toast('Game initialization failed: '+err.message,true)});
   if(EDITOR_MODE){

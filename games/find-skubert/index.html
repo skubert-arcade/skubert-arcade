@@ -31,12 +31,33 @@
     .skubert-marker.selected:before{content:"";position:absolute;inset:0;border:2px dashed #2c6ad3;border-radius:50%;box-shadow:0 0 0 3px #fff8;pointer-events:none}
     .skubert-marker.selected:after{content:"⇄";position:absolute;top:-16px;right:-14px;font-size:16px;color:#103766;text-shadow:0 1px white}
     .game.three-active .skubert-marker[data-three-visible="true"] img{opacity:0}
+    .skubert-marker.collected{display:none!important}
+    .skubert-marker.collecting{z-index:5;pointer-events:none}
+    .skubert-marker.collecting img{animation:skubert-capture 1500ms linear forwards;transform-origin:center center;transition:none}
+    @keyframes skubert-capture{0%{transform:perspective(480px) rotateX(var(--marker-pitch,0deg)) rotateZ(var(--marker-rotation,0deg)) scale(1);opacity:1}62%{transform:perspective(480px) rotateX(var(--marker-pitch,0deg)) rotateY(1260deg) rotateZ(450deg) scale(3);opacity:1}100%{transform:perspective(480px) rotateX(var(--marker-pitch,0deg)) rotateY(2160deg) rotateZ(720deg) scale(0);opacity:0}}
     .chromebar{position:absolute;inset:0 0 auto;z-index:12;pointer-events:none;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:10px 13px 24px;background:linear-gradient(#231910ad,#23191030 70%,transparent)}
     .head-left,.head-right{display:flex;align-items:center;gap:10px;pointer-events:auto}
     .home{background:#231b16a8;border:1px solid #ffedc360;border-radius:999px;padding:7px 11px;color:#fff7e8;text-decoration:none;font-weight:750;font-size:12px;backdrop-filter:blur(6px)}
     .heading{font:700 15px/1.2 Georgia,serif;letter-spacing:.01em;text-shadow:0 1px 5px #100902bb}
     .location{font-size:11px;font-weight:750;text-shadow:0 1px 5px #100902bb;white-space:nowrap}
     .mode-pill{background:#f5d99e;color:#3a2813;border:1px solid #fff1c4;border-radius:999px;font-weight:850;font-size:11px;padding:5px 9px;white-space:nowrap}
+    .game-hud{display:flex;gap:6px;align-items:center;white-space:nowrap}
+    .hud-item{padding:5px 9px;border:1px solid #ffedc360;border-radius:999px;background:#231b16c9;font-size:12px;font-weight:850;font-variant-numeric:tabular-nums;backdrop-filter:blur(6px)}
+    .hud-item strong{color:#ffe0a0}
+    .hud-time.urgent{border-color:#ff9a85;color:#ffd2c9}
+    .game-overlay{position:absolute;inset:0;z-index:22;background:#2416088e;display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(2px)}
+    .overlay-card{width:min(95%,390px);text-align:center;background:#211b18f1;border:1px solid #f7dda67b;box-shadow:0 20px 60px #0009;border-radius:18px;padding:26px 24px;color:#fff6e9}
+    .overlay-card h1,.overlay-card h2{font:700 clamp(25px,4vw,33px)/1.15 Georgia,serif;margin:0 0 12px}
+    .overlay-card p{font-size:14px;line-height:1.5;color:#e8d7b9;margin:8px 0 16px}
+    .overlay-score{font-size:55px;font-weight:950;color:#ffde9b;font-variant-numeric:tabular-nums;line-height:1.2}
+    .overlay-action{background:#f0c47c;color:#251b12;font-weight:900;border:0;border-radius:10px;padding:13px 24px;margin-top:10px;font-size:15px}
+    .overlay-action:hover:not(:disabled){background:#ffdfa7}
+    .overlay-action:disabled{opacity:.5;cursor:not-allowed}
+    .effect-layer{position:absolute;inset:0;z-index:6;pointer-events:none;overflow:hidden}
+    .capture-spark{position:absolute;font-size:var(--spark-size,17px);line-height:1;color:var(--spark-color,#ffdd90);text-shadow:0 0 9px currentColor;pointer-events:none;animation:skubert-spark 880ms ease-out forwards}
+    @keyframes skubert-spark{0%{transform:translate(-50%,-50%) scale(.3);opacity:1}32%{opacity:1}100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(.1);opacity:0}}
+    @media(max-width:700px){.game-hud{gap:3px}.hud-item{padding:4px 6px;font-size:10px}.location{display:none}}
+
     .arrow{position:absolute;top:50%;transform:translateY(-50%);width:36px;height:64px;z-index:8;border:1px solid #ffe8b56c;border-radius:12px;background:#23191092;backdrop-filter:blur(8px);color:#fff7e7;font-size:28px;opacity:.72}
     .arrow:hover{opacity:1}.arrow:disabled{opacity:.2;cursor:default}.arrow.prev{left:8px}.arrow.next{right:8px}
     .toolbar{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:12;width:min(700px,calc(100vw - 30px));display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px solid #fff1d16b;border-radius:999px;background:#281e17d9;box-shadow:0 5px 19px #0004;backdrop-filter:blur(12px)}
@@ -71,19 +92,43 @@
     .game.placement .viewport.dragging{cursor:grabbing}
     .game.placement .note{max-width:calc(100% - 345px)}
     @media(max-width:700px){.chromebar{padding:7px 8px 20px}.heading{font-size:13px}.location{font-size:10px}.home{font-size:11px}.head-left,.head-right{gap:5px}.arrow{width:28px;height:55px;font-size:23px}.arrow.prev{left:4px}.arrow.next{right:4px}.toolbar{bottom:7px;width:calc(100vw - 16px);gap:8px;padding:8px 10px}.editor{top:43px;right:8px;width:min(295px,calc(100vw - 16px));max-height:calc(100dvh - 105px)}.note{top:43px;left:8px;max-width:min(250px,calc(100% - 16px))}.game.placement .note{display:none}}
-    @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
   </style>
 </head>
 <body>
-<main class="game" id="game" aria-label="Where's Skubert tapestry placement editor">
+<main class="game" id="game" aria-label="Where's Skubert tapestry search game">
   <div class="viewport" id="viewport" tabindex="0" role="region" aria-label="The Bayeux Tapestry as a continuous horizontal panorama. Drag, swipe, use arrow keys, or scroll to move.">
     <div class="strip" id="strip"></div>
   </div>
   <header class="chromebar">
     <div class="head-left"><a href="../../index.html" class="home">← Arcade</a><strong class="heading">Where’s Skubert?</strong><span class="mode-pill" id="modeBadge" hidden>PLACEMENT MODE</span></div>
-    <div class="head-right"><span class="location" id="positionLabel">Scene 1 of 9 · 0%</span></div>
+    <div class="head-right"><span class="location" id="positionLabel">Scene 1 of 9 · 0%</span>
+      <div class="game-hud" id="gameHud" hidden aria-live="off">
+        <span class="hud-item">Score <strong id="gameScore">0</strong></span>
+        <span class="hud-item">Found <strong id="gameFound">0 / 0</strong></span>
+        <span class="hud-item hud-time" id="timePill">Time <strong id="gameTime">1:00</strong></span>
+      </div>
+    </div>
   </header>
   <div class="note" id="introNote">Scroll horizontally to explore the tapestry.</div>
+  <div class="effect-layer" id="effectLayer" aria-hidden="true"></div>
+  <div class="game-overlay" id="startOverlay" hidden>
+    <div class="overlay-card">
+      <h1>Where’s Skubert?</h1>
+      <p>Find and click the hidden 3D Skubert heads across the Bayeux Tapestry. Earn as many points as you can in <strong>60 seconds</strong>.</p>
+      <p id="gameReadyMessage">Loading head locations…</p>
+      <button class="overlay-action" id="beginGame" type="button" disabled>Start searching · 1:00</button>
+    </div>
+  </div>
+  <div class="game-overlay" id="endOverlay" hidden>
+    <div class="overlay-card" role="dialog" aria-modal="true" aria-labelledby="endTitle">
+      <h2 id="endTitle">Time’s up!</h2>
+      <div class="overlay-score" id="endScore">0</div>
+      <p id="endSummary">0 Skuberts found</p>
+      <p id="endBest"></p>
+      <button class="overlay-action" id="restartGame" type="button">Play again</button>
+    </div>
+  </div>
   <button type="button" class="arrow prev" id="previous" aria-label="Scroll left">‹</button>
   <button type="button" class="arrow next" id="next" aria-label="Scroll right">›</button>
   <div class="toolbar" aria-label="Horizontal navigation">

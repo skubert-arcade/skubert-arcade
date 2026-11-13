@@ -8,7 +8,7 @@ import {clone as cloneSkinned} from 'three/addons/utils/SkeletonUtils.js';
 const MAX_VISIBLE_3D=6;
 const MAX_RENDER_FPS=30;
 
-export async function createThreePreview({gameEl,viewport,modelPath,getHeads,getMarkers}){
+export async function createThreePreview({gameEl,viewport,modelPath,getHeads,getMarkers,getEffect=()=>null,isCompleted=()=>false}){
   const gltf=await new GLTFLoader().loadAsync(modelPath);
   const root=gltf.scene;
   const bounds=new THREE.Box3().setFromObject(root);
@@ -67,7 +67,7 @@ export async function createThreePreview({gameEl,viewport,modelPath,getHeads,get
     const visible=[];
     const markerNodes=getMarkers(), heads=getHeads();
     for(const h of heads){
-      const marker=markerNodes.get(h.id);if(!marker)continue;
+      const marker=markerNodes.get(h.id);if(!marker || isCompleted(h.id))continue;
       const b=marker.getBoundingClientRect();
       const inView=b.right>left && b.left<right && b.bottom>top && b.top<bottom;
       marker.dataset.threeVisible='false';
@@ -77,13 +77,14 @@ export async function createThreePreview({gameEl,viewport,modelPath,getHeads,get
       const pivot=pool[idx];
       pivot.visible=true;
       const size=Math.min(b.width,b.height);
-      pivot.scale.setScalar(Math.max(0.001,size/maxDimension*0.90));
+      const effect=getEffect(h.id,now);
+      pivot.scale.setScalar(Math.max(0.001,size/maxDimension*0.90*(effect?.scale??1)));
       const x=(b.left+b.right)*.5-left-lastWidth/2;
       const y=lastHeight/2-((b.top+b.bottom)*.5-top);
       pivot.position.set(x,y,0);
       // Yaw turns left/right around the vertical axis. Pitch tilts up/down
       // around the model's horizontal X axis; YXZ applies yaw before local pitch.
-      const yaw=THREE.MathUtils.degToRad(h.rotationDeg)+Math.sin(now*.001)*.06;
+      const yaw=THREE.MathUtils.degToRad(h.rotationDeg)+Math.sin(now*.001)*.06+(effect?.spin??0);
       const pitch=THREE.MathUtils.degToRad(h.pitchDeg||0);
       pivot.rotation.set(pitch,yaw,0,'YXZ');
       marker.dataset.threeVisible='true';
@@ -93,7 +94,8 @@ export async function createThreePreview({gameEl,viewport,modelPath,getHeads,get
   function animate(now){
     if(disposed)return;
     raf=requestAnimationFrame(animate);
-    if(!refreshPending && now-lastRender<1000/MAX_RENDER_FPS)return;
+    const capturing=getHeads().some(h=>getEffect(h.id,now));
+    if(!refreshPending && now-lastRender<1000/(capturing?60:MAX_RENDER_FPS))return;
     updateViewSize();layoutModels(now);
     renderer.render(scene,camera);
     lastRender=now;refreshPending=false;
