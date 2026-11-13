@@ -30,7 +30,10 @@
     .skubert-marker img{width:100%;height:100%;display:block;object-fit:contain;pointer-events:none;user-select:none;transform:perspective(480px) rotateX(var(--marker-pitch,0deg)) rotateZ(var(--marker-rotation,0deg));transition:opacity .22s ease}
     .skubert-marker.selected:before{content:"";position:absolute;inset:0;border:2px dashed #2c6ad3;border-radius:50%;box-shadow:0 0 0 3px #fff8;pointer-events:none}
     .skubert-marker.selected:after{content:"⇄";position:absolute;top:-16px;right:-14px;font-size:16px;color:#103766;text-shadow:0 1px white}
-    .game.three-active .skubert-marker[data-three-visible="true"] img{opacity:0}
+    /* Only remove the PNG after a successful WebGL frame for this exact head.
+       Visibility changes instantly; otherwise the old opacity transition can
+       keep the placeholder over the GLB for several frames. */
+    .game.three-active .skubert-marker[data-three-visible="true"] img{opacity:0;visibility:hidden;transition:none}
     .skubert-marker.collected{display:none!important}
     .skubert-marker.collecting{z-index:5;pointer-events:none}
     .skubert-marker.collecting img{animation:skubert-capture 1500ms linear forwards;transform-origin:center center;transition:none}
@@ -53,9 +56,24 @@
     .overlay-action{background:#f0c47c;color:#251b12;font-weight:900;border:0;border-radius:10px;padding:13px 24px;margin-top:10px;font-size:15px}
     .overlay-action:hover:not(:disabled){background:#ffdfa7}
     .overlay-action:disabled{opacity:.5;cursor:not-allowed}
-    .effect-layer{position:absolute;inset:0;z-index:6;pointer-events:none;overflow:hidden}
-    .capture-spark{position:absolute;font-size:var(--spark-size,17px);line-height:1;color:var(--spark-color,#ffdd90);text-shadow:0 0 9px currentColor;pointer-events:none;animation:skubert-spark 880ms ease-out forwards}
-    @keyframes skubert-spark{0%{transform:translate(-50%,-50%) scale(.3);opacity:1}32%{opacity:1}100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(.1);opacity:0}}
+    /* Strong foreground effects: never behind WebGL, tapestry or heads. */
+    .effect-layer{position:absolute;inset:0;z-index:18;pointer-events:none;overflow:hidden;isolation:isolate}
+    .capture-spark{position:absolute;display:block;width:var(--spark-size,20px);height:var(--spark-size,20px);pointer-events:none;transform-origin:center;
+      background:var(--spark-color,#ffdb72);
+      clip-path:polygon(50% 0%,62% 34%,100% 50%,62% 62%,50% 100%,38% 62%,0% 50%,38% 34%);
+      filter:drop-shadow(0 0 3px #fff) drop-shadow(0 0 8px var(--spark-color,#ffdb72));
+      animation:skubert-spark var(--spark-duration,1100ms) cubic-bezier(.17,.65,.36,1) both;
+      animation-delay:var(--spark-delay,0ms)}
+    .capture-spark:after{content:"";position:absolute;inset:32%;border-radius:50%;background:#fff8e9}
+    @keyframes skubert-spark{
+      0%{transform:translate(-50%,-50%) rotate(0) scale(.2);opacity:0}
+      12%{opacity:1}
+      38%{transform:translate(calc(-50% + var(--half-dx)),calc(-50% + var(--half-dy))) rotate(105deg) scale(1.6);opacity:1}
+      100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) rotate(230deg) scale(0);opacity:0}
+    }
+    .capture-ring{position:absolute;box-sizing:border-box;width:var(--ring-size,70px);height:var(--ring-size,70px);border:3px solid #fff1a3;border-radius:50%;
+      pointer-events:none;box-shadow:0 0 12px #ffce58, inset 0 0 12px #fff8b2;animation:skubert-ring 750ms ease-out both;animation-delay:var(--ring-delay,0ms)}
+    @keyframes skubert-ring{0%{transform:translate(-50%,-50%) scale(.18);opacity:0}17%{opacity:1}100%{transform:translate(-50%,-50%) scale(3);opacity:0}}
     @media(max-width:700px){.game-hud{gap:3px}.hud-item{padding:4px 6px;font-size:10px}.location{display:none}}
 
     .arrow{position:absolute;top:50%;transform:translateY(-50%);width:36px;height:64px;z-index:8;border:1px solid #ffe8b56c;border-radius:12px;background:#23191092;backdrop-filter:blur(8px);color:#fff7e7;font-size:28px;opacity:.72}

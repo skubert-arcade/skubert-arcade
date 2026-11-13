@@ -272,21 +272,40 @@
     const size=progress<=.62 ? 1+2*(progress/.62) : 3*(1-(progress-.62)/.38);
     return {scale:Math.max(0,size),spin:progress*Math.PI*12,active:true};
   }
+  // Foreground sparkle burst. Coordinates are measured in game viewport space
+  // (not tapestry-world space) so the burst is visible above the 3D canvas.
+  // Every element is decorative and cannot intercept pointer clicks.
   function sparksAt(marker){
     const rect=marker.getBoundingClientRect(),bounds=gameEl.getBoundingClientRect();
-    const x=(rect.left+rect.right)/2-bounds.left,y=(rect.top+rect.bottom)/2-bounds.top;
+    const x=(rect.left+rect.right)/2-bounds.left;
+    const y=(rect.top+rect.bottom)/2-bounds.top;
     const effects=$('effectLayer');
-    for(let i=0;i<18;i++){
-      const angle=2*Math.PI*i/18+(Math.random()-.5)*.4;
-      const distance=34+Math.random()*95;
-      const spark=document.createElement('span');spark.className='capture-spark';spark.textContent=i%3===0?'✧':'✦';
+    const size=Math.max(28,Math.min(190,rect.width));
+    for(let i=0;i<28;i++){
+      const angle=2*Math.PI*i/28+(Math.random()-.5)*.20;
+      const distance=size*(.8+Math.random()*1.35)+23;
+      const spark=document.createElement('span');
+      spark.className='capture-spark';
       spark.style.left=`${x}px`;spark.style.top=`${y}px`;
       spark.style.setProperty('--dx',`${Math.cos(angle)*distance}px`);
       spark.style.setProperty('--dy',`${Math.sin(angle)*distance}px`);
-      spark.style.setProperty('--spark-size',`${10+Math.random()*13}px`);
-      spark.style.setProperty('--spark-color',i%3===0?'#74c9f8':i%3===1?'#ffcc70':'#fff2b9');
+      spark.style.setProperty('--half-dx',`${Math.cos(angle)*distance*.5}px`);
+      spark.style.setProperty('--half-dy',`${Math.sin(angle)*distance*.5}px`);
+      spark.style.setProperty('--spark-size',`${14+Math.random()*18}px`);
+      spark.style.setProperty('--spark-color',i%3===0?'#63ccff':i%3===1?'#ffd158':'#fff8d1');
+      spark.style.setProperty('--spark-duration',`${950+Math.random()*320}ms`);
+      spark.style.setProperty('--spark-delay',`${(i%3)*75}ms`);
       effects.append(spark);
-      setTimeout(()=>spark.remove(),920);
+      spark.addEventListener('animationend',()=>spark.remove(),{once:true});
+    }
+    // Concentric golden rings make the interaction legible even on busy imagery.
+    for(let i=0;i<2;i++){
+      const ring=document.createElement('span');ring.className='capture-ring';
+      ring.style.left=`${x}px`;ring.style.top=`${y}px`;
+      ring.style.setProperty('--ring-size',`${Math.max(54,size)}px`);
+      ring.style.setProperty('--ring-delay',`${i*180}ms`);
+      effects.append(ring);
+      ring.addEventListener('animationend',()=>ring.remove(),{once:true});
     }
   }
   function collectHead(id){
@@ -423,12 +442,12 @@
         getEffect:collectionState,isCompleted:id=>completedIds.has(id)
       });
       gameEl.classList.add('three-active');three.refresh();
-      if(EDITOR_MODE){$('threePreview').textContent='Use image previews';toast('3D heads loaded. Drag markers to move them.');}
+      if(EDITOR_MODE){$('threePreview').textContent='Use image previews';toast('3D heads rendered. Drag markers to move them.');}
     }catch(err){
       console.warn('Skubert GLB could not load; keeping PNG fallback.',err);
       three?.dispose();three=null;gameEl.classList.remove('three-active');
       for(const m of markers.values())m.dataset.threeVisible='false';
-      if(EDITOR_MODE){$('threePreview').textContent='Preview real 3D';toast('Could not load 3D; image previews still work.',true);}
+      if(EDITOR_MODE){$('threePreview').textContent='Preview real 3D';toast('Could not render 3D; image previews still work.',true);}else toast('3D model unavailable — using PNG previews. See browser console for details.',true);
     }finally{threeBusy=false;if(EDITOR_MODE)$('threePreview').disabled=false;}
   }
   async function toggleThree(){

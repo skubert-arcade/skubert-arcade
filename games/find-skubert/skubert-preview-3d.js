@@ -62,18 +62,21 @@ export async function createThreePreview({gameEl,viewport,modelPath,getHeads,get
       camera.updateProjectionMatrix();refreshPending=true;
     }
   }
+  // Collect visible heads without changing their placeholder state yet. The
+  // canvas is drawn first, then we hide PNGs for heads we actually rendered.
   function layoutModels(now){
     const {left,top,right,bottom}=viewport.getBoundingClientRect();
     const visible=[];
     const markerNodes=getMarkers(), heads=getHeads();
     for(const h of heads){
-      const marker=markerNodes.get(h.id);if(!marker || isCompleted(h.id))continue;
+      const marker=markerNodes.get(h.id);
+      if(!marker || isCompleted(h.id))continue;
       const b=marker.getBoundingClientRect();
-      const inView=b.right>left && b.left<right && b.bottom>top && b.top<bottom;
-      marker.dataset.threeVisible='false';
-      if(inView)visible.push({h,marker,b});
+      if(b.right>left && b.left<right && b.bottom>top && b.top<bottom)visible.push({h,marker,b});
     }
-    visible.slice(0,MAX_VISIBLE_3D).forEach(({h,marker,b},idx)=>{
+    const renderedIds=new Set();
+    const inPool=visible.slice(0,MAX_VISIBLE_3D);
+    inPool.forEach(({h,b},idx)=>{
       const pivot=pool[idx];
       pivot.visible=true;
       const size=Math.min(b.width,b.height);
@@ -82,26 +85,48 @@ export async function createThreePreview({gameEl,viewport,modelPath,getHeads,get
       const x=(b.left+b.right)*.5-left-lastWidth/2;
       const y=lastHeight/2-((b.top+b.bottom)*.5-top);
       pivot.position.set(x,y,0);
-      // Yaw turns left/right around the vertical axis. Pitch tilts up/down
-      // around the model's horizontal X axis; YXZ applies yaw before local pitch.
       const yaw=THREE.MathUtils.degToRad(h.rotationDeg)+Math.sin(now*.001)*.06+(effect?.spin??0);
       const pitch=THREE.MathUtils.degToRad(h.pitchDeg||0);
       pivot.rotation.set(pitch,yaw,0,'YXZ');
-      marker.dataset.threeVisible='true';
+      renderedIds.add(h.id);
     });
-    for(let i=Math.min(MAX_VISIBLE_3D,visible.length);i<pool.length;i++)pool[i].visible=false;
+    for(let i=inPool.length;i<pool.length;i++)pool[i].visible=false;
+    return renderedIds;
   }
+  function commitVisibility(renderedIds){
+    // Update only if visibility ACTUALLY changes. The old code set false then
+    // true every frame; transitions could make the PNG appear to flicker.
+    for(const [id,marker] of getMarkers()){
+      const next=renderedIds.has(id)?'true':'false';
+      if(marker.dataset.threeVisible!==next)marker.dataset.threeVisible=next;
+    }
+  }
+  let firstFrameResolve,firstFrameReject;
+  const firstFrame=new Promise((resolve,reject)=>{firstFrameResolve=resolve;firstFrameReject=reject});
   function animate(now){
     if(disposed)return;
     raf=requestAnimationFrame(animate);
     const capturing=getHeads().some(h=>getEffect(h.id,now));
     if(!refreshPending && now-lastRender<1000/(capturing?60:MAX_RENDER_FPS))return;
-    updateViewSize();layoutModels(now);
-    renderer.render(scene,camera);
-    lastRender=now;refreshPending=false;
+    try{
+      updateViewSize();
+      const renderedIds=layoutModels(now);
+      renderer.render(scene,camera);
+      // A successful WebGL frame precedes PNG removal.
+      commitVisibility(renderedIds);
+      lastRender=now;refreshPending=false;
+      if(firstFrameResolve){firstFrameResolve();firstFrameResolve=null;firstFrameReject=null;}
+    }catch(error){
+      if(firstFrameReject){firstFrameReject(error);firstFrameResolve=null;firstFrameReject=null;}
+      disposed=true;cancelAnimationFrame(raf);commitVisibility(new Set());
+      renderer.dispose();canvas.remove();
+      console.error('3D Skubert render failed; falling back to PNG images.',error);
+    }
   }
   updateViewSize();
   raf=requestAnimationFrame(animate);
+  // Do not mark the renderer "ready" before the first actual successful frame.
+  await firstFrame;
   return {
     refresh(){refreshPending=true;},
     dispose(){
