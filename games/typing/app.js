@@ -2,11 +2,26 @@
 const params = new URLSearchParams(window.location.search);
 const LEVEL = 2000;
 
-// FALL SPEED: 1 pixel per 20 ms (50 pixels/second) initially.
-// After 60 seconds, speed grows by 1% for each additional full second.
-const BASE_FALL_SPEED_PX_PER_SECOND = 50;
-const SPEEDUP_DELAY_SECONDS = 60;
+// FALL SPEED
+// Start at half the previous speed: 25 px/sec instead of 50 px/sec.
+// After 30 seconds of play, global speed increases 1% every second (compounded).
+const BASE_FALL_SPEED_PX_PER_SECOND = 25;
+const SPEEDUP_DELAY_SECONDS = 30;
 const SPEEDUP_MULTIPLIER_PER_SECOND = 1.01;
+
+// LENGTH-BASED SPEED: 5 characters or less fall at full global speed;
+// 22 characters or more fall at half speed. Length includes spaces because
+// players must type them. "master data management" is 22 characters.
+const FULL_SPEED_WORD_LENGTH = 5;
+const HALF_SPEED_WORD_LENGTH = 22;
+const MIN_WORD_SPEED_MULTIPLIER = 0.5;
+
+function getWordSpeedMultiplier(word) {
+  const lengthRatio = (word.length - FULL_SPEED_WORD_LENGTH) /
+    (HALF_SPEED_WORD_LENGTH - FULL_SPEED_WORD_LENGTH);
+  const clampedRatio = Math.max(0, Math.min(1, lengthRatio));
+  return 1 - (1 - MIN_WORD_SPEED_MULTIPLIER) * clampedRatio;
+}
 
 // DOM ELEMENTS
 const buttonElementID = document.getElementById('StartButton');
@@ -226,13 +241,15 @@ function updateWordPosition() {
     // doesn't change the intended falling speed.
     const deltaSeconds = Math.max(0, (now - lastUpdateTime) / 1000);
     lastUpdateTime = now;
-    const fallDistance = BASE_FALL_SPEED_PX_PER_SECOND * speedMultiplier * deltaSeconds;
+    const globalFallDistance = BASE_FALL_SPEED_PX_PER_SECOND * speedMultiplier * deltaSeconds;
 
     const wordText = document.getElementsByClassName('word');
     for (let i = 0; i < arrWords.length; i++) {
-      // Keep decimals: parseInt would discard the 1% speed increases.
+      // Each word has a fixed length-based proportion of the global speed.
+      // Keep decimals: parseInt would discard the gradual speed changes.
+      const wordFallDistance = globalFallDistance * getWordSpeedMultiplier(arrWords[i]);
       const currentTop = parseFloat(wordText[i].style.top) || 0;
-      const newTop = currentTop + fallDistance;
+      const newTop = currentTop + wordFallDistance;
 
       if (newTop + 15 > gameHeight) {
         gameOver = true;
