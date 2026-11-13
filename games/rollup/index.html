@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#FFFFFF">
 <title>Roll Up</title>
 <!-- Site-wide favicon is stored at the root of the repository, outside /games/. -->
-<link rel="icon" type="image/png" href="assets/favicon.ico">
+<link rel="icon" type="image/x-icon" href="../../assets/favicon.ico">
 <link rel="preload" href="../typing/models/skubert.glb" as="fetch" crossorigin="anonymous">
 <script type="importmap">
 {
@@ -47,10 +47,7 @@
   .stat-value.accent{color:#d6ff72}
   .stat-suffix{font-size:11px;font-weight:700;color:#a6bbc5;letter-spacing:0;margin-left:4px}
   .game-shell{border:1px solid #3a4a57;border-radius:20px;overflow:hidden;box-shadow:0 22px 75px #0005;background:#eaf0eb}
-  .shell-bar{min-height:44px;padding:10px 17px;background:#203047;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #415166}
-  .shell-title{color:#eff8fd;font-weight:900;font-size:12px;display:flex;align-items:center;gap:9px;letter-spacing:.03em}
-  .traffic{display:flex;gap:5px}.traffic span{width:8px;height:8px;border-radius:50%;background:#dc7d77}.traffic span:nth-child(2){background:#e3b45b}.traffic span:nth-child(3){background:#93c985}
-  .shell-status{font-size:10px;color:#b8cad5;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+
   #playfield{position:relative;width:100%;height:575px;overflow:hidden;background:#eaf0eb;touch-action:none;cursor:default;isolation:isolate}
   #siteContent{width:100%;height:100%;position:relative;color:#172c38;user-select:none;pointer-events:none}
   .site-page{width:100%;height:100%;background:radial-gradient(circle at 95% 10%,#f3f7ef,#e8efe9 56%,#e1ece7);padding:16px 18px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
@@ -133,9 +130,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 .stats .stat-value{font-size:14px;line-height:1.2;margin:0;letter-spacing:0;font-weight:850}
 .stats .stat-value.accent{color:#d6ff72}
 .game-shell{position:relative;flex:1;min-height:0;width:100%;margin:0;border:0;border-radius:0;background:#e5ece7;box-shadow:none;overflow:hidden}
-.shell-bar{position:absolute;left:17px;bottom:18px;z-index:25;min-height:0;padding:8px 12px;display:flex;gap:10px;background:#102937e3;color:#fff;border:1px solid #ffffff38;border-radius:30px;box-shadow:0 7px 22px #0b28323c;pointer-events:none;backdrop-filter:blur(10px)}
-.shell-title{font-size:10px;color:#e1f4ef;font-weight:850;letter-spacing:.07em}
-.shell-bar .traffic,.shell-status{display:none}
+
 #playfield{height:100%!important;width:100%;overflow:hidden;border-radius:0;background:#e5ece7;outline:none}
 #siteContent{height:100%;width:100%}
 .site-page{padding:clamp(22px,3vw,52px);gap:clamp(10px,1.6vh,24px);background:radial-gradient(circle at 95% 10%,#f4f7ef,#e8efe9 55%,#e1ece7)}
@@ -187,7 +182,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   .stats .stat-value{font-size:12px}
   .site-page{padding:15px 10px 10px;gap:8px}
   .screen.launch-screen{padding:0 10px 58px}
-  .shell-bar{bottom:10px;left:10px}
+
 }
 @media(max-width:480px){
   .menu-toggle span{display:none}
@@ -283,11 +278,6 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   color: var(--ui-panel) !important;
 }
 
-/* Bottom-left information indicator */
-.shell-bar {
-  background: var(--ui-panel);
-  border-color: var(--ui-border);
-}
 
 /* Help, results and leaderboard panels */
 .screen-card {
@@ -344,10 +334,6 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   color: #FFFFFF !important;
 }
 
-/* Bottom-left stage information */
-.shell-title {
-  color: #FFFFFF !important;
-}
 
 </style>
 </head>
@@ -374,10 +360,6 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     <div class="stat"><div class="stat-label">Time left</div><div class="stat-value" id="timeLabel">1:00</div></div>
   </section>
   <div class="game-shell">
-    <div class="shell-bar">
-      <div class="shell-title"><div class="traffic"><span></span><span></span><span></span></div><span id="shellSceneTitle">PRODUCT LIFECYCLE</span></div>
-      <div class="shell-status" id="shellStatus">READY TO CHOMP</div>
-    </div>
     <div id="playfield" tabindex="0" aria-label="Game area. Move your mouse or arrow keys to guide Skubert over page elements.">
       <div id="siteContent"></div>
       <canvas id="attachmentBack" class="attachment-layer" aria-hidden="true"></canvas>
@@ -456,8 +438,13 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const MOVE_SPEED = 450;          // Maximum speed (pixels/second).
   const CHASE_RESPONSE = 7.0;      // Higher = snappier; lower = heavier / more momentum.
   const SLOWDOWN_RADIUS = 105;     // Distance (px) over which Skubert brakes near the cursor.
-  const EDGE_SCROLL_PUSH = 400;    // Target extension (px) near the top/bottom edge.
-  const EDGE_SCROLL_ZONE = 500;     // Width (px) of the edge-scroll activation area.
+  const EDGE_SCROLL_PUSH = 400;    // Virtual cursor target extension near an edge.
+  const EDGE_SCROLL_ZONE = 500;     // Maximum distance (px) from an edge to begin scrolling.
+  const EDGE_SCROLL_VIEWPORT_FRACTION = 0.25; // Start scrolling about 25% before the top/bottom edge.
+  function earlyScrollMargin(height){
+    // Keep top and bottom trigger regions separate, even on small screens.
+    return Math.max(28,Math.min(EDGE_SCROLL_ZONE,height*EDGE_SCROLL_VIEWPORT_FRACTION,height/2-28));
+  }
   // GROWTH SETTINGS — one size function controls the GLB/fallback, attached
   // items, drop-in landing, and the HTML pickup hitbox. Adjust here only.
   const AVATAR_START_SIZE = 30;       // Diameter in CSS pixels at zero mass.
@@ -666,7 +653,6 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
         console.info('Offline snapshot ready:',SCENES[renderedScene].name,game.sceneTotal,'collectibles');
       },{once:true});
     }
-    $('shellSceneTitle').textContent=SCENES[game.scene].name;
     refreshLocks();updateHud();
   }
   function refreshLocks(){
@@ -681,7 +667,6 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     $('timeLabel').textContent=game.mode==='relaxed'?'∞':timeText(game.remaining);
     $('remainingLabel').textContent=`${game.sceneTotal-game.sceneEaten} DOM items remaining`;
     $('progressFill').style.width=`${game.sceneTotal?(game.sceneEaten/game.sceneTotal)*100:0}%`;
-    $('shellStatus').textContent=game.status==='playing'?'EATING · KEEP MOVING':game.status.toUpperCase();
   }
   function setToast(text){const el=$('toast');el.textContent=text;el.classList.add('show');clearTimeout(setToast.timer);setToast.timer=setTimeout(()=>el.classList.remove('show'),1850)}
   let launchToken=0;
@@ -1188,6 +1173,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     if(!game.previous)game.previous=now;
     const dt=clamp((now-game.previous)/1000,0,.06);game.previous=now;
     const previousX=game.x,previousY=game.y;
+    let frameScrollDelta=0;
     if(game.status==='playing'){
       if(game.mode==='timed'){game.remaining=Math.max(0,game.remaining-dt);if(game.remaining<=0)finish('timeout')}
       if(game.status==='playing'){
@@ -1207,10 +1193,11 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
           // This preserves edge scrolling after Skubert reaches the boundary.
           let targetY=game.ty;
           const h=field.clientHeight;
-          if(game.ty<EDGE_SCROLL_ZONE){
-            targetY-=EDGE_SCROLL_PUSH*(1-game.ty/EDGE_SCROLL_ZONE);
-          }else if(game.ty>h-EDGE_SCROLL_ZONE){
-            targetY+=EDGE_SCROLL_PUSH*(1-(h-game.ty)/EDGE_SCROLL_ZONE);
+          const edgeMargin=earlyScrollMargin(h);
+          if(game.ty<edgeMargin){
+            targetY-=EDGE_SCROLL_PUSH*(1-clamp(game.ty/edgeMargin,0,1));
+          }else if(game.ty>h-edgeMargin){
+            targetY+=EDGE_SCROLL_PUSH*(1-clamp((h-game.ty)/edgeMargin,0,1));
           }
           const toX=game.tx-game.x,toY=targetY-game.y;
           const distance=Math.hypot(toX,toY);
@@ -1236,17 +1223,27 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
         const attemptedX=game.x+game.vx*dt;
         const attemptedY=game.y+game.vy*dt;
         const margin=28;
+        const height=field.clientHeight;
+        const edgeMargin=earlyScrollMargin(height);
+        const safeTop=edgeMargin,safeBottom=height-edgeMargin;
         game.x=clamp(attemptedX,margin,Math.max(margin,field.clientWidth-margin));
-        game.y=clamp(attemptedY,margin,Math.max(margin,field.clientHeight-margin));
-        // Continue to scroll the article when vertical momentum reaches an edge.
-        // The scroll rate is capped by the same MOVE_SPEED setting.
-        const spillY=attemptedY-game.y;
-        if(Math.abs(spillY)>.01)scrollArticleBy(spillY);
+        // As Skubert moves toward an edge, transfer the excess movement into
+        // scrolling BEFORE he reaches the viewport boundary. If the snapshot
+        // itself is at its top/bottom, use the remaining motion on Skubert.
+        let wantedScroll=0;
+        if(game.vy<0 && attemptedY<safeTop){
+          wantedScroll=Math.min(0,attemptedY-Math.min(game.y,safeTop));
+        }else if(game.vy>0 && attemptedY>safeBottom){
+          wantedScroll=Math.max(0,attemptedY-Math.max(game.y,safeBottom));
+        }
+        if(Math.abs(wantedScroll)>.01)frameScrollDelta=scrollArticleBy(wantedScroll);
+        game.y=clamp(attemptedY-frameScrollDelta,margin,Math.max(margin,height-margin));
         positionAvatar();if(now-game.lastCheck>75){game.lastCheck=now;checkCollisions(now)}
         if(now-game.lastHudTime>250){game.lastHudTime=now;updateHud()}
       }
     }
-    attachments.render(now,game.x-previousX,game.y-previousY);
+    // Rolling attachments also respond to the ground moving beneath Skubert.
+    attachments.render(now,game.x-previousX,game.y-previousY+frameScrollDelta);
     requestAnimationFrame(frame);
   }
   function pointerMove(e){if(game.status!=='playing')return;const rect=field.getBoundingClientRect();game.tx=e.clientX-rect.left;game.ty=e.clientY-rect.top;game.pointer=true;}
@@ -1281,14 +1278,16 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     return null;
   }
   function scrollArticleBy(pixels){
-    // Both stages contain saved webpages that can be scrolled.
-    if(game.status!=='playing'||!Number.isFinite(pixels)||!pixels)return false;
+    // Return the actual scroll distance, so avatar movement stays continuous
+    // even when the saved webpage reaches its upper or lower limit.
+    if(game.status!=='playing'||!Number.isFinite(pixels)||!pixels)return 0;
     const article=scrollTarget();
-    if(!article)return false;
+    if(!article)return 0;
     const before=article.scrollTop;
     article.scrollTop+=pixels;
-    if(Math.abs(article.scrollTop-before)>.01){rescanVisibleArticle();return true;}
-    return false;
+    const moved=article.scrollTop-before;
+    if(Math.abs(moved)>.01)rescanVisibleArticle();
+    return moved;
   }
   field.addEventListener('wheel', e=>{
     // Preserve trackpad/wheel navigation independent of Skubert's position.
