@@ -163,6 +163,17 @@ function drawWord() {
   wordDiv.style.left = (Math.random() * (gameWidth - 150)).toString() + 'px';
   arrWordsDiv.push(wordDiv);
   gameContentClass[0].appendChild(wordDiv);
+
+  // Read the current CSS blue BEFORE replacing the falling block's background.
+  // This keeps the lettering in the same blue as the previous block design.
+  const previousBackgroundColor = window.getComputedStyle(wordDiv).backgroundColor;
+  const wordBlue = (previousBackgroundColor === 'transparent' ||
+    previousBackgroundColor === 'rgba(0, 0, 0, 0)')
+    ? '#0032b1' // Fallback if the existing stylesheet has no solid blue.
+    : previousBackgroundColor;
+  wordDiv.style.setProperty('background', '#ffffff', 'important');
+  wordDiv.style.setProperty('color', wordBlue, 'important');
+  paragraph.style.setProperty('color', wordBlue, 'important');
 }
 
 // GET RANDOM WORD FROM DICTIONARY WITHOUT REPEATS
@@ -212,6 +223,17 @@ function getWord() {
   inputElementID.value = '';
   if (arrWords.includes(inputValue)) {
     updateScore(inputValue);
+
+    // Grow Skubert by 1% of its original size per successfully typed LETTER.
+    // Spaces are not letters. The viewer reads this total even if the GLB
+    // has not finished loading when the word is submitted.
+    const correctLetters = (inputValue.match(/[a-z]/g) || []).length;
+    window.skubertGrowthLetters = (window.skubertGrowthLetters || 0) + correctLetters;
+    window.dispatchEvent(new CustomEvent('skubert:word-correct', {
+      detail: { word: inputValue, letters: correctLetters,
+                totalLetters: window.skubertGrowthLetters }
+    }));
+
     let indexWord = arrWords.indexOf(inputValue);
     let wordDivIndex = arrWordsDiv[indexWord];
     arrWords.splice(indexWord, 1);

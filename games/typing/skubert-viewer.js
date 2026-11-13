@@ -19,6 +19,20 @@ if (!gameArea || !wrapper || !mount) {
   throw new Error('Missing #GameContent, #Wrapper, or #skubert-viewer.');
 }
 
+// Enlarge the complete viewer, including its PNG fallback, without changing
+// the camera framing or the GLB's head-tracking movement. The model grows by
+// 1% of its INITIAL display size for each correctly submitted letter.
+// Growth is linear: 20 correct letters = 120% of the initial model size.
+mount.style.transformOrigin = 'center bottom';
+mount.style.transition = 'transform 180ms ease-out';
+function updateSkubertGrowth() {
+  const letters = Math.max(0, Number(window.skubertGrowthLetters) || 0);
+  const scale = 1 + letters * 0.01;
+  mount.style.transform = `scale(${scale})`;
+}
+window.addEventListener('skubert:word-correct', updateSkubertGrowth);
+updateSkubertGrowth();
+
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
 camera.position.set(0, 0, 5.0);
@@ -52,7 +66,7 @@ function sizeAndPosition() {
   // Parent is #Wrapper, not #GameContent: the game's game-over code
   // replaces #GameContent.innerHTML, and would destroy an embedded canvas.
   mount.style.left = `${area.left - parent.left + (area.width - width) / 2}px`;
-  mount.style.top = `${area.top - parent.top + (area.height - height) / 2}px`;
+  mount.style.top = `${area.bottom - parent.top - height - 5}px`;
 
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
@@ -159,5 +173,10 @@ function animate() {
     );
   }
   renderer.render(scene, camera);
+  // Switch from the PNG only AFTER rendering a frame containing the GLB.
+  // A downloaded model alone is not evidence that it is visible yet.
+  if (isLoaded && !mount.classList.contains('model-ready')) {
+    mount.classList.add('model-ready');
+  }
 }
 renderer.setAnimationLoop(animate);
