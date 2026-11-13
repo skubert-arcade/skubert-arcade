@@ -1,0 +1,348 @@
+{
+  "version": 1,
+  "description": "Native-resolution lossless WebP tiles preserving RGBA source pixels and row dimensions",
+  "rows": [
+    {
+      "scene": 1,
+      "source": "bayeux_row_01.png",
+      "width": 4800,
+      "height": 370,
+      "tiles": [
+        {
+          "file": "tapestry-01-01.webp",
+          "x": 0,
+          "width": 960,
+          "height": 370
+        },
+        {
+          "file": "tapestry-01-02.webp",
+          "x": 960,
+          "width": 960,
+          "height": 370
+        },
+        {
+          "file": "tapestry-01-03.webp",
+          "x": 1920,
+          "width": 960,
+          "height": 370
+        },
+        {
+          "file": "tapestry-01-04.webp",
+          "x": 2880,
+          "width": 960,
+          "height": 370
+        },
+        {
+          "file": "tapestry-01-05.webp",
+          "x": 3840,
+          "width": 960,
+          "height": 370
+        }
+      ]
+    },
+    {
+      "scene": 2,
+      "source": "bayeux_row_02.png",
+      "width": 4800,
+      "height": 375,
+      "tiles": [
+        {
+          "file": "tapestry-02-01.webp",
+          "x": 0,
+          "width": 960,
+          "height": 375
+        },
+        {
+          "file": "tapestry-02-02.webp",
+          "x": 960,
+          "width": 960,
+          "height": 375
+        },
+        {
+          "file": "tapestry-02-03.webp",
+          "x": 1920,
+          "width": 960,
+          "height": 375
+        },
+        {
+          "file": "tapestry-02-04.webp",
+          "x": 2880,
+          "width": 960,
+          "height": 375
+        },
+        {
+          "file": "tapestry-02-05.webp",
+          "x": 3840,
+          "width": 960,
+          "height": 375
+        }
+      ]
+    },
+    {
+      "scene": 3,
+      "source": "bayeux_row_03.png",
+      "width": 4799,
+      "height": 367,
+      "tiles": [
+        {
+          "file": "tapestry-03-01.webp",
+          "x": 0,
+          "width": 960,
+          "height": 367
+        },
+        {
+          "file": "tapestry-03-02.webp",
+          "x": 960,
+          "width": 960,
+          "height": 367
+        },
+        {
+          "file": "tapestry-03-03.webp",
+          "x": 1920,
+          "width": 960,
+          "height": 367
+        },
+        {
+          "file": "tapestry-03-04.webp",
+          "x": 2880,
+          "width": 960,
+          "height": 367
+        },
+        {
+          "file": "tapestry-03-05.webp",
+          "x": 3840,
+          "width": 959,
+          "height": 367
+        }
+      ]
+    },
+    {
+      "scene": 4,
+      "source": "bayeux_row_04.png",
+      "width": 4775,
+      "height": 372,
+      "tiles": [
+        {
+          "file": "tapestry-04-01.webp",
+          "x": 0,
+          "width": 960,
+          "height": 372
+        },
+        {
+          "file": "tapestry-04-02.webp",
+          "x": 960,
+          "width": 960,
+          "height": 372
+        },
+        {
+          "file": "tapestry-04-03.webp",
+          "x": 1920,
+          "width": 960,
+          "height": 372
+        },
+        {
+          "file": "tapestry-04-04.webp",
+          "x": 2880,
+          "width": 960,
+          "height": 372
+        },
+        {
+          "file": "tapestry-04-05.webp",
+          "x": 3840,
+          "width": 935,
+          "height": 372
+        }
+      ]
+    },
+    {
+      "scene": 5,
+      "source": "bayeux_row_05.png",
+      "width": 4800,
+      "height": 369,
+      "tiles": [
+        {
+          "file": "tapestry-05-01.webp",
+          "x": 0,
+          "width": 960,
+          "height": 369
+        },
+        {
+          "file": "tapestry-05-02.webp",
+          "x": 960,
+          "width": 960,
+          "height": 369
+        },
+        {
+          "file": "tapestry-05-03.webp",
+          "x": 1920,
+          "width": 960,
+          "height": 369
+        },
+        {
+          "file": "tapestry-05-04.webp",
+          "x": 2880,
+          "width": 960,
+          "height": 369
+        },
+        {
+          "file": "tapestry-05-05.webp",
+          "x": 3840,
+          "width": 960,
+          "height": 369
+        }
+      ]
+    },
+    {
+      "scene": 6,
+      "source": "bayeux_row_06.png",
+      "width": 4800,
+      "height": 369,
+      "tiles": [
+        {
+          "file": "tapestry-06-01.webp",
+          "x": 0,
+          "width": 960,
+          "height": 369
+        },
+        {
+          "file": "tapestry-06-02.webp",
+          "x": 960,
+          "width": 960,
+          "height": 369
+        },
+        {
+          "file": "tapestry-06-03.webp",
+          "x": 1920,
+          "width": 960,
+          "height": 369
+        },
+        {
+          "file": "tapestry-06-04.webp",
+          "x": 2880,
+          "width": 960,
+          "height": 369
+        },
+        {
+          "file": "tapestry-06-05.webp",
+          "x": 3840,
+          "width": 960,
+          "height": 369
+        }
+      ]
+    },
+    {
+      "scene": 7,
+      "source": "bayeux_row_07.png",
+      "width": 4800,
+      "height": 365,
+      "tiles": [
+        {
+          "file": "tapestry-07-01.webp",
+          "x": 0,
+          "width": 960,
+          "height": 365
+        },
+        {
+          "file": "tapestry-07-02.webp",
+          "x": 960,
+          "width": 960,
+          "height": 365
+        },
+        {
+          "file": "tapestry-07-03.webp",
+          "x": 1920,
+          "width": 960,
+          "height": 365
+        },
+        {
+          "file": "tapestry-07-04.webp",
+          "x": 2880,
+          "width": 960,
+          "height": 365
+        },
+        {
+          "file": "tapestry-07-05.webp",
+          "x": 3840,
+          "width": 960,
+          "height": 365
+        }
+      ]
+    },
+    {
+      "scene": 8,
+      "source": "bayeux_row_08.png",
+      "width": 4784,
+      "height": 360,
+      "tiles": [
+        {
+          "file": "tapestry-08-01.webp",
+          "x": 0,
+          "width": 960,
+          "height": 360
+        },
+        {
+          "file": "tapestry-08-02.webp",
+          "x": 960,
+          "width": 960,
+          "height": 360
+        },
+        {
+          "file": "tapestry-08-03.webp",
+          "x": 1920,
+          "width": 960,
+          "height": 360
+        },
+        {
+          "file": "tapestry-08-04.webp",
+          "x": 2880,
+          "width": 960,
+          "height": 360
+        },
+        {
+          "file": "tapestry-08-05.webp",
+          "x": 3840,
+          "width": 944,
+          "height": 360
+        }
+      ]
+    },
+    {
+      "scene": 9,
+      "source": "bayeux_row_09.png",
+      "width": 4783,
+      "height": 331,
+      "tiles": [
+        {
+          "file": "tapestry-09-01.webp",
+          "x": 0,
+          "width": 960,
+          "height": 331
+        },
+        {
+          "file": "tapestry-09-02.webp",
+          "x": 960,
+          "width": 960,
+          "height": 331
+        },
+        {
+          "file": "tapestry-09-03.webp",
+          "x": 1920,
+          "width": 960,
+          "height": 331
+        },
+        {
+          "file": "tapestry-09-04.webp",
+          "x": 2880,
+          "width": 960,
+          "height": 331
+        },
+        {
+          "file": "tapestry-09-05.webp",
+          "x": 3840,
+          "width": 943,
+          "height": 331
+        }
+      ]
+    }
+  ]
+}
