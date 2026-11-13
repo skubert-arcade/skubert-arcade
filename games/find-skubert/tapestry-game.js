@@ -12,7 +12,7 @@
   const MODEL_FILE = '../typing/models/skubert.glb';
   // Original cruise speed. Left/right arrows adjust it by +/- 50%, smoothly.
   const SCROLL_SPEED = 295;
-  const SPEED_INERTIA_SECONDS = 0.48; // response time constant (~95% in 1.44 s)
+  const SPEED_INERTIA_SECONDS = 1.0; // response time constant (~95% in 1.44 s)
   const RUN_SECONDS = 60;
   const BONUS_SECONDS = 2;
   const COUNTDOWN_SECONDS = 3;
