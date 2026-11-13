@@ -10,7 +10,9 @@
   const DRAFT_KEY = 'skubert-tapestry-placements-v1';
   const PLACEHOLDER = 'assets/skubert-preview.png';
   const MODEL_FILE = '../typing/models/skubert.glb';
+  // Original cruise speed. Left/right arrows adjust it by +/- 50%, smoothly.
   const SCROLL_SPEED = 295;
+  const SPEED_INERTIA_SECONDS = 0.48; // response time constant (~95% in 1.44 s)
   const RUN_SECONDS = 60;
   const BONUS_SECONDS = 2;
   const COUNTDOWN_SECONDS = 3;
@@ -18,6 +20,8 @@
   const HIGH_SCORE_KEY = 'skubert-find-best-v1';
   const panels = [], markers = new Map(), images = [];
   let heads = [], selectedId = null, auto = false, lastFrame = 0;
+  let speedMultiplier = 1;
+  const heldSpeedKeys = new Set();
   let draggingPan = null, draggingHead = null, three = null, threeBusy = false;
   let debounceSave = 0, timerMessage = 0;
   let phase = EDITOR_MODE ? 'editor' : 'ready';
@@ -504,6 +508,17 @@
     await enableThree();
   }
 
+  function updateSpeedReadout(){
+    if(EDITOR_MODE)return;
+    $('speedValue').textContent=`${speedMultiplier.toFixed(2)}×`;
+  }
+  function targetSpeedMultiplier(){
+    const braking=heldSpeedKeys.has('ArrowLeft');
+    const accelerating=heldSpeedKeys.has('ArrowRight');
+    if(braking===accelerating)return 1; // neither or both held
+    return braking?.5:1.5;
+  }
+  function clearSpeedKeys(){heldSpeedKeys.clear();}
   function updateProgress(){
     const max=totalScroll(),fraction=max?clamp(viewport.scrollLeft/max,0,1):0;
     $('percent').textContent=`${Math.round(fraction*100)}%`;
@@ -515,21 +530,29 @@
     if(three)three.refresh();
   }
   function setAuto(enabled){
-    auto=Boolean(enabled);$('auto').textContent=auto?'Ⅱ':'▶';
+    auto=Boolean(enabled);
+    if(!auto){clearSpeedKeys();speedMultiplier=1;updateSpeedReadout();}
+    $('auto').textContent=auto?'Ⅱ':'▶';
     $('auto').setAttribute('aria-pressed',String(auto));
     $('auto').setAttribute('aria-label',auto?'Pause automatic scrolling':'Start automatic scrolling');
   }
   function dismissNote(){$('introNote').hidden=true;}
-  function scrollByAmount(distance){setAuto(false);viewport.scrollBy({left:distance,behavior:'smooth'});}
+  function scrollByAmount(distance){
+    if(!EDITOR_MODE)return; // no manual navigation in normal gameplay
+    setAuto(false);viewport.scrollBy({left:distance,behavior:'smooth'});
+  }
   function attachNavigation(){
     viewport.addEventListener('scroll',()=>{updateProgress();scheduleImageWindow();if(viewport.scrollLeft>40)dismissNote()},{passive:true});
     window.addEventListener('resize',layoutTiles);
     viewport.addEventListener('wheel',e=>{
-      e.preventDefault();setAuto(false);dismissNote();
+      e.preventDefault();
+      if(!EDITOR_MODE)return; // also block mouse/trackpad scroll in gameplay
+      setAuto(false);dismissNote();
       const delta=Math.abs(e.deltaX)>Math.abs(e.deltaY)?e.deltaX:e.deltaY;
       viewport.scrollLeft+=delta*(e.deltaMode===1?32:1.5);
     },{passive:false});
     viewport.addEventListener('pointerdown',e=>{
+      if(!EDITOR_MODE)return; // do not steal clicks from Skubert heads
       if(e.target.closest('.skubert-marker'))return;
       setAuto(false);
       draggingPan={id:e.pointerId,x:e.clientX,y:e.clientY,scroll:viewport.scrollLeft,dist:0,type:e.pointerType};
@@ -555,9 +578,19 @@
     viewport.addEventListener('lostpointercapture',()=>{viewport.classList.remove('dragging')});
     $('previous').addEventListener('click',()=>scrollByAmount(-viewport.clientWidth*.8));
     $('next').addEventListener('click',()=>scrollByAmount(viewport.clientWidth*.8));
-    seek.addEventListener('input',()=>{setAuto(false);dismissNote();viewport.scrollLeft=totalScroll()*Number(seek.value)/1000;});
-    $('auto').addEventListener('click',()=>setAuto(!auto));
+    seek.addEventListener('input',()=>{
+      if(!EDITOR_MODE)return;
+      setAuto(false);dismissNote();viewport.scrollLeft=totalScroll()*Number(seek.value)/1000;
+    });
+    $('auto').addEventListener('click',()=>{if(EDITOR_MODE)setAuto(!auto)});
     document.addEventListener('keydown',e=>{
+      if(!EDITOR_MODE){
+        if(e.key==='ArrowLeft'||e.key==='ArrowRight'){
+          e.preventDefault();
+          if(phase==='playing')heldSpeedKeys.add(e.key);
+        }
+        return; // no PageUp/Down, Space, Home/End, A/D manual seeking
+      }
       if(isForm(document.activeElement))return;
       if(EDITOR_MODE && e.key==='Delete' && selectedId){e.preventDefault();deleteSelected();return;}
       if(EDITOR_MODE && e.key==='Escape'){setSelected(null);return;}
@@ -570,11 +603,29 @@
       else if(e.key==='End'){viewport.scrollLeft=totalScroll();e.preventDefault();return;}
       if(dx){e.preventDefault();scrollByAmount(dx);}
     });
+    document.addEventListener('keyup',e=>{
+      if(!EDITOR_MODE && (e.key==='ArrowLeft'||e.key==='ArrowRight')){
+        e.preventDefault();heldSpeedKeys.delete(e.key);
+      }
+    });
+    window.addEventListener('blur',clearSpeedKeys);
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)clearSpeedKeys()});
     let last=0;
     function tick(now){
       tickCountdown(now);
       tickGameTimer(now);
-      if(auto){const dt=Math.min(.05,Math.max(0,(now-last)/1000||0));viewport.scrollLeft+=SCROLL_SPEED*dt;}
+      if(auto){
+        const dt=Math.min(.05,Math.max(0,(now-last)/1000||0));
+        if(!EDITOR_MODE && phase==='playing'){
+          const target=targetSpeedMultiplier();
+          // Exponential easing is time-step independent: no abrupt jumps when a
+          // key is pressed or released, even at variable frame rates.
+          speedMultiplier+=(target-speedMultiplier)*(1-Math.exp(-dt/SPEED_INERTIA_SECONDS));
+          if(Math.abs(speedMultiplier-target)<0.002)speedMultiplier=target;
+          updateSpeedReadout();
+        }
+        viewport.scrollLeft+=SCROLL_SPEED*(EDITOR_MODE?1:speedMultiplier)*dt;
+      }
       last=now;requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
@@ -584,6 +635,12 @@
     buildStrip();layoutTiles();attachNavigation();
     gameEl.classList.toggle('placement',EDITOR_MODE);
     panelEl.hidden=!EDITOR_MODE;$('modeBadge').hidden=!EDITOR_MODE;
+    seek.disabled=!EDITOR_MODE;
+    if(!EDITOR_MODE){
+      seek.setAttribute('aria-label','Tapestry progress (view only)');
+      $('speedGuide').hidden=false;$('speedReadout').hidden=false;
+      updateSpeedReadout();
+    }
     if(EDITOR_MODE)controlEvents();
     configureGameplay();
     await loadLocations();

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#d8c6a6">
   <link rel="icon" type="image/x-icon" href="../../assets/favicon.ico">
-  <title>Find Skubert</title>
+  <title>Where’s Skubert? · Skubert Arcade</title>
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -21,6 +21,10 @@
     .viewport{position:absolute;inset:0;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;overscroll-behavior-x:contain;touch-action:pan-x;cursor:grab;user-select:none;-webkit-user-select:none}
     .viewport::-webkit-scrollbar{display:none}
     .viewport.dragging{cursor:grabbing}
+    /* During the timed game, only scripted auto-scroll can move the strip.
+       Placement Mode retains full pan, touch, wheel, and scrub controls. */
+    .game:not(.placement) .viewport{overflow-x:hidden;touch-action:none;cursor:default}
+    .game:not(.placement) .arrow,.game:not(.placement) #auto{display:none!important}
     .strip{display:flex;width:max-content;height:100%;align-items:stretch}
     .scene{height:100%;flex:none;position:relative;display:flex;align-items:stretch}
     .tile{height:100%;flex:none;position:relative;background:#e5d5b9;overflow:hidden}
@@ -32,11 +36,19 @@
     .skubert-marker img{position:relative;z-index:1;width:100%;height:100%;display:block;object-fit:contain;pointer-events:none;user-select:none;transform:perspective(480px) rotateX(var(--marker-pitch,0deg)) rotateZ(var(--marker-rotation,0deg));transition:opacity .22s ease}
     /* The transparent halo remains behind both the PNG fallback and the 3D model.
        It is deliberately outside the PNG so it stays visible after the PNG hides. */
+    /* Gold stays visible. Blue is its own layer, which reaches EXACTLY zero
+       opacity at the end of EVERY two-second pulse. Neither layer changes
+       head geometry, pointer targets, or placement coordinates. */
     .skubert-halo{position:absolute;inset:-27%;z-index:0;border-radius:50%;pointer-events:none;
-      background:radial-gradient(circle,transparent 24%,#84caff29 40%,#77c9ff91 55%,#ffe09f99 68%,transparent 83%);
-      box-shadow:0 0 11px 3px #5db9ff80,0 0 23px 8px #ffd97966;
+      background:radial-gradient(circle,transparent 28%,#ffd79726 43%,#ffce78a8 65%,transparent 84%);
+      box-shadow:0 0 15px 5px #ffd97971,0 0 25px 7px #e9a84757;
       filter:blur(3px);animation:skubert-halo-pulse 2.4s ease-in-out infinite alternate}
-    @keyframes skubert-halo-pulse{from{opacity:.78;transform:scale(.96)}to{opacity:1;transform:scale(1.09)}}
+    .skubert-halo::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+      background:radial-gradient(circle,transparent 22%,#7bdaff25 37%,#64c6ffbf 55%,#449bff88 70%,transparent 84%);
+      box-shadow:0 0 12px 3px #58bfffba,0 0 25px 8px #339bff87;
+      animation:skubert-blue-glow-fade 2s ease-in-out infinite}
+    @keyframes skubert-blue-glow-fade{0%,100%{opacity:0}37%,60%{opacity:1}}
+    @keyframes skubert-halo-pulse{from{opacity:.83;transform:scale(.96)}to{opacity:1;transform:scale(1.09)}}
     /* 150% of the visible head's width AND height = 25% extra on each edge.
        In Placement Mode keep the target at its original size for accurate editing. */
     .skubert-hitbox{position:absolute;inset:0;z-index:3;pointer-events:auto;background:transparent;border-radius:50%}
@@ -112,6 +124,11 @@
     .seek{--progress:0%;appearance:none;-webkit-appearance:none;flex:1;min-width:0;height:5px;margin:0;border-radius:99px;background:linear-gradient(90deg,#fed99a var(--progress),#fff5db64 var(--progress));cursor:pointer}
     .seek::-webkit-slider-thumb{appearance:none;width:17px;height:17px;border-radius:50%;border:2px solid #302014;background:#ffe4ae}
     .seek::-moz-range-thumb{width:15px;height:15px;border-radius:50%;border:2px solid #302014;background:#ffe4ae}
+    .game:not(.placement) .seek{pointer-events:none;cursor:default;opacity:1}
+    .game:not(.placement) .seek::-webkit-slider-thumb{background:#ead5a8}
+    .speed-guide{font-size:11px;color:#fff1d5;white-space:nowrap;opacity:.85}
+    .speed-readout{min-width:56px;text-align:center;border-radius:99px;background:#fff1c41a;padding:4px 7px;font-size:12px;font-weight:850;font-variant-numeric:tabular-nums;color:#ffe3a0}
+    @media(max-width:690px){.speed-guide{display:none}}
     .mini-btn{height:29px;min-width:32px;padding:0 8px;border:1px solid #f7ddad66;border-radius:999px;background:transparent;color:#fff9ec;font-weight:800}
     .mini-btn:hover{background:#ffe4ae30}
     .note{position:absolute;left:13px;top:52px;z-index:8;padding:7px 10px;max-width:min(430px,calc(100vw - 30px));border-radius:9px;background:#241b15ba;font-size:11px;pointer-events:none;backdrop-filter:blur(8px)}
@@ -144,7 +161,7 @@
 </head>
 <body>
 <main class="game" id="game" aria-label="Where's Skubert tapestry search game">
-  <div class="viewport" id="viewport" tabindex="0" role="region" aria-label="The Bayeux Tapestry as a continuous horizontal panorama. Drag, swipe, use arrow keys, or scroll to move.">
+  <div class="viewport" id="viewport" tabindex="0" role="region" aria-label="Bayeux Tapestry. The game scrolls automatically. Hold the left arrow key to brake or right arrow key to accelerate.">
     <div class="strip" id="strip"></div>
   </div>
   <header class="chromebar">
@@ -157,7 +174,7 @@
       </div>
     </div>
   </header>
-  <div class="note" id="introNote">Scroll horizontally to explore the tapestry.</div>
+  <div class="note" id="introNote">Hold ← to brake (50%) or → to accelerate (150%).</div>
   <div class="effect-layer" id="effectLayer" aria-hidden="true"></div>
   <div class="countdown-overlay" id="countdownOverlay" aria-live="off" aria-label="Starting in three, two, one" hidden>
     <div class="countdown-number" id="countdownNumber">3</div>
@@ -166,6 +183,7 @@
     <div class="overlay-card">
       <h1>Where’s Skubert?</h1>
       <p>Find and click the hidden 3D Skubert heads across the Bayeux Tapestry. Earn points in <strong>60 seconds</strong> and gain <strong>+2 seconds</strong> for every head you find.</p>
+      <p>The tapestry scrolls automatically. Hold <strong>←</strong> to brake to half speed or <strong>→</strong> to accelerate to 1.5× speed. Release to smoothly return to normal.</p>
       <p id="gameReadyMessage">Loading head locations…</p>
       <button class="overlay-action" id="beginGame" type="button" disabled>Start Searching</button>
     </div>
@@ -184,6 +202,8 @@
   <div class="toolbar" aria-label="Horizontal navigation">
     <span class="percent" id="percent">0%</span>
     <input class="seek" id="seek" type="range" min="0" max="1000" value="0" aria-label="Position along the tapestry">
+    <span class="speed-guide" id="speedGuide" hidden>← Brake · Accelerate →</span>
+    <span class="speed-readout" id="speedReadout" hidden aria-label="Current scrolling speed"><span id="speedValue">1.00×</span></span>
     <button class="mini-btn" type="button" id="auto" aria-label="Start automatic scrolling" aria-pressed="false" title="Auto scroll">▶</button>
   </div>
   <aside class="editor" id="placementPanel" hidden aria-label="Skubert placement editor">
@@ -222,6 +242,6 @@
   </aside>
   <div class="status" id="status" role="status" hidden></div>
 </main>
-<script src="./tapestry-game.js?v=20261113-glow-hitbox" defer></script>
+<script src="./tapestry-game.js?v=20261113-inertial-blue-pulse" defer></script>
 </body>
 </html>
