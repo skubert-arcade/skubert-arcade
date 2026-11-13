@@ -201,12 +201,10 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 #avatar .skubert-webgl{position:absolute;inset:0;display:block;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity .25s ease}
 #avatar.has-3d .skubert-webgl{opacity:1}
 #avatar.has-3d .avatar-inner > .skubert-fallback{opacity:0}
-/* During the close-up title screen, ALWAYS display the Skubert image—even
-   when the GLB has loaded. Removing drop-ready on either Start button makes
-   the model fade in during the drop; when it is still loading, the fallback
-   remains visible until the 3D renderer is ready. */
-#avatar.drop-ready.has-3d .skubert-webgl{opacity:0}
-#avatar.drop-ready.has-3d .avatar-inner > .skubert-fallback{opacity:1}
+/* The intro uses the same ready-state handoff as gameplay:
+   the fallback remains visible while the GLB loads, and the real 3D canvas
+   takes its place immediately after the renderer draws its first frame.
+   Do not force the PNG back on while .drop-ready is present. */
 #avatar.chomping.has-3d .skubert-webgl{animation:skubert-3d-chomp .23s ease-out}
 @keyframes skubert-3d-chomp{0%,100%{scale:1}55%{scale:1.1}}
 
@@ -374,9 +372,9 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 }
 @keyframes rollup-intro-spin{
   0%{transform:translateY(0) rotateZ(0deg) scale(1)}
-  32%{transform:translateY(-25px) rotateZ(390deg) scale(1.12)}
-  68%{transform:translateY(-8px) rotateZ(810deg) scale(1.04)}
-  100%{transform:translateY(0) rotateZ(1080deg) scale(1)}
+  32%{transform:translateY(-25px) rotateZ(115deg) scale(1.12)}
+  68%{transform:translateY(-8px) rotateZ(250deg) scale(1.04)}
+  100%{transform:translateY(0) rotateZ(360deg) scale(1)}
 }
 /* Sparkles render above the avatar but never block the button or pointer. */
 #introSkubertStage .skubert-launch-fx{
@@ -445,7 +443,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       <div id="introSkubertStage" aria-hidden="true"><div class="skubert-launch-fx" id="skubertLaunchFx"></div></div>
       <div id="avatar" aria-hidden="true" style="--turn:0deg">
         <div class="avatar-inner">
-          <!-- Preview rendered from the real Skubert GLB; fades out when WebGL is ready. -->
+          <!-- Lightweight image appears while the GLB loads, then fades out as soon as 3D is ready. -->
           <img class="skubert-fallback" src="./assets/skubert-loading.png" alt="" decoding="async" draggable="false">
         </div>
       </div>
@@ -453,7 +451,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       <div id="toast" aria-live="polite"></div>
       <div class="screen launch-screen" id="introOverlay">
         <div class="screen-card launch-card">
-          <p class="launch-eyebrow"></p>
+          <p class="launch-eyebrow">Skubert Roll Up</p>
           <h2>Ready to drop in?</h2>
           <p>Roll over HTML objects, grow, and explore the Product Lifecycle page.</p>
           <div class="screen-buttons">
@@ -879,7 +877,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       if(token!==launchToken||game.status!=='dropping')return;
       launchWindupTimer=null;
       avatar.classList.remove('drop-ready','launch-windup');
-      // Keep the same existing fall animation; the GLB fades in here as before.
+      // Keep the existing fall animation; 3D is already visible when loaded.
       if(reduceMotion || !introSkubertStage.animate){finishDrop();return;}
       dropAnimation=introSkubertStage.animate(flight,{
         duration:1050,easing:'cubic-bezier(.20,.70,.14,1)',fill:'forwards'
