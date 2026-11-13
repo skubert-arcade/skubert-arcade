@@ -1,6 +1,507 @@
 {
   "version": 1,
   "coordinateSystem": "row-percent",
-  "notes": "Click the tapestry in ?place=1 mode to add positions, then download and replace this file.",
-  "heads": []
+  "notes": "scene is 1–9. xPercent/yPercent are relative to that scene. sizePercent is percent of displayed tapestry height. rotationDeg is yaw; pitchDeg is tilt around the horizontal X axis (negative = up, positive = down).",
+  "heads": [
+    {
+      "id": "skubert-01",
+      "scene": 1,
+      "xPercent": 8.646,
+      "yPercent": 38.564,
+      "sizePercent": 17.5,
+      "rotationDeg": -50,
+      "pitchDeg": 10,
+      "points": 100
+    },
+    {
+      "id": "skubert-02",
+      "scene": 1,
+      "xPercent": 14.225,
+      "yPercent": 14.254,
+      "sizePercent": 9,
+      "rotationDeg": -30,
+      "pitchDeg": 25,
+      "points": 100
+    },
+    {
+      "id": "skubert-03",
+      "scene": 1,
+      "xPercent": 42.802,
+      "yPercent": 38.011,
+      "sizePercent": 9,
+      "rotationDeg": -70,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-04",
+      "scene": 1,
+      "xPercent": 60.247,
+      "yPercent": 28.177,
+      "sizePercent": 9,
+      "rotationDeg": -60,
+      "pitchDeg": 25,
+      "points": 100
+    },
+    {
+      "id": "skubert-05",
+      "scene": 1,
+      "xPercent": 80.86,
+      "yPercent": 23.757,
+      "sizePercent": 25.5,
+      "rotationDeg": 55,
+      "pitchDeg": 35,
+      "points": 100
+    },
+    {
+      "id": "skubert-06",
+      "scene": 2,
+      "xPercent": 18.405,
+      "yPercent": 37.569,
+      "sizePercent": 19.5,
+      "rotationDeg": 40,
+      "pitchDeg": 20,
+      "points": 100
+    },
+    {
+      "id": "skubert-07",
+      "scene": 2,
+      "xPercent": 23.273,
+      "yPercent": 35.138,
+      "sizePercent": 9,
+      "rotationDeg": -40,
+      "pitchDeg": 15,
+      "points": 100
+    },
+    {
+      "id": "skubert-08",
+      "scene": 2,
+      "xPercent": 29.057,
+      "yPercent": 31.713,
+      "sizePercent": 9,
+      "rotationDeg": -35,
+      "pitchDeg": 10,
+      "points": 100
+    },
+    {
+      "id": "skubert-09",
+      "scene": 2,
+      "xPercent": 43.983,
+      "yPercent": 49.945,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-10",
+      "scene": 2,
+      "xPercent": 59.056,
+      "yPercent": 39.89,
+      "sizePercent": 9.5,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-11",
+      "scene": 2,
+      "xPercent": 76.329,
+      "yPercent": 15.028,
+      "sizePercent": 27,
+      "rotationDeg": 50,
+      "pitchDeg": 20,
+      "points": 100
+    },
+    {
+      "id": "skubert-12",
+      "scene": 2,
+      "xPercent": 90.988,
+      "yPercent": 20.11,
+      "sizePercent": 16,
+      "rotationDeg": -40,
+      "pitchDeg": 10,
+      "points": 100
+    },
+    {
+      "id": "skubert-13",
+      "scene": 2,
+      "xPercent": 95.908,
+      "yPercent": 23.646,
+      "sizePercent": 9,
+      "rotationDeg": -30,
+      "pitchDeg": 10,
+      "points": 100
+    },
+    {
+      "id": "skubert-14",
+      "scene": 3,
+      "xPercent": 2.56,
+      "yPercent": 41.547,
+      "sizePercent": 27,
+      "rotationDeg": 70,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-15",
+      "scene": 3,
+      "xPercent": 9.802,
+      "yPercent": 39.337,
+      "sizePercent": 20,
+      "rotationDeg": 65,
+      "pitchDeg": 40,
+      "points": 100
+    },
+    {
+      "id": "skubert-16",
+      "scene": 3,
+      "xPercent": 50.744,
+      "yPercent": 31.934,
+      "sizePercent": 16,
+      "rotationDeg": -65,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-17",
+      "scene": 3,
+      "xPercent": 41.854,
+      "yPercent": 8.398,
+      "sizePercent": 9,
+      "rotationDeg": 60,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-18",
+      "scene": 3,
+      "xPercent": 86.826,
+      "yPercent": 27.845,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-19",
+      "scene": 3,
+      "xPercent": 63.132,
+      "yPercent": 12.818,
+      "sizePercent": 20.5,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-20",
+      "scene": 3,
+      "xPercent": 91.398,
+      "yPercent": 23.646,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-21",
+      "scene": 4,
+      "xPercent": 24.223,
+      "yPercent": 36.464,
+      "sizePercent": 27,
+      "rotationDeg": -70,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-22",
+      "scene": 4,
+      "xPercent": 42.317,
+      "yPercent": 33.039,
+      "sizePercent": 9,
+      "rotationDeg": 65,
+      "pitchDeg": -35,
+      "points": 100
+    },
+    {
+      "id": "skubert-23",
+      "scene": 4,
+      "xPercent": 50.357,
+      "yPercent": 32.818,
+      "sizePercent": 14,
+      "rotationDeg": -60,
+      "pitchDeg": 10,
+      "points": 100
+    },
+    {
+      "id": "skubert-24",
+      "scene": 4,
+      "xPercent": 57.468,
+      "yPercent": 27.956,
+      "sizePercent": 27,
+      "rotationDeg": 70,
+      "pitchDeg": 25,
+      "points": 100
+    },
+    {
+      "id": "skubert-25",
+      "scene": 4,
+      "xPercent": 75.57,
+      "yPercent": 39.779,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-26",
+      "scene": 5,
+      "xPercent": 3.22,
+      "yPercent": 25.414,
+      "sizePercent": 21.5,
+      "rotationDeg": 60,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-27",
+      "scene": 5,
+      "xPercent": 10.415,
+      "yPercent": 8.177,
+      "sizePercent": 27,
+      "rotationDeg": -65,
+      "pitchDeg": 30,
+      "points": 100
+    },
+    {
+      "id": "skubert-28",
+      "scene": 5,
+      "xPercent": 45.923,
+      "yPercent": 27.293,
+      "sizePercent": 27,
+      "rotationDeg": -55,
+      "pitchDeg": 10,
+      "points": 100
+    },
+    {
+      "id": "skubert-29",
+      "scene": 5,
+      "xPercent": 40.86,
+      "yPercent": 42.431,
+      "sizePercent": 10,
+      "rotationDeg": 55,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-30",
+      "scene": 5,
+      "xPercent": 48.581,
+      "yPercent": 44.42,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-31",
+      "scene": 5,
+      "xPercent": 72.587,
+      "yPercent": 14.033,
+      "sizePercent": 27,
+      "rotationDeg": -50,
+      "pitchDeg": 30,
+      "points": 100
+    },
+    {
+      "id": "skubert-32",
+      "scene": 5,
+      "xPercent": 94.495,
+      "yPercent": 34.586,
+      "sizePercent": 20.5,
+      "rotationDeg": -45,
+      "pitchDeg": 20,
+      "points": 100
+    },
+    {
+      "id": "skubert-33",
+      "scene": 6,
+      "xPercent": 50.476,
+      "yPercent": 19.669,
+      "sizePercent": 20,
+      "rotationDeg": -40,
+      "pitchDeg": 25,
+      "points": 100
+    },
+    {
+      "id": "skubert-34",
+      "scene": 6,
+      "xPercent": 73.666,
+      "yPercent": 41.436,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-35",
+      "scene": 6,
+      "xPercent": 77.226,
+      "yPercent": 43.425,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-36",
+      "scene": 6,
+      "xPercent": 88.337,
+      "yPercent": 39.558,
+      "sizePercent": 18.5,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-37",
+      "scene": 7,
+      "xPercent": 7.672,
+      "yPercent": 22.983,
+      "sizePercent": 13,
+      "rotationDeg": -40,
+      "pitchDeg": 25,
+      "points": 100
+    },
+    {
+      "id": "skubert-38",
+      "scene": 7,
+      "xPercent": 19.007,
+      "yPercent": 28.066,
+      "sizePercent": 17,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-39",
+      "scene": 7,
+      "xPercent": 35.854,
+      "yPercent": 18.895,
+      "sizePercent": 25.5,
+      "rotationDeg": -20,
+      "pitchDeg": -35,
+      "points": 100
+    },
+    {
+      "id": "skubert-41",
+      "scene": 7,
+      "xPercent": 45.685,
+      "yPercent": 27.293,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-40",
+      "scene": 7,
+      "xPercent": 83.077,
+      "yPercent": 44.42,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-42",
+      "scene": 8,
+      "xPercent": 4.191,
+      "yPercent": 24.42,
+      "sizePercent": 20,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-43",
+      "scene": 8,
+      "xPercent": 12.731,
+      "yPercent": 19.448,
+      "sizePercent": 13.5,
+      "rotationDeg": -65,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-44",
+      "scene": 8,
+      "xPercent": 60.319,
+      "yPercent": 25.193,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-45",
+      "scene": 8,
+      "xPercent": 88.591,
+      "yPercent": 20.552,
+      "sizePercent": 23,
+      "rotationDeg": 80,
+      "pitchDeg": 15,
+      "points": 100
+    },
+    {
+      "id": "skubert-46",
+      "scene": 9,
+      "xPercent": 10.92,
+      "yPercent": 24.088,
+      "sizePercent": 27,
+      "rotationDeg": 70,
+      "pitchDeg": 25,
+      "points": 100
+    },
+    {
+      "id": "skubert-47",
+      "scene": 9,
+      "xPercent": 35.536,
+      "yPercent": 25.414,
+      "sizePercent": 19.5,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-48",
+      "scene": 9,
+      "xPercent": 93.087,
+      "yPercent": 22.431,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-49",
+      "scene": 9,
+      "xPercent": 24.226,
+      "yPercent": 19.227,
+      "sizePercent": 16,
+      "rotationDeg": -45,
+      "pitchDeg": 15,
+      "points": 100
+    },
+    {
+      "id": "skubert-50",
+      "scene": 7,
+      "xPercent": 49.088,
+      "yPercent": 46.298,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    }
+  ]
 }
