@@ -2,6 +2,12 @@
 const params = new URLSearchParams(window.location.search);
 const LEVEL = 2000;
 
+// FALL SPEED: 1 pixel per 20 ms (50 pixels/second) initially.
+// After 60 seconds, speed grows by 1% for each additional full second.
+const BASE_FALL_SPEED_PX_PER_SECOND = 50;
+const SPEEDUP_DELAY_SECONDS = 60;
+const SPEEDUP_MULTIPLIER_PER_SECOND = 1.01;
+
 // DOM ELEMENTS
 const buttonElementID = document.getElementById('StartButton');
 const gameContentID = document.getElementById('GameContent');
@@ -19,7 +25,6 @@ let score = 0;
 let gameOver = false;
 let arrWords = [];
 let arrWordsDiv = [];
-let topVal = 0;
 
 // SOUNDS
 const startGameSound = document.getElementById('StartGameSound');
@@ -128,6 +133,10 @@ function init() {
 // CREATE WORD, STORES IT IN AN ARRAY & GET POSITION WHERE IT STARTS TO FALLLS
 function drawWord() {
   const word = generateRandomWord(DICTIONARY);
+
+  // If all remaining unused words are on screen, skip this spawn.
+  if (word === null) return;
+
   arrWords.push(word);
   let wordDiv = document.createElement('div');
   const paragraph = document.createElement('p');
@@ -141,8 +150,7 @@ function drawWord() {
   gameContentClass[0].appendChild(wordDiv);
 }
 
-// GET RANDOM WORD FROM DICTIONARY
-
+// GET RANDOM WORD FROM DICTIONARY WITHOUT REPEATS
 let unusedWords = [];
 let lastSpawnedWord = null;
 
@@ -183,21 +191,6 @@ function generateRandomWord(words) {
   lastSpawnedWord = word;
   return word;
 }
-function drawWord() {
-  const word = generateRandomWord(DICTIONARY);
-
-  // Skip this spawn if no eligible word is available.
-  if (word === null) return;
-
-  arrWords.push(word);
-
-  // Keep the rest of the existing drawWord()
-  // function unchanged.
-}
-{
-  return words[Math.floor(Math.random() * words.length)];
-}
-
 // GET VALUE FROM INPUT
 function getWord() {
   let inputValue = inputElementID.value.toLowerCase();
@@ -217,22 +210,40 @@ function getWord() {
 
 // FALLING WORD LOGIC + GAMEOVER
 function updateWordPosition() {
+  // Start the timer when gameplay starts, not when the script loads.
+  const gameStartTime = performance.now();
+  let lastUpdateTime = gameStartTime;
+
   setInterval(() => {
-    if (!gameOver) {
-      let wordText = document.getElementsByClassName('word');
-      for (let i = 0; i < arrWords.length; i++) {
-        if (parseInt(topVal) + 15 > gameHeight) {
-          gameOver = true;
-          gameContentID.innerHTML = modalGameOver();
-          playSound(gameoverSound, 8, startGameSound);
-          gameoverSound.style.zIndex = 1;
-          inputElementID.setAttribute('disabled', true);
-        } else {
-          topVal = wordText[i].style.top;
-          topVal.replace('px', '');
-          wordText[i].style.top = (parseInt(topVal) + 1).toString() + 'px';
-        }
+    if (gameOver) return;
+
+    const now = performance.now();
+    const elapsedSeconds = Math.floor((now - gameStartTime) / 1000);
+    const secondsAtHigherSpeed = Math.max(0, elapsedSeconds - SPEEDUP_DELAY_SECONDS);
+    const speedMultiplier = Math.pow(SPEEDUP_MULTIPLIER_PER_SECOND, secondsAtHigherSpeed);
+
+    // Use actual elapsed time, so an occasional delayed timer tick
+    // doesn't change the intended falling speed.
+    const deltaSeconds = Math.max(0, (now - lastUpdateTime) / 1000);
+    lastUpdateTime = now;
+    const fallDistance = BASE_FALL_SPEED_PX_PER_SECOND * speedMultiplier * deltaSeconds;
+
+    const wordText = document.getElementsByClassName('word');
+    for (let i = 0; i < arrWords.length; i++) {
+      // Keep decimals: parseInt would discard the 1% speed increases.
+      const currentTop = parseFloat(wordText[i].style.top) || 0;
+      const newTop = currentTop + fallDistance;
+
+      if (newTop + 15 > gameHeight) {
+        gameOver = true;
+        gameContentID.innerHTML = modalGameOver();
+        playSound(gameoverSound, 8, startGameSound);
+        gameoverSound.style.zIndex = 1;
+        inputElementID.setAttribute('disabled', true);
+        break;
       }
+
+      wordText[i].style.top = newTop + 'px';
     }
   }, 20);
 }
