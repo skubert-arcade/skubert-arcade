@@ -41,7 +41,7 @@ function start3D() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.25;
+  renderer.toneMappingExposure = 1.0;
   renderer.domElement.className = 'skubert-webgl';
   renderer.domElement.setAttribute('aria-hidden','true');
   inner.appendChild(renderer.domElement);
@@ -49,11 +49,11 @@ function start3D() {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
   camera.position.set(0, 0, 5);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8ba3b6, 2.3));
-  const key = new THREE.DirectionalLight(0xffffff, 2.5);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8ba3b6, 1.2));
+  const key = new THREE.DirectionalLight(0xffffff, 1.6);
   key.position.set(2, 4, 5);
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0xc8dfff, 0.8);
+  const fill = new THREE.DirectionalLight(0xc8dfff, 0.35);
   fill.position.set(-3, -1, 1);
   scene.add(fill);
 
