@@ -478,9 +478,9 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
         <div class="screen-card">
           <div class="figure" id="finishIcon">🏆</div><h2 id="finishTitle">Excellent chomping!</h2><p id="finishMessage">You cleared the page.</p>
           <div class="result-score" id="finalScore">0</div><div class="pill" id="finishStats">0 elements eaten</div>
-          <form class="initials-row" id="scoreForm"><input aria-label="Your initials" id="initialsInput" placeholder="ABC" maxlength="3" pattern="[A-Za-z0-9]{1,3}" required autocomplete="off"><button class="btn btn-green" type="submit">Save score</button></form>
-          <p id="saveMessage" aria-live="polite">Scores are saved only on this browser.</p>
-          <div class="leaderboard"><h3>🏅 Top 5 · This browser</h3><div id="leadersList"></div></div>
+          <form class="initials-row" id="scoreForm"><input aria-label="Your initials" id="initialsInput" placeholder="ABC" minlength="3" maxlength="3" pattern="[A-Za-z]{3}" required autocomplete="off"><button class="btn btn-green" type="submit">Save score</button></form>
+          <p id="saveMessage" aria-live="polite">Scores are shared across Skubert Arcade.</p>
+          <div class="leaderboard"><h3>🏅 Top 5 · All players</h3><div id="leadersList"></div></div>
           <div class="screen-buttons"><button id="playAgain" class="btn btn-green" type="button">Play again</button><button id="closeFinish" class="btn" type="button">Back to intro</button></div>
         </div>
       </div>
@@ -490,6 +490,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   <div class="hintline"><span><strong id="remainingLabel">Stage 1: 0 elements to eat</strong> · Eat words, then larger HTML blocks.</span><span>Move <span class="key">MOUSE</span> or <span class="key">WASD</span> · Scroll by approaching the edge or using the wheel · <span class="key">P</span> pause</span></div>
   <p class="mobile-tip" style="color:#a0b5be;font-size:11px;margin:2px 0">Touch devices: drag a finger around the page to guide Skubert.</p>
 </div>
+<script src="../../shared/leaderboard.js"></script>
 <script>
 (() => {
   'use strict';
@@ -506,7 +507,10 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const finishOverlay = $('finishOverlay');
   const helpOverlay = $('helpOverlay');
   const keys = new Set();
-  const KEY = 'skubert-dom-dash-scores-v1';
+  // Shared leaderboard state: keep requests from older runs from changing new runs.
+  let leaderboardRequestId = 0;
+  let scoreRunId = 0;
+  let scoreSubmissionToken = null;
   // TIMED RUN: 60 seconds on the Product Lifecycle snapshot.
   const DURATION = 60;
   // MOVEMENT SETTINGS — change these values to customize the ball-like feel.
@@ -812,6 +816,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     positionAvatar();
   }
   function resetToIntro(){
+    scoreRunId++; // Invalidate UI updates from outstanding score submissions.
     launchToken++;
     clearLaunchEffects();
     closeMenu();
@@ -1290,17 +1295,95 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     $('finishMessage').textContent=reason==='cleared'?'You cleared the Product Lifecycle page!':'Your minute is up. Can you beat your score?';
     $('finalScore').textContent=game.score.toLocaleString();
     $('finishStats').textContent=`${game.eaten} elements · ${game.mode==='relaxed'?'relaxed mode':'1:00 challenge'}`;
-    $('initialsInput').value='';$('scoreForm').hidden=false;$('saveMessage').textContent='Scores are saved only on this browser.';
-    renderLeaders();updateHud();
+    $('initialsInput').value='';
+    $('initialsInput').disabled=false;
+    $('scoreForm').querySelector('button[type="submit"]').disabled=false;
+    $('scoreForm').hidden=game.mode!=='timed';
+    $('saveMessage').textContent=game.mode==='timed'
+      ? 'Enter three initials to submit your score for all players.'
+      : 'Explore Freely scores are not eligible for the shared leaderboard.';
+    void renderLeaders();updateHud();
   }
-  function loadScores(){try{const values=JSON.parse(localStorage.getItem(KEY)||'[]');return Array.isArray(values)?values:[]}catch(_){return []}}
-  function renderLeaders(){const list=loadScores().filter(r=>r.mode===game.mode).sort((a,b)=>b.score-a.score).slice(0,5);$('leadersList').innerHTML=list.length?list.map((r,i)=>`<div class="leaderboard-row"><span>${i+1}.</span><span>${r.initials.replace(/[^A-Z0-9]/g,'')}</span><span>${r.score.toLocaleString()}</span></div>`).join(''):'<p style="margin:5px 0;font-size:11px">No scores saved yet. Be the first!</p>'}
-  $('scoreForm').addEventListener('submit',event=>{
-    event.preventDefault();if(game.saved)return;
-    const initials=$('initialsInput').value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3);if(!initials){$('saveMessage').textContent='Please enter 1–3 letters or numbers.';return}
-    const all=loadScores();all.push({initials,score:game.score,mode:game.mode,date:new Date().toISOString()});all.sort((a,b)=>b.score-a.score);
-    try{localStorage.setItem(KEY,JSON.stringify(all.slice(0,80)));$('saveMessage').textContent='Score saved on this browser!'}catch(_){$('saveMessage').textContent='Browser storage unavailable; score could not be saved.'}
-    game.saved=true;$('scoreForm').hidden=true;renderLeaders();
+
+  // Rankings come from the shared Google Sheet (not this browser's localStorage).
+  async function renderLeaders(){
+    const requestId=++leaderboardRequestId;
+    const container=$('leadersList');
+    container.textContent='Loading shared leaderboard…';
+    try{
+      if(!window.SkubertLeaderboard)throw new Error('Leaderboard script is not loaded.');
+      const scores=await window.SkubertLeaderboard.getLeaderboard('rollup',5);
+      if(requestId!==leaderboardRequestId)return;
+      if(!Array.isArray(scores))throw new Error('Unexpected leaderboard response.');
+      const valid=scores.filter(entry =>
+        /^[A-Z]{3}$/.test(String(entry.initials)) &&
+        Number.isSafeInteger(Number(entry.score)) && Number(entry.score)>=0
+      );
+      if(!valid.length){container.textContent='No shared scores yet. Be the first!';return;}
+      const fragment=document.createDocumentFragment();
+      valid.forEach((entry,i)=>{
+        const row=document.createElement('div');row.className='leaderboard-row';
+        const rank=document.createElement('span');rank.textContent=`${i+1}.`;
+        const initials=document.createElement('span');initials.textContent=entry.initials;
+        const points=document.createElement('span');
+        points.textContent=Number(entry.score).toLocaleString();
+        row.append(rank,initials,points);fragment.appendChild(row);
+      });
+      container.replaceChildren(fragment);
+    }catch(error){
+      if(requestId!==leaderboardRequestId)return;
+      console.warn('Roll Up leaderboard unavailable:',error);
+      container.textContent='Shared leaderboard unavailable. Your game still works.';
+    }
+  }
+
+  $('scoreForm').addEventListener('submit',async event=>{
+    event.preventDefault();
+    if(game.saved || game.status!=='finished')return;
+    if(game.mode!=='timed'){
+      $('saveMessage').textContent='Only timed games can submit scores.';
+      return;
+    }
+    const runId=scoreRunId;
+    if(scoreSubmissionToken?.runId===runId)return; // Avoid double-click duplicates.
+    const initials=$('initialsInput').value.trim().toUpperCase();
+    if(!/^[A-Z]{3}$/.test(initials)){
+      $('saveMessage').textContent='Enter exactly three initials (A–Z).';return;
+    }
+    if(!window.SkubertLeaderboard){
+      $('saveMessage').textContent='Leaderboard script unavailable; try refreshing the page.';
+      return;
+    }
+    const score=game.score;
+    if(!Number.isSafeInteger(score) || score<0){
+      $('saveMessage').textContent='Cannot submit an invalid score.';return;
+    }
+    const token={runId};
+    scoreSubmissionToken=token;
+    const button=$('scoreForm').querySelector('button[type="submit"]');
+    button.disabled=true;$('initialsInput').disabled=true;
+    $('saveMessage').textContent='Submitting and verifying your score…';
+    try{
+      const result=await window.SkubertLeaderboard.submitScore('rollup',initials,score);
+      // The player may have started another round while the network was busy.
+      if(scoreRunId!==runId || game.status!=='finished')return;
+      if(!result?.saved)throw new Error('Submission was not confirmed.');
+      game.saved=true;
+      $('scoreForm').hidden=true;
+      $('saveMessage').textContent='Score saved to the shared leaderboard!';
+      await renderLeaders();
+    }catch(error){
+      console.warn('Roll Up score submission could not be confirmed:',error);
+      if(scoreRunId!==runId || game.status!=='finished')return;
+      // An opaque Apps Script POST can succeed even if receipt verification fails.
+      // Do not auto-resubmit; a new submission ID could create duplicate rows.
+      $('saveMessage').textContent='Could not confirm saving. Check the Google Sheet before trying again; the score may already be there.';
+    }finally{
+      if(scoreSubmissionToken===token)scoreSubmissionToken=null;
+      if(scoreRunId===runId){
+        button.disabled=false;$('initialsInput').disabled=false;
+      }
+    }
   });
   function frame(now){
     if(!game.previous)game.previous=now;
@@ -1494,6 +1577,5 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 })();
 </script>
 <script type="module" src="./skubert-3d.js"></script>
-<script src="../../shared/leaderboard.js"></script>
 </body>
 </html>
