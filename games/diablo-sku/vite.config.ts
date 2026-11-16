@@ -7,7 +7,7 @@ import wasm from "vite-plugin-wasm";
 import { VitePWA } from "vite-plugin-pwa";
 import pkg from "./package.json" with { type: "json" };
 
-const BASE = "/diablo_web/";
+const BASE = "/diablo_sku/";
 const ROOT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const BUILD_ID = process.env.VITE_APP_BUILD_ID ?? process.env.GITHUB_SHA ?? pkg.version;
 const ASSET_DATA_EPOCH = process.env.VITE_APP_ASSET_DATA_EPOCH ?? "1";
