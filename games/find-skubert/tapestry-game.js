@@ -12,7 +12,7 @@
   const MODEL_FILE = '../typing/models/skubert.glb';
   // Original cruise speed. Left/right arrows adjust it by +/- 50%, smoothly.
   const SCROLL_SPEED = 295;
-  const SPEED_INERTIA_SECONDS = 0.48; // response time constant (~95% in 1.44 s)
+  const SPEED_INERTIA_SECONDS = 0.6; // response time constant (~95% in 1.44 s)
   const RUN_SECONDS = 60;
   const BONUS_SECONDS = 2;
   const COUNTDOWN_SECONDS = 3;
@@ -652,7 +652,7 @@
     const braking=heldSpeedKeys.has('ArrowLeft');
     const accelerating=heldSpeedKeys.has('ArrowRight');
     if(braking===accelerating)return 1; // neither or both held
-    return braking?.5:1.5;
+    return braking?.5:2.0;
   }
   function clearSpeedKeys(){heldSpeedKeys.clear();}
   function updateProgress(){
