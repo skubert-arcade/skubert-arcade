@@ -12,17 +12,20 @@
   const MODEL_FILE = '../typing/models/skubert.glb';
   // Original cruise speed. Left/right arrows adjust it by +/- 50%, smoothly.
   const SCROLL_SPEED = 295;
-  const SPEED_INERTIA_SECONDS = 1.0; // response time constant (~95% in 1.44 s)
+  const SPEED_INERTIA_SECONDS = 0.48; // response time constant (~95% in 1.44 s)
   const RUN_SECONDS = 60;
   const BONUS_SECONDS = 2;
   const COUNTDOWN_SECONDS = 3;
   const COLLECT_ANIM_MS = 1500;
-  const FULL_SCORE_WINDOW_MS = 2000; // On-screen for <2 seconds: 100% of base points.
-  const MID_SCORE_WINDOW_MS = 3000;  // On-screen for 2 to <3 seconds: 75%.
-  // Heads in the placement JSON default to 100 base points. Custom base
-  // points are respected, so a 200-point head scores 200, 150, or 100.
   const HIGH_SCORE_KEY = 'skubert-find-best-v1';
   const panels = [], markers = new Map(), images = [];
+  // Runtime movement is deliberately separate from persistent placement data.
+  const motionStates = new Map(), escapedIds = new Set(), frozenPositions = new Map();
+  const MOTION_TYPES = new Set(['static', 'left', 'vertical', 'wave-left']);
+  const DEFAULT_MOTION = Object.freeze({
+    type:'static', speedPxPerSecond:180, verticalAmplitudePercent:8, periodSeconds:3
+  });
+
   let heads = [], selectedId = null, auto = false, lastFrame = 0;
   let speedMultiplier = 1;
   const heldSpeedKeys = new Set();
@@ -32,9 +35,6 @@
   let score = 0, deadline = 0, secondsLeft = RUN_SECONDS, runToken = 0;
   let countdownEnd = 0, countdownShown = 0;
   const scoredIds = new Set(), completedIds = new Set(), collectionEffects = new Map();
-  // Starts when the visible head first overlaps the viewport in actual play.
-  // The timestamp is retained if the head later leaves the screen.
-  const enteredScreenAt = new Map();
   const collectionTimers = new Set();
   const undoStack = [];
   const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -46,10 +46,26 @@
     const el=$('status');el.hidden=false;el.textContent=message;el.classList.toggle('error', error);
     clearTimeout(timerMessage);timerMessage=setTimeout(()=>{el.hidden=true},3500);
   }
+  function normalizeMotion(raw){
+    const source=raw && typeof raw==='object' && !Array.isArray(raw) ? raw : {};
+    const type=MOTION_TYPES.has(source.type) ? source.type : 'static';
+    const numberOr=(value,fallback,min,max)=>{
+      const n=Number(value);
+      return value!==undefined && value!==null && value!=='' && Number.isFinite(n)
+        ? clamp(n,min,max) : fallback;
+    };
+    return {
+      type,
+      speedPxPerSecond:round(numberOr(source.speedPxPerSecond,DEFAULT_MOTION.speedPxPerSecond,20,600),1),
+      verticalAmplitudePercent:round(numberOr(source.verticalAmplitudePercent,DEFAULT_MOTION.verticalAmplitudePercent,0,35),1),
+      periodSeconds:round(numberOr(source.periodSeconds,DEFAULT_MOTION.periodSeconds,0.5,15),1)
+    };
+  }
+  function motionFor(h){return normalizeMotion(h.motion);}
   function serializable(){
     return {
-      version: 1, coordinateSystem: 'row-percent',
-      notes: 'scene is 1–9. xPercent/yPercent are relative to that scene. sizePercent is percent of displayed tapestry height. rotationDeg is yaw; pitchDeg is tilt around the horizontal X axis (negative = up, positive = down).',
+      version: 2, coordinateSystem: 'row-percent',
+      notes: 'scene is 1–9. xPercent/yPercent are relative to each tapestry row; optional motion sets static, left, vertical or wave-left movement. Leftward speed is in viewport pixels/sec; vertical amplitude is percent of viewport height. Omitting motion preserves static behavior.',
       heads: heads.map(h=>({...h}))
     };
   }
@@ -81,7 +97,9 @@
       sizePercent:round(Number.isFinite(size)?clamp(size,2,27):9,2),
       rotationDeg:round(Number.isFinite(rot)?clamp(rot,-180,180):0,1),
       pitchDeg:round(Number.isFinite(pitch)?clamp(pitch,-85,85):0,1),
-      points:Number.isFinite(pts)?Math.round(clamp(pts,1,9999)):100
+      points:Number.isFinite(pts)?Math.round(clamp(pts,1,9999)):100,
+      ...(h.motion && typeof h.motion==='object' && normalizeMotion(h.motion).type!=='static'
+        ? {motion:normalizeMotion(h.motion)} : {})
     };
   }
   function parseLocations(raw){
@@ -155,6 +173,18 @@
   }
 
   function markerHead(id){return heads.find(h=>h.id===id)}
+  function resetMarkerMotion(marker){
+    if(!marker)return;
+    marker.style.transform='';
+    marker.classList.remove('escaped');
+    marker.removeAttribute('aria-hidden');
+    marker.tabIndex=0;
+  }
+  function clearMotionRuntime(){
+    motionStates.clear();escapedIds.clear();frozenPositions.clear();
+    for(const marker of markers.values())resetMarkerMotion(marker);
+    if(three)three.refresh();
+  }
   function updateMarkerPlacement(h){
     const marker=markers.get(h.id);if(!marker)return;
     const target=panels[h.scene-1];
@@ -169,20 +199,18 @@
     marker.classList.toggle('selected',EDITOR_MODE&&h.id===selectedId);
     marker.classList.toggle('collecting',collectionEffects.has(h.id));
     marker.classList.toggle('collected',completedIds.has(h.id));
-    // Native HTML title tooltips can appear as a yellow rectangle after a
-    // pointer click. Never show one on a gameplay head.
-    if(EDITOR_MODE)marker.title=`${h.id} — drag to reposition`;
-    else marker.removeAttribute('title');
+    marker.title=EDITOR_MODE?`${h.id} — drag to reposition`: 'Find and click Skubert';
   }
   function renderMarkers(){
+    clearMotionRuntime();
     for(const marker of markers.values())marker.remove();
     markers.clear();
     for(const h of heads){
       const marker=document.createElement('button');marker.className='skubert-marker';
       marker.type='button';marker.dataset.headId=h.id;
       marker.setAttribute('aria-label',`Skubert head at scene ${h.scene}, ${Math.round(h.xPercent)} percent; ${h.points} points`);
-      // Neither 3D model scale nor stored coordinates are changed by glow
-      // modulation or the enlarged 195%-size gameplay hit target.
+      // Visual head size and 3D geometry remain unchanged. The halo is always
+      // visible, while the transparent hitbox can extend 25% past each side.
       const halo=document.createElement('span');halo.className='skubert-halo';halo.setAttribute('aria-hidden','true');
       const img=document.createElement('img');img.src=PLACEHOLDER;img.alt='';img.draggable=false;
       const hitbox=document.createElement('span');hitbox.className='skubert-hitbox';hitbox.setAttribute('aria-hidden','true');
@@ -190,6 +218,10 @@
       marker.addEventListener('pointerdown',e=>{
         e.stopPropagation();
         if(!EDITOR_MODE)return;
+        if($('motionPreview').checked){
+          $('motionPreview').checked=false;
+          clearMotionRuntime(); // Dragging should always edit the stable anchor.
+        }
         setSelected(h.id);
         remember();
         draggingHead={id:h.id,startX:e.clientX,startY:e.clientY,startScene:h.scene,changed:false};
@@ -249,7 +281,10 @@
     }
     return null;
   }
-  function setSelected(id){selectedId=id;updateSelectedDisplay();for(const h of heads)updateMarkerPlacement(h)}
+  function setSelected(id){
+    if(EDITOR_MODE && selectedId!==id)clearMotionRuntime();
+    selectedId=id;updateSelectedDisplay();for(const h of heads)updateMarkerPlacement(h);
+  }
   function updateSelectedDisplay(){
     $('headCount').textContent=`${heads.length} head${heads.length===1?'':'s'} placed`;
     const h=markerHead(selectedId);
@@ -261,6 +296,17 @@
     $('headPitch').value=h.pitchDeg||0;
     $('headPitchOut').textContent=h.pitchDeg<0?`${Math.abs(h.pitchDeg)}° · up`:h.pitchDeg>0?`${h.pitchDeg}° · down`:'0° · level';
     $('headPoints').value=h.points;
+    const motion=motionFor(h);
+    $('headMotion').value=motion.type;
+    $('headMotionSpeed').value=motion.speedPxPerSecond;
+    $('headMotionSpeedOut').textContent=motion.speedPxPerSecond+' px/s';
+    $('headMotionAmplitude').value=motion.verticalAmplitudePercent;
+    $('headMotionAmplitudeOut').textContent=motion.verticalAmplitudePercent+'%';
+    $('headMotionPeriod').value=motion.periodSeconds;
+    $('headMotionPeriodOut').textContent=motion.periodSeconds+' s';
+    $('motionSpeedControls').hidden=!['left','wave-left'].includes(motion.type);
+    $('motionVerticalControls').hidden=!['vertical','wave-left'].includes(motion.type);
+    $('motionPeriodControls').hidden=!['vertical','wave-left'].includes(motion.type);
   }
   function addHead(position){
     if(!position)return;
@@ -275,8 +321,74 @@
   }
   function updateHeadSetting(key,val){
     const h=markerHead(selectedId);if(!h)return;
-    h[key]=val;updateMarkerPlacement(h);updateSelectedDisplay();saveDraft();
+    h[key]=val;clearMotionRuntime();updateMarkerPlacement(h);updateSelectedDisplay();saveDraft();
     if(three)three.refresh();
+  }
+  function updateMotionSetting(key,value){
+    const h=markerHead(selectedId);if(!h)return;
+    const motion=motionFor(h);
+    motion[key]=value;
+    const valid=normalizeMotion(motion);
+    if(valid.type==='static')delete h.motion;
+    else h.motion=valid;
+    clearMotionRuntime();updateSelectedDisplay();saveDraft();
+  }
+  // Heads configured to fly left become screen-space targets the instant their
+  // anchor enters view. They do NOT inherit subsequent changes in scroll speed.
+  // Both the HTML click target and 3D model follow the same transformed marker.
+  function updateMovingHeads(now){
+    if(!EDITOR_MODE && phase!=='playing')return;
+    const preview=EDITOR_MODE && $('motionPreview').checked;
+    const width=viewport.clientWidth,height=viewport.clientHeight;
+    if(!width || !height)return;
+    for(const h of heads){
+      if(EDITOR_MODE && (!preview || h.id!==selectedId || draggingHead))continue;
+      const motion=motionFor(h);
+      if(motion.type==='static' || completedIds.has(h.id) || escapedIds.has(h.id))continue;
+      const marker=markers.get(h.id),panel=panels[h.scene-1];
+      if(!marker || !panel)continue;
+      const anchorX=panel.node.offsetLeft+panel.node.offsetWidth*h.xPercent/100-viewport.scrollLeft;
+      const anchorY=height*h.yPercent/100;
+      const radius=height*h.sizePercent/200;
+      // Keep the captured head pinned to its clicked screen position while the
+      // 1.5-second collection effect plays, despite ongoing tapestry scrolling.
+      const frozen=frozenPositions.get(h.id);
+      if(frozen){
+        marker.style.transform=`translate(-50%,-50%) translate3d(${round(frozen.x-anchorX,2)}px,${round(frozen.y-anchorY,2)}px,0)`;
+        continue;
+      }
+      if(scoredIds.has(h.id))continue;
+      let state=motionStates.get(h.id);
+      if(!state){
+        // Starting movement ahead of the viewport would lose precious game time.
+        // Spawn only once any part of the actual head enters the visible region.
+        if(anchorX-radius>width || anchorX+radius<0 || anchorY+radius<0 || anchorY-radius>height)continue;
+        state={start:now,screenX:anchorX,screenY:anchorY};
+        motionStates.set(h.id,state);
+      }
+      const seconds=Math.max(0,(now-state.start)/1000);
+      const leftward=motion.type==='left' || motion.type==='wave-left';
+      const vertical=motion.type==='vertical' || motion.type==='wave-left';
+      const screenX=leftward ? state.screenX-motion.speedPxPerSecond*seconds : anchorX;
+      const amplitude=height*motion.verticalAmplitudePercent/100;
+      const sine=vertical ? Math.sin(seconds*2*Math.PI/motion.periodSeconds) : 0;
+      // Clamp vertical movement to keep the entire visible head in the viewport.
+      const baseY=leftward ? state.screenY : anchorY;
+      const screenY=clamp(baseY+amplitude*sine,radius,Math.max(radius,height-radius));
+      if(leftward && screenX+radius<=0){
+        motionStates.delete(h.id);
+        if(EDITOR_MODE){
+          // Editor previews repeat, but published gameplay despawns permanently.
+          resetMarkerMotion(marker);
+        }else{
+          escapedIds.add(h.id);marker.classList.add('escaped');
+          marker.setAttribute('aria-hidden','true');marker.tabIndex=-1;
+        }
+        if(three)three.refresh();
+        continue;
+      }
+      marker.style.transform=`translate(-50%,-50%) translate3d(${round(screenX-anchorX,2)}px,${round(screenY-anchorY,2)}px,0)`;
+    }
   }
   function updateGameHud(){
     if(EDITOR_MODE)return;
@@ -296,7 +408,7 @@
   // Foreground sparkle burst. Coordinates are measured in game viewport space
   // (not tapestry-world space) so the burst is visible above the 3D canvas.
   // Every element is decorative and cannot intercept pointer clicks.
-  function sparksAt(marker,awardedPoints){
+  function sparksAt(marker){
     const rect=marker.getBoundingClientRect(),bounds=gameEl.getBoundingClientRect();
     const x=(rect.left+rect.right)/2-bounds.left;
     const y=(rect.top+rect.bottom)/2-bounds.top;
@@ -320,7 +432,7 @@
       spark.addEventListener('animationend',()=>spark.remove(),{once:true});
     }
     const bonus=document.createElement('span');
-    bonus.className='time-bonus-pop';bonus.textContent=`+${awardedPoints} pts · +${BONUS_SECONDS}s`;
+    bonus.className='time-bonus-pop';bonus.textContent=`+${BONUS_SECONDS}s`;
     bonus.style.left=`${x}px`;bonus.style.top=`${y}px`;
     effects.append(bonus);
     bonus.addEventListener('animationend',()=>bonus.remove(),{once:true});
@@ -334,31 +446,23 @@
       ring.addEventListener('animationend',()=>ring.remove(),{once:true});
     }
   }
-  function pointsForHead(head,enteredAt,now){
-    const age=Math.max(0,now-enteredAt);
-    const fraction=age<FULL_SCORE_WINDOW_MS?1:age<MID_SCORE_WINDOW_MS?.75:.50;
-    return Math.max(1,Math.round(head.points*fraction));
-  }
   function collectHead(id){
-    if(phase!=='playing'||scoredIds.has(id))return;
+    if(phase!=='playing'||scoredIds.has(id)||escapedIds.has(id))return;
     const h=markerHead(id),marker=markers.get(id);
     if(!h||!marker)return;
-    const now=performance.now();
-    // If a click happens before the first animation-frame visibility sample,
-    // this click itself establishes the first seen time.
-    if(!enteredScreenAt.has(id))enteredScreenAt.set(id,now);
-    const awardedPoints=pointsForHead(h,enteredScreenAt.get(id),now);
-    scoredIds.add(id);score+=awardedPoints;
+    scoredIds.add(id);score+=h.points;
     // Extend the absolute deadline, not merely the displayed seconds, so the
     // countdown is accurate even when the bonus arrives between timer ticks.
     deadline+=BONUS_SECONDS*1000;
-    secondsLeft=Math.max(0,Math.ceil((deadline-now)/1000));
+    secondsLeft=Math.max(0,Math.ceil((deadline-performance.now())/1000));
     const token=runToken;
-    collectionEffects.set(id,{start:now});
+    if(motionFor(h).type!=='static'){
+      const r=marker.getBoundingClientRect(),v=viewport.getBoundingClientRect();
+      frozenPositions.set(id,{x:(r.left+r.right)/2-v.left,y:(r.top+r.bottom)/2-v.top});
+    }
+    collectionEffects.set(id,{start:performance.now()});
     marker.classList.add('collecting');marker.style.pointerEvents='none';
-    // Clear the native button's focus so it cannot leave a yellow rectangle.
-    if(document.activeElement===marker)marker.blur();
-    sparksAt(marker,awardedPoints);updateGameHud();
+    sparksAt(marker);updateGameHud();
     if(three)three.refresh();
     const timer=setTimeout(()=>{
       collectionTimers.delete(timer);
@@ -372,7 +476,8 @@
   function clearRun(){
     runToken++;
     for(const t of collectionTimers)clearTimeout(t);
-    collectionTimers.clear();collectionEffects.clear();scoredIds.clear();completedIds.clear();enteredScreenAt.clear();
+    collectionTimers.clear();collectionEffects.clear();scoredIds.clear();completedIds.clear();
+    clearMotionRuntime();
     $('effectLayer').replaceChildren();score=0;secondsLeft=RUN_SECONDS;deadline=0;
     countdownEnd=0;countdownShown=0;$('countdownOverlay').hidden=true;
     for(const marker of markers.values()){
@@ -454,6 +559,14 @@
     $('headYaw').addEventListener('pointerdown',remember);
     $('headPitch').addEventListener('pointerdown',remember);
     $('headPoints').addEventListener('focus',remember);
+    for(const id of ['headMotion','headMotionSpeed','headMotionAmplitude','headMotionPeriod']){
+      $(id).addEventListener(id==='headMotion'?'focus':'pointerdown',remember);
+    }
+    $('headMotion').addEventListener('change',e=>updateMotionSetting('type',e.target.value));
+    $('headMotionSpeed').addEventListener('input',e=>updateMotionSetting('speedPxPerSecond',Number(e.target.value)));
+    $('headMotionAmplitude').addEventListener('input',e=>updateMotionSetting('verticalAmplitudePercent',Number(e.target.value)));
+    $('headMotionPeriod').addEventListener('input',e=>updateMotionSetting('periodSeconds',Number(e.target.value)));
+    $('motionPreview').addEventListener('change',clearMotionRuntime);
     $('headSize').addEventListener('input',e=>updateHeadSetting('sizePercent',Number(e.target.value)));
     $('headYaw').addEventListener('input',e=>updateHeadSetting('rotationDeg',Number(e.target.value)));
     $('headPitch').addEventListener('input',e=>updateHeadSetting('pitchDeg',Number(e.target.value)));
@@ -463,6 +576,7 @@
       const h=markerHead(selectedId);if(!h)return;
       addHead({scene:h.scene,xPercent:clamp(h.xPercent+0.7,0,100),yPercent:clamp(h.yPercent+2,0,100)});
       const copy=markerHead(selectedId);copy.sizePercent=h.sizePercent;copy.rotationDeg=h.rotationDeg;copy.pitchDeg=h.pitchDeg||0;copy.points=h.points;
+      if(h.motion)copy.motion={...h.motion};
       updateMarkerPlacement(copy);updateSelectedDisplay();saveDraft();
     });
     $('undo').addEventListener('click',()=>{
@@ -530,27 +644,6 @@
     await enableThree();
   }
 
-  function updateHeadScreenStates(now){
-    if(EDITOR_MODE)return; // Placement Mode always has full-strength halos.
-    const bounds=viewport.getBoundingClientRect();
-    const width=Math.max(1,bounds.width);
-    for(const [id,marker] of markers){
-      if(completedIds.has(id))continue;
-      const box=marker.getBoundingClientRect();
-      const centerX=(box.left+box.right)*.5;
-      // 0 at the RIGHT edge of the screen, 1 at the LEFT edge. This is
-      // independent of scroll speed, canvas rendering and the 2-second pulse.
-      const strength=clamp((bounds.right-centerX)/width,0,1);
-      // Avoid unnecessary style invalidation in 60fps animation frames.
-      const value=strength.toFixed(3);
-      if(marker.style.getPropertyValue('--glow-strength')!==value)
-        marker.style.setProperty('--glow-strength',value);
-      const onscreen=box.right>bounds.left && box.left<bounds.right &&
-        box.bottom>bounds.top && box.top<bounds.bottom;
-      if(phase==='playing' && onscreen && !enteredScreenAt.has(id))
-        enteredScreenAt.set(id,now);
-    }
-  }
   function updateSpeedReadout(){
     if(EDITOR_MODE)return;
     $('speedValue').textContent=`${speedMultiplier.toFixed(2)}×`;
@@ -559,7 +652,7 @@
     const braking=heldSpeedKeys.has('ArrowLeft');
     const accelerating=heldSpeedKeys.has('ArrowRight');
     if(braking===accelerating)return 1; // neither or both held
-    return braking?.5:2.0;
+    return braking?.5:1.5;
   }
   function clearSpeedKeys(){heldSpeedKeys.clear();}
   function updateProgress(){
@@ -669,7 +762,7 @@
         }
         viewport.scrollLeft+=SCROLL_SPEED*(EDITOR_MODE?1:speedMultiplier)*dt;
       }
-      updateHeadScreenStates(now);
+      updateMovingHeads(now);
       last=now;requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);

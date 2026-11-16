@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#d8c6a6">
   <link rel="icon" type="image/x-icon" href="../../assets/favicon.ico">
-  <title>Find Skubert</title>
+  <title>Where’s Skubert? · Skubert Arcade</title>
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
@@ -29,39 +29,34 @@
     .scene{height:100%;flex:none;position:relative;display:flex;align-items:stretch}
     .tile{height:100%;flex:none;position:relative;background:#e5d5b9;overflow:hidden}
     .tile img{width:100%;height:100%;display:block;object-fit:fill;user-select:none;-webkit-user-drag:none;pointer-events:none}
-    .character-layer{position:absolute;inset:0;z-index:3;pointer-events:none}
-    .skubert-marker{position:absolute;z-index:1;aspect-ratio:1;transform:translate(-50%,-50%);padding:0;border:0;background:transparent;pointer-events:auto;touch-action:none;cursor:pointer;user-select:none;filter:drop-shadow(0 3px 5px #36231850);appearance:none;-webkit-appearance:none;-webkit-tap-highlight-color:transparent}
-    /* A clicked HTML button must not show the browser's rectangular yellow
-       focus/tap highlight. Keyboard focus retains a CIRCULAR accessible ring. */
-    .game:not(.placement) .skubert-marker:focus{outline:none!important}
-    .game:not(.placement) .skubert-marker:focus-visible .skubert-hitbox{outline:3px solid #fff1bf;outline-offset:3px}
+    .character-layer{position:absolute;inset:0;z-index:3;pointer-events:none;overflow:visible}
+    /* Moving heads can travel between tapestry sections; the viewport clips them. */
+    .skubert-marker{position:absolute;z-index:1;aspect-ratio:1;transform:translate(-50%,-50%);padding:0;border:0;background:transparent;pointer-events:auto;touch-action:none;cursor:pointer;user-select:none;filter:drop-shadow(0 3px 5px #36231850)}
     /* The marker itself stays at the EXACT visual size recorded in the location JSON.
        Glow and hit area are separate children: neither changes GLB scale or placement. */
     .skubert-marker img{position:relative;z-index:1;width:100%;height:100%;display:block;object-fit:contain;pointer-events:none;user-select:none;transform:perspective(480px) rotateX(var(--marker-pitch,0deg)) rotateZ(var(--marker-rotation,0deg));transition:opacity .22s ease}
     /* The transparent halo remains behind both the PNG fallback and the 3D model.
        It is deliberately outside the PNG so it stays visible after the PNG hides. */
-    /* The whole halo is modulated by screen position (CSS custom property):
-       zero on the right edge, 100% on the left edge. The independent blue
-       two-second pulse is still applied INSIDE the position-scaled halo. */
+    /* Gold stays visible. Blue is its own layer, which reaches EXACTLY zero
+       opacity at the end of EVERY two-second pulse. Neither layer changes
+       head geometry, pointer targets, or placement coordinates. */
     .skubert-halo{position:absolute;inset:-27%;z-index:0;border-radius:50%;pointer-events:none;
       background:radial-gradient(circle,transparent 28%,#ffd79726 43%,#ffce78a8 65%,transparent 84%);
       box-shadow:0 0 15px 5px #ffd97971,0 0 25px 7px #e9a84757;
-      filter:blur(3px);animation:skubert-halo-pulse 2.4s ease-in-out infinite alternate;
-      opacity:var(--glow-strength,1)}
+      filter:blur(3px);animation:skubert-halo-pulse 2.4s ease-in-out infinite alternate}
     .skubert-halo::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
       background:radial-gradient(circle,transparent 22%,#7bdaff25 37%,#64c6ffbf 55%,#449bff88 70%,transparent 84%);
       box-shadow:0 0 12px 3px #58bfffba,0 0 25px 8px #339bff87;
       animation:skubert-blue-glow-fade 2s ease-in-out infinite}
     @keyframes skubert-blue-glow-fade{0%,100%{opacity:0}37%,60%{opacity:1}}
-    @keyframes skubert-halo-pulse{from{opacity:calc(var(--glow-strength,1) * .83);transform:scale(.96)}to{opacity:var(--glow-strength,1);transform:scale(1.09)}}
-    /* Previously 150% of head width/height. Increase that by another 30%:
-       150% * 1.30 = 195% total target width AND height (47.5% each edge).
-       Placement Mode retains original head size for precise dragging. */
+    @keyframes skubert-halo-pulse{from{opacity:.83;transform:scale(.96)}to{opacity:1;transform:scale(1.09)}}
+    /* 150% of the visible head's width AND height = 25% extra on each edge.
+       In Placement Mode keep the target at its original size for accurate editing. */
     .skubert-hitbox{position:absolute;inset:0;z-index:3;pointer-events:auto;background:transparent;border-radius:50%}
-    .game:not(.placement) .skubert-hitbox{inset:-47.5%}
+    .game:not(.placement) .skubert-hitbox{inset:-25%}
     .skubert-marker.collecting .skubert-halo{animation:skubert-halo-collect 1500ms linear forwards}
     .skubert-marker.collecting .skubert-hitbox{pointer-events:none}
-    @keyframes skubert-halo-collect{0%{transform:scale(1);opacity:var(--glow-strength,1)}62%{transform:scale(3);opacity:var(--glow-strength,1)}100%{transform:scale(0);opacity:0}}
+    @keyframes skubert-halo-collect{0%{transform:scale(1);opacity:1}62%{transform:scale(3);opacity:1}100%{transform:scale(0);opacity:0}}
     .skubert-marker.selected:before{z-index:4}
     .skubert-marker.selected:after{z-index:4}
     .skubert-marker.selected:before{content:"";position:absolute;inset:0;border:2px dashed #2c6ad3;border-radius:50%;box-shadow:0 0 0 3px #fff8;pointer-events:none}
@@ -70,7 +65,7 @@
        Visibility changes instantly; otherwise the old opacity transition can
        keep the placeholder over the GLB for several frames. */
     .game.three-active .skubert-marker[data-three-visible="true"] img{opacity:0;visibility:hidden;transition:none}
-    .skubert-marker.collected{display:none!important}
+    .skubert-marker.collected,.skubert-marker.escaped{display:none!important}
     .skubert-marker.collecting{z-index:5;pointer-events:none}
     .skubert-marker.collecting img{animation:skubert-capture 1500ms linear forwards;transform-origin:center center;transition:none}
     @keyframes skubert-capture{0%{transform:perspective(480px) rotateX(var(--marker-pitch,0deg)) rotateZ(var(--marker-rotation,0deg)) scale(1);opacity:1}62%{transform:perspective(480px) rotateX(var(--marker-pitch,0deg)) rotateY(1260deg) rotateZ(450deg) scale(3);opacity:1}100%{transform:perspective(480px) rotateX(var(--marker-pitch,0deg)) rotateY(2160deg) rotateZ(720deg) scale(0);opacity:0}}
@@ -155,6 +150,13 @@
     .editor-fields output{font-size:11px;font-weight:800;color:#ffe2ab;min-width:50px;text-align:right}
     .editor-fields input[type=range]{grid-column:1 / -1;width:100%;accent-color:#edbe75;cursor:pointer;margin-top:-4px}
     .editor-fields input[type=number]{width:85px;background:#fff8e8;color:#1d1a16;border:0;border-radius:6px;padding:5px 7px;font-size:12px}
+    .editor-motion{margin-top:14px;padding-top:11px;border-top:1px solid #f0d9aa55}
+    .editor-motion h3{font-size:12px;margin:0 0 8px;color:#ffe2ab}
+    .editor-motion select{display:block;width:100%;margin:5px 0 10px;padding:7px 8px;border:1px solid #a78c66;border-radius:7px;background:#fff8e8;color:#1d1a16;font-size:12px}
+    .editor-motion .editor-fields{margin-top:8px}
+    .editor-motion .motion-preview{display:flex;align-items:center;gap:7px;margin-top:10px;font-size:11px}
+    .editor-motion .motion-preview input{accent-color:#efbd79}
+
     .editor-hint{margin-top:10px;padding:8px;background:#fff8e90b;border-left:3px solid #efbd79;border-radius:4px;font-size:10px;line-height:1.5;color:#eee0cb}
     .status{position:absolute;bottom:61px;left:50%;transform:translateX(-50%);z-index:16;background:#183327e8;border:1px solid #c2d6b0;color:white;border-radius:9px;padding:8px 13px;font-size:12px;max-width:90%;text-align:center}
     .error{background:#532527ee;border-color:#bd8b87}
@@ -188,15 +190,7 @@
   <div class="game-overlay" id="startOverlay" hidden>
     <div class="overlay-card">
       <h1>Where’s Skubert?</h1>
-      <p>I've gotten lost in the Bayeux Tapestry,<br>
-      a 230-foot depiction of the events leading<br>
-      up to the Norman Conquest of England in 1066,<br>
-      led by William, Duke of Normandy,<br>
-      challenging Harold II, King of England,<br>
-      and culminating in the Battle of Hastings!<br>
-      Woopsie!</p>
-      <p>-Skubert</p>
-      <p>Find and click the hidden Skubert heads. Find one quickly for <strong>100 points</strong> (first 2 seconds on screen), then <strong>75</strong> (next second), or <strong>50</strong> afterward. Each find adds <strong>+2 seconds</strong> to your 60-second timer.</p>
+      <p>Find and click the hidden 3D Skubert heads across the Bayeux Tapestry. Earn points in <strong>60 seconds</strong> and gain <strong>+2 seconds</strong> for every head you find.</p>
       <p>The tapestry scrolls automatically. Hold <strong>←</strong> to brake to half speed or <strong>→</strong> to accelerate to 1.5× speed. Release to smoothly return to normal.</p>
       <p id="gameReadyMessage">Loading head locations…</p>
       <button class="overlay-action" id="beginGame" type="button" disabled>Start Searching</button>
@@ -233,8 +227,31 @@
         <input type="range" id="headYaw" min="-180" max="180" step="5" value="0">
         <label for="headPitch">Pitch — look up / down</label><output id="headPitchOut">0° · level</output>
         <input type="range" id="headPitch" min="-85" max="85" step="5" value="0" aria-label="Look up or down: negative looks up, positive looks down">
-        <label for="headPoints">Starting points (100% / 75% / 50%)</label><input type="number" id="headPoints" min="1" max="9999" step="25" value="100">
+        <label for="headPoints">Future point value</label><input type="number" id="headPoints" min="1" max="9999" step="25" value="100">
       </div>
+      <section class="editor-motion" aria-label="Selected Skubert movement">
+        <h3>Movement</h3>
+        <label for="headMotion">Movement type</label>
+        <select id="headMotion">
+          <option value="static">Static</option>
+          <option value="left">Move Left — fly offscreen</option>
+          <option value="vertical">Vertical — up/down</option>
+          <option value="wave-left">Wave Left — left + up/down</option>
+        </select>
+        <div class="editor-fields" id="motionSpeedControls" hidden>
+          <label for="headMotionSpeed">Leftward speed</label><output id="headMotionSpeedOut">180 px/s</output>
+          <input id="headMotionSpeed" type="range" min="20" max="600" step="10" value="180">
+        </div>
+        <div class="editor-fields" id="motionVerticalControls" hidden>
+          <label for="headMotionAmplitude">Vertical amplitude (viewport height)</label><output id="headMotionAmplitudeOut">8%</output>
+          <input id="headMotionAmplitude" type="range" min="0" max="35" step="1" value="8">
+        </div>
+        <div class="editor-fields" id="motionPeriodControls" hidden>
+          <label for="headMotionPeriod">Vertical cycle duration</label><output id="headMotionPeriodOut">3 s</output>
+          <input id="headMotionPeriod" type="range" min="0.5" max="15" step="0.5" value="3">
+        </div>
+        <label class="motion-preview" for="motionPreview"><input id="motionPreview" type="checkbox"> Preview selected head's movement</label>
+      </section>
       <div class="editor-actions">
         <button class="editor-btn" type="button" id="duplicateHead">Duplicate</button>
         <button class="editor-btn danger" type="button" id="deleteHead">Delete selected</button>
@@ -251,11 +268,12 @@
       <button class="editor-btn" type="button" id="importJson">Import JSON</button>
       <input type="file" id="jsonInput" accept=".json,application/json" hidden>
     </div>
+    <div class="editor-hint">Motion uses screen pixels/sec, independent of tapestry scroll speed. Fly-left and wave-left Skuberts appear once per game and despawn off the left edge. Placement previews repeat. Turn preview off before dragging. </div>
     <div class="editor-hint">Yaw turns the head left/right. Pitch tilts it up/down (negative = up, positive = down). The PNG approximates pitch; use <strong>Preview real 3D</strong> to see the true model rotation.</div>
     <div class="editor-hint">Your draft auto-saves in this browser. To publish placements, download the JSON and replace <code>skubert-locations.json</code> in GitHub. This editor does not edit the tapestry images.</div>
   </aside>
   <div class="status" id="status" role="status" hidden></div>
 </main>
-<script src="./tapestry-game.js?v=20261113-time-value-glow-target" defer></script>
+<script src="./tapestry-game.js?v=20261116-moving-skuberts" defer></script>
 </body>
 </html>
