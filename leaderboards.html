@@ -119,7 +119,7 @@
         }
         thead.appendChild(headings);
         const tbody = document.createElement('tbody');
-        scores.slice(0, 50).forEach((entry, i) => {
+        scores.slice(0, 5).forEach((entry, i) => {
           const tr = document.createElement('tr');
           const rank = document.createElement('td');
           rank.textContent = String(i + 1);
