@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Skubert Arcade</title>
   <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+
   <style>
     * {
       box-sizing: border-box;
@@ -164,14 +165,14 @@
        Coordinates are percentages of the square source, so scaling stays aligned. */
     .press-start-hitbox {
       position: absolute;
-      left: 34%;
-      top: 85.8%;
-      width: 32%;
-      height: 3.8%;
-      min-height: 0px;
+      left: 26.5%;
+      top: 84%;
+      width: 47%;
+      height: 8.5%;
+      min-height: 40px;
       padding: 0;
       border: 2px solid transparent;
-      border-radius: 4px;
+      border-radius: 8px;
       background: transparent;
       color: transparent;
       cursor: pointer;
@@ -229,6 +230,28 @@
       font-size: 20px;
       margin: 0 0 9px;
       text-shadow: none;
+    }
+
+    /* Arcade-wide, read-only leaderboard button above Lock Arcade. */
+    .arcade-choices .leaderboard-link {
+      display: block;
+      width: max-content;
+      max-width: 100%;
+      min-width: 215px;
+      margin: 0 auto 12px;
+      padding: 14px 25px;
+      background: #f3be65;
+      color: #17213a;
+      text-decoration: none;
+      font-size: 16px;
+      font-weight: bold;
+      border-radius: 8px;
+      transition: background .2s;
+    }
+    .arcade-choices .leaderboard-link:hover { background: #ffd58e; }
+    .arcade-choices .leaderboard-link:focus-visible {
+      outline: 3px solid #ffd58e;
+      outline-offset: 3px;
     }
 
     .arcade-choices #lockButton {
@@ -330,14 +353,16 @@
           <div class="game-icon" aria-hidden="true">⌨️</div>
           <h2>Typing Frenzy</h2>
           <p>Help Skubert learn product data terminology.</p>
-          <p><b><2 minutes</b></p>
+          <p><b>&lt;2 minutes</b></p>
+        </a>
         <a class="game" href="games/find-skubert/">
           <div class="game-icon" aria-hidden="true">🔍</div>
           <h2>Find Skubert</h2>
           <p>Find Skubert in the Norman Conquest of England in 1066.</p>
-          <p><b><5 minutes</b></p>
+          <p><b>&lt;5 minutes</b></p>
         </a>
       </div>
+      <a class="leaderboard-link" href="leaderboards.html">🏆 View Leaderboards</a>
       <button id="lockButton" type="button">Lock Arcade</button>
     </section>
   </main>
