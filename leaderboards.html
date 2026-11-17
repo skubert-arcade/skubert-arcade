@@ -57,9 +57,8 @@
       <span class="eyebrow">Skubert Arcade</span>
     </nav>
     <header class="hero">
-      <p class="eyebrow">🏆 Hall of Fame</p>
-      <h1>Arcade Leaderboards</h1>
-      <p class="intro">The five highest scores for each game, shared across all players. Rankings refresh from Google Sheets; viewing them doesn't submit a score.</p>
+      <h1>🏆Skubert Arcade Leaderboards</h1>
+      <p class="intro">The five highest scores for each game, shared across all players.</p>
       <div class="actions">
         <button id="refreshAll" class="refresh" type="button">↻ Refresh Rankings</button>
         <span id="lastUpdated" role="status" aria-live="polite">Loading rankings…</span>
@@ -67,22 +66,22 @@
     </header>
     <div class="boards">
       <section class="board" aria-labelledby="title-rollup" data-game="rollup">
-        <header class="board-header"><div class="game-icon" aria-hidden="true">📦</div><h2 id="title-rollup">Roll Up</h2><p class="board-subtitle">One-minute product lifecycle challenge</p></header>
+        <header class="board-header"><div class="game-icon" aria-hidden="true">📦</div><h2 id="title-rollup">Roll Up</h2><p class="board-subtitle"></p></header>
         <div class="board-body" id="scores-rollup" aria-live="polite"><p class="board-status">Loading scores…</p></div>
         <footer class="board-footer"><a class="play-link" href="games/rollup/">Play Roll Up</a></footer>
       </section>
       <section class="board" aria-labelledby="title-typing" data-game="typing">
-        <header class="board-header"><div class="game-icon" aria-hidden="true">⌨️</div><h2 id="title-typing">Typing Frenzy</h2><p class="board-subtitle">Product data terminology typing challenge</p></header>
+        <header class="board-header"><div class="game-icon" aria-hidden="true">⌨️</div><h2 id="title-typing">Typing Frenzy</h2><p class="board-subtitle"></p></header>
         <div class="board-body" id="scores-typing" aria-live="polite"><p class="board-status">Loading scores…</p></div>
         <footer class="board-footer"><a class="play-link" href="games/typing/">Play Typing Frenzy</a></footer>
       </section>
       <section class="board" aria-labelledby="title-find-skubert" data-game="find-skubert">
-        <header class="board-header"><div class="game-icon" aria-hidden="true">🔍</div><h2 id="title-find-skubert">Find Skubert</h2><p class="board-subtitle">Norman Conquest tapestry scavenger hunt</p></header>
+        <header class="board-header"><div class="game-icon" aria-hidden="true">🔍</div><h2 id="title-find-skubert">Find Skubert</h2><p class="board-subtitle"></p></header>
         <div class="board-body" id="scores-find-skubert" aria-live="polite"><p class="board-status">Loading scores…</p></div>
         <footer class="board-footer"><a class="play-link" href="games/find-skubert/">Play Find Skubert</a></footer>
       </section>
     </div>
-    <p class="footnote">Only scores submitted to the shared leaderboard appear here. A game with no submitted scores will display an empty ranking.</p>
+    <p class="footnote"></p>
   </main>
 
   <!-- Reuse the existing read-only Google Apps Script helper; no backend changes. -->
