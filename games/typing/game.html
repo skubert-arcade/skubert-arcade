@@ -13,6 +13,8 @@
     <link rel="icon" href="../../assets/favicon.ico" type="image/x-icon" />
     <link rel="stylesheet" href="css/global.css" />
     <link rel="stylesheet" href="css/game.css" />
+    <!-- Shared score-entry UI used across the arcade. -->
+    <link rel="stylesheet" href="../../shared/score-entry.css" />
 
     <!-- 3D Skubert overlay: does not capture clicks or typing input -->
     <style>
@@ -41,6 +43,37 @@
 #GameContent {
   position: relative;
   z-index: 2;
+}
+
+/* Only adjust the layout after a typing run ends. Gameplay is unchanged. */
+#GameContent.sk-typing-ended {
+  height: auto !important;
+  min-height: 600px;
+  align-items: flex-start !important;
+  overflow-y: auto;
+  padding: 12px 8px 22px;
+}
+#GameContent.sk-typing-ended .modal-gameover {
+  width: min(100%, 500px) !important;
+  max-width: 100% !important;
+  flex: 0 1 auto !important;
+  margin: 12px auto;
+  padding: 20px 15px;
+  border-radius: 16px;
+}
+#GameContent .typing-score-entry { width: 100%; }
+/* Keep the shared widget legible even if the game's styles override buttons. */
+#GameContent .sk-score__initials {
+  border: 2px solid #9ab0cf !important;
+  border-radius: 10px !important;
+}
+#GameContent .sk-score__submit {
+  border: 1px solid #0032b1 !important;
+  border-radius: 10px !important;
+}
+#GameContent .sk-score__row { text-align: left; }
+@media (max-width: 520px) {
+  #GameContent.sk-typing-ended .modal-gameover { padding: 12px 8px; }
 }
 
     </style>
@@ -121,6 +154,9 @@
     <audio id="NotPointSound"></audio>
     <audio id="MenuSound"></audio>
 
+    <!-- Load the Cloudflare-backed leaderboard and shared form before gameplay. -->
+    <script src="../../shared/leaderboard.js"></script>
+    <script src="../../shared/score-entry.js"></script>
     <script src="./app.js"></script>
     <!-- Avoid audio calls made by app.js when using silent placeholders -->
     <script>window.playSound = function () {};</script>

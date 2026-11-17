@@ -275,10 +275,12 @@ function updateWordPosition() {
 
       if (newTop + 15 > gameHeight) {
         gameOver = true;
+        gameContentID.classList.add('sk-typing-ended');
         gameContentID.innerHTML = modalGameOver();
+        inputElementID.setAttribute('disabled', true);
+        showTypingScoreEntry();
         playSound(gameoverSound, 8, startGameSound);
         gameoverSound.style.zIndex = 1;
-        inputElementID.setAttribute('disabled', true);
         break;
       }
 
@@ -320,11 +322,13 @@ function showLevel() {
 }
 
 // GAMEOVER MODAL
+// The game owns its final score; the shared component only displays/submits it.
 function modalGameOver() {
   return `
     <div class="modal-gameover col-8">
-      <h1> Game Over </h2>
-      <h2> Score: ${score} </h2>
+      <h1>Game Over</h1>
+      <h2 id="typingFinalScoreFallback">Score: ${score}</h2>
+      <div id="typingScoreMount" class="typing-score-entry"></div>
       <button id="Restart" class="my-2 btn-modal">
         <a href="game.html">
           <h6>Restart</h6>
@@ -337,6 +341,32 @@ function modalGameOver() {
       </button>
     </div>
   `;
+}
+
+function showTypingScoreEntry() {
+  const mount = document.getElementById('typingScoreMount');
+  const fallback = document.getElementById('typingFinalScoreFallback');
+  if (!mount) return;
+
+  // If shared resources fail to load, leave the final score and restart visible.
+  if (!window.SkubertScoreUI?.create) {
+    mount.textContent = 'Score submission is unavailable. Please refresh and try again.';
+    console.warn('Typing Frenzy: shared score-entry.js is not available.');
+    return;
+  }
+
+  try {
+    const scoreUI = window.SkubertScoreUI.create(mount, {
+      game: 'typing',
+      previewCount: 5,
+      rankingsHref: '../../leaderboards.html'
+    });
+    scoreUI.show({ score, eligible: true });
+    if (fallback) fallback.hidden = true; // The shared widget displays the score.
+  } catch (error) {
+    console.error('Typing Frenzy: could not initialize score entry.', error);
+    mount.textContent = 'Score submission is unavailable. Please refresh and try again.';
+  }
 }
 
 init();
