@@ -1,0 +1,35 @@
+/* Scoped shared score-entry styling. Avoids conflicts with each game's CSS. */
+.sk-score { --sk-blue:#0032b1; --sk-ink:#173046; --sk-gold:#f4bc4d; --sk-border:#dbe4f1;
+  box-sizing:border-box; margin:12px auto 0; max-width:430px; padding:14px;
+  background:#f4f7fd; border:1px solid var(--sk-border); border-radius:16px;
+  color:var(--sk-ink); text-align:center; font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif; }
+.sk-score *, .sk-score *::before, .sk-score *::after {box-sizing:border-box}
+.sk-score[hidden], .sk-score [hidden]{display:none!important}
+.sk-score__eyebrow {font-size:10px;letter-spacing:.16em;color:#39539b;font-weight:900;text-transform:uppercase}
+.sk-score__score-caption{font-size:10px;letter-spacing:.14em;color:#536b7f;font-weight:800;margin-top:9px}
+.sk-score__points{font-size:clamp(30px,6vw,44px);line-height:1.15;font-weight:950;letter-spacing:-.055em;color:var(--sk-blue);font-variant-numeric:tabular-nums}
+.sk-score__form{display:flex;flex-wrap:wrap;align-items:end;justify-content:center;gap:9px;margin:13px 0 5px}
+.sk-score__label{display:block;text-align:left;font-size:12px;font-weight:800;color:var(--sk-ink)}
+.sk-score__label span{font-weight:500;color:#596f82} 
+.sk-score__label input{display:block;margin-top:6px}
+.sk-score__initials{min-width:0;width:122px;min-height:45px;border:2px solid #9ab0cf;border-radius:10px;padding:7px 10px;background:white!important;color:#163467!important;text-align:center;font-size:19px;font-weight:900;letter-spacing:.2em;text-transform:uppercase;box-shadow:none}
+.sk-score__initials:focus-visible,.sk-score__submit:focus-visible,.sk-score__refresh:focus-visible,.sk-score__all:focus-visible{outline:3px solid var(--sk-gold);outline-offset:2px}
+.sk-score__submit{min-height:45px;min-width:150px;padding:9px 14px;border:1px solid #0032b1;border-radius:10px;background:#0032b1!important;color:#fff!important;white-space:nowrap;font-size:13px;font-weight:850;box-shadow:none;cursor:pointer}
+.sk-score__submit:hover:not(:disabled){background:#1749cd!important}
+.sk-score__submit:disabled{opacity:.68;cursor:wait}
+.sk-score__status{margin:10px auto;max-width:365px;min-height:20px;font-size:12px;line-height:1.45;color:#4a647e}
+.sk-score__status[data-tone="error"]{color:#a42332;font-weight:750}
+.sk-score__status[data-tone="success"]{color:#176644;font-weight:800}
+.sk-score__rankings{margin-top:12px;text-align:left;background:white;border:1px solid var(--sk-border);border-radius:12px;overflow:hidden}
+.sk-score__rankings-head{display:flex;align-items:center;justify-content:space-between;gap:7px;padding:10px 12px;background:#e7eefa;color:#203966;font-size:11px}
+.sk-score__refresh{background:transparent;border:0;border-radius:5px;color:#0032b1;font-size:11px;font-weight:800;padding:5px 4px;cursor:pointer}
+.sk-score__refresh:disabled{opacity:.5;cursor:wait}
+.sk-score__list{min-height:36px;padding:4px 12px;color:#53697d;font-size:12px;line-height:1.6}
+.sk-score__row{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid #edf1f5;color:#233f56}
+.sk-score__row:last-child{border:0}
+.sk-score__row span:first-child{color:#65809b;font-weight:800}
+.sk-score__row span:last-child{font-variant-numeric:tabular-nums;color:#153d85;font-weight:850}
+.sk-score__row--mine{background:#fff6db;border-radius:5px}
+.sk-score__all{display:block;padding:9px 12px;border-top:1px solid #e2e8f2;color:#0032b1!important;text-decoration:underline!important;font-size:11px;font-weight:750}
+@media(max-width:380px){.sk-score{padding:11px}.sk-score__initials{width:106px}.sk-score__submit{min-width:140px}}
+@media(prefers-reduced-motion:reduce){.sk-score *{animation:none!important;transition:none!important}}
