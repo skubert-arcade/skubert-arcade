@@ -1,84 +1,78 @@
-/* Skubert Arcade — browser helper for Google Apps Script leaderboard.
- * Load as <script src="../../shared/leaderboard.js"></script> from a game folder.
+/* Skubert Arcade shared scoreboard — Cloudflare Worker JSON API.
+ * Same public interface as the previous Google JSONP helper:
+ *   SkubertLeaderboard.getLeaderboard(game, limit)
+ *   SkubertLeaderboard.submitScore(game, initials, score, scoreVersion)
  */
 (function () {
   'use strict';
-
-  // REPLACE with the deployed Apps Script WEB APP /exec URL (not /dev).
+  // Replace only this address with your deployed Worker HTTPS URL.
   const API_URL = 'https://skubert-arcade-api.ajones14test.workers.dev';
-  const TIMEOUT_MS = 10000;
+  const TIMEOUT_MS = 20000;
+  const GAMES = new Set(['rollup', 'typing', 'find-skubert']);
+  const pending = new Map(); // Reuse UUID for retry after an uncertain POST.
 
-  function endpoint() {
-    if (!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(API_URL)) {
-      throw new Error('Configure API_URL in shared/leaderboard.js first.');
+  function endpoint(path) {
+    if (!/^https:\/\/[^/]+\.workers\.dev$/.test(API_URL)) {
+      throw new Error('Configure API_URL with your Cloudflare Worker URL.');
     }
-    return API_URL;
+    return API_URL + path;
   }
-
-  function jsonp(parameters) {
-    return new Promise((resolve, reject) => {
-      const name = '__skubertCb_' + crypto.randomUUID().replace(/-/g, '');
-      const url = new URL(endpoint());
-      Object.entries(parameters).forEach(([key, val]) => url.searchParams.set(key, String(val)));
-      url.searchParams.set('prefix', name);
-      // Discourage stale cached responses when confirming a new submission.
-      url.searchParams.set('_', String(Date.now()));
-      const script = document.createElement('script');
-      let settled = false;
-      let timer;
-      function done(err, data) {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        script.remove();
-        delete window[name];
-        if (err) reject(err); else resolve(data);
-      }
-      window[name] = data => done(null, data);
-      script.onerror = () => done(new Error('Could not read leaderboard.'));
-      timer = setTimeout(() => done(new Error('Leaderboard request timed out.')), TIMEOUT_MS);
-      script.async = true;
-      script.src = url.toString();
-      document.head.appendChild(script);
+  async function getJSON(path, options = {}) {
+    const response = await fetch(endpoint(path), {
+      ...options,
+      headers: { ...(options.headers || {}), 'Accept': 'application/json' },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      cache: options.cache || 'no-store',
     });
+    let data;
+    try { data = await response.json(); }
+    catch { throw new Error(`Leaderboard API returned HTTP ${response.status} without JSON.`); }
+    if (!response.ok || !data || !data.ok) {
+      throw new Error(data?.error || `Leaderboard API returned HTTP ${response.status}.`);
+    }
+    return data;
   }
-
+  function validateGame(game) {
+    if (!GAMES.has(game)) throw new Error('Unknown game.');
+  }
   async function getLeaderboard(game, limit = 10) {
-    const response = await jsonp({ action: 'leaderboard', game, limit });
-    if (!response || !response.ok) throw new Error(response?.error || 'Could not load leaderboard.');
-    return response.scores;
+    validateGame(game);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new Error('Limit must be from 1 to 50.');
+    const result = await getJSON(`/api/leaderboard?game=${encodeURIComponent(game)}&limit=${limit}`);
+    if (!Array.isArray(result.scores)) throw new Error('Unexpected leaderboard response.');
+    return result.scores;
   }
-
   async function submitScore(game, initials, score, scoreVersion = 1) {
-    initials = String(initials).toUpperCase().trim();
-    if (!/^[A-Z]{3}$/.test(initials)) throw new Error('Enter exactly three letters.');
+    validateGame(game);
+    initials = String(initials).trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(initials)) throw new Error('Enter exactly three initials (A–Z).');
     if (!Number.isSafeInteger(score) || score < 0) throw new Error('Invalid score.');
-    const submissionId = crypto.randomUUID();
-    // Apps Script ContentService is not a conventional cross-origin JSON API.
-    // 'no-cors' lets a simple POST reach doPost, but the response is OPAQUE:
-    // NEVER interpret fetch resolving as proof that the score was stored.
-    await fetch(endpoint(), {
-      method: 'POST',
-      credentials: "omit", // Prevents Chrome from sending the user's Google profile cookies
-      redirect: "follow",   // Follows Google's 302 redirect to ://googleusercontent.com cleanly
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-      body: JSON.stringify({ game, initials, score, scoreVersion, submissionId })
-    });
-    // Confirm separately using the read-only JSONP receipt endpoint.
-    for (const delay of [600, 1200, 2000, 3500]) {
-      await new Promise(resolve => setTimeout(resolve, delay));
+    if (scoreVersion !== 1) throw new Error('Unsupported scoring version.');
+    const key = JSON.stringify([game, initials, score, scoreVersion]);
+    const submissionId = pending.get(key) || crypto.randomUUID();
+    pending.set(key, submissionId);
+    try {
+      const result = await getJSON('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ game, initials, score, scoreVersion, submissionId }),
+      });
+      if (!result.saved) throw new Error('Submission not confirmed.');
+      pending.delete(key);
+      return { saved: true, submissionId, duplicate: !!result.duplicate };
+    } catch (error) {
+      // If the POST response failed after Google saved, check the receipt first.
       try {
-        const receipt = await jsonp({ action: 'receipt', game, submissionId });
-        if (receipt?.ok && receipt.saved) return { saved: true, submissionId };
-        if (receipt && !receipt.ok) throw new Error(receipt.error || 'Receipt rejected.');
-      } catch (error) {
-        // A transient failed read is not proof that the submission failed.
-        console.warn('Score confirmation pending:', error);
+        const receipt = await getJSON(`/api/receipt?game=${encodeURIComponent(game)}&submissionId=${encodeURIComponent(submissionId)}`);
+        if (receipt.saved) {
+          pending.delete(key);
+          return { saved: true, submissionId, recovered: true };
+        }
+      } catch (_) {
+        // Unknown result: leave the UUID in memory so retry is idempotent.
       }
+      throw error;
     }
-    throw new Error('Could not confirm the score. It may have been saved. Check the Sheet before retrying.');
   }
-
   window.SkubertLeaderboard = Object.freeze({ getLeaderboard, submitScore });
 })();
