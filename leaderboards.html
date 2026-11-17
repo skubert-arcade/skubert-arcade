@@ -147,7 +147,7 @@
           refreshButton.disabled = false;
           return;
         }
-        const results = await Promise.allSettled(gameIds.map(game => leaderboard.getLeaderboard(game, 50)));
+        const results = await Promise.allSettled(gameIds.map(game => leaderboard.getLeaderboard(game, 5)));
         if (generation !== refreshGeneration) return;
         let failed = 0;
         results.forEach((result, index) => {
