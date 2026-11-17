@@ -413,6 +413,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   }
 }
 </style>
+<link rel="stylesheet" href="../../shared/score-entry.css">
 </head>
 <body>
 <div class="wrap">
@@ -478,10 +479,9 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       <div class="screen" id="finishOverlay" hidden>
         <div class="screen-card">
           <div class="figure" id="finishIcon">🏆</div><h2 id="finishTitle">Excellent chomping!</h2><p id="finishMessage">You cleared the page.</p>
-          <div class="result-score" id="finalScore">0</div><div class="pill" id="finishStats">0 elements eaten</div>
-          <form class="initials-row" id="scoreForm"><input aria-label="Your initials" id="initialsInput" placeholder="ABC" minlength="3" maxlength="3" pattern="[A-Za-z]{3}" required autocomplete="off"><button class="btn btn-green" type="submit">Save score</button></form>
-          <p id="saveMessage" aria-live="polite">Scores are shared across Skubert Arcade.</p>
-          <div class="leaderboard"><h3>🏅 Top 5 · All players</h3><div id="leadersList"></div></div>
+          <div class="pill" id="finishStats">0 elements eaten</div>
+          <!-- Shared score-entry component; game supplies the verified final score. -->
+          <div id="scoreEntryMount"></div>
           <div class="screen-buttons"><button id="playAgain" class="btn btn-green" type="button">Play again</button><button id="closeFinish" class="btn" type="button">Back to intro</button></div>
         </div>
       </div>
@@ -492,6 +492,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   <p class="mobile-tip" style="color:#a0b5be;font-size:11px;margin:2px 0">Touch devices: drag a finger around the page to guide Skubert.</p>
 </div>
 <script src="../../shared/leaderboard.js"></script>
+<script src="../../shared/score-entry.js"></script>
 <script>
 (() => {
   'use strict';
@@ -508,10 +509,13 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const finishOverlay = $('finishOverlay');
   const helpOverlay = $('helpOverlay');
   const keys = new Set();
-  // Shared leaderboard state: keep requests from older runs from changing new runs.
-  let leaderboardRequestId = 0;
-  let scoreRunId = 0;
-  let scoreSubmissionToken = null;
+  // Shared score UI. All network calls go through the existing Cloudflare helper.
+  const scoreUI = window.SkubertScoreUI.create($('scoreEntryMount'), {
+    game: 'rollup',
+    previewCount: 5,
+    rankingsHref: '../../leaderboards.html',
+    onSaved: () => { game.saved = true; }
+  });
   // TIMED RUN: 60 seconds on the Product Lifecycle snapshot.
   const DURATION = 60;
   // MOVEMENT SETTINGS — change these values to customize the ball-like feel.
@@ -817,7 +821,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     positionAvatar();
   }
   function resetToIntro(){
-    scoreRunId++; // Invalidate UI updates from outstanding score submissions.
+    scoreUI.reset(); // Discard stale pending UI results when a new run starts.
     launchToken++;
     clearLaunchEffects();
     closeMenu();
@@ -1294,98 +1298,15 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     $('finishIcon').textContent=reason==='cleared'?'🏆':'⏱️';
     $('finishTitle').textContent=reason==='cleared'?'Total page destruction!':'Time is up!';
     $('finishMessage').textContent=reason==='cleared'?'You cleared the Product Lifecycle page!':'Your minute is up. Can you beat your score?';
-    $('finalScore').textContent=game.score.toLocaleString();
     $('finishStats').textContent=`${game.eaten} elements · ${game.mode==='relaxed'?'relaxed mode':'1:00 challenge'}`;
-    $('initialsInput').value='';
-    $('initialsInput').disabled=false;
-    $('scoreForm').querySelector('button[type="submit"]').disabled=false;
-    $('scoreForm').hidden=game.mode!=='timed';
-    $('saveMessage').textContent=game.mode==='timed'
-      ? 'Enter three initials to submit your score for all players.'
-      : 'Explore Freely scores are not eligible for the shared leaderboard.';
-    void renderLeaders();updateHud();
+    scoreUI.show({
+      score: game.score,
+      eligible: game.mode === 'timed',
+      ineligibleMessage: 'Explore Freely scores are not eligible for shared rankings.'
+    });
+    updateHud();
   }
 
-  // Rankings come from the shared Google Sheet (not this browser's localStorage).
-  async function renderLeaders(){
-    const requestId=++leaderboardRequestId;
-    const container=$('leadersList');
-    container.textContent='Loading shared leaderboard…';
-    try{
-      if(!window.SkubertLeaderboard)throw new Error('Leaderboard script is not loaded.');
-      const scores=await window.SkubertLeaderboard.getLeaderboard('rollup',5);
-      if(requestId!==leaderboardRequestId)return;
-      if(!Array.isArray(scores))throw new Error('Unexpected leaderboard response.');
-      const valid=scores.filter(entry =>
-        /^[A-Z]{3}$/.test(String(entry.initials)) &&
-        Number.isSafeInteger(Number(entry.score)) && Number(entry.score)>=0
-      );
-      if(!valid.length){container.textContent='No shared scores yet. Be the first!';return;}
-      const fragment=document.createDocumentFragment();
-      valid.forEach((entry,i)=>{
-        const row=document.createElement('div');row.className='leaderboard-row';
-        const rank=document.createElement('span');rank.textContent=`${i+1}.`;
-        const initials=document.createElement('span');initials.textContent=entry.initials;
-        const points=document.createElement('span');
-        points.textContent=Number(entry.score).toLocaleString();
-        row.append(rank,initials,points);fragment.appendChild(row);
-      });
-      container.replaceChildren(fragment);
-    }catch(error){
-      if(requestId!==leaderboardRequestId)return;
-      console.warn('Roll Up leaderboard unavailable:',error);
-      container.textContent='Shared leaderboard unavailable. Your game still works.';
-    }
-  }
-
-  $('scoreForm').addEventListener('submit',async event=>{
-    event.preventDefault();
-    if(game.saved || game.status!=='finished')return;
-    if(game.mode!=='timed'){
-      $('saveMessage').textContent='Only timed games can submit scores.';
-      return;
-    }
-    const runId=scoreRunId;
-    if(scoreSubmissionToken?.runId===runId)return; // Avoid double-click duplicates.
-    const initials=$('initialsInput').value.trim().toUpperCase();
-    if(!/^[A-Z]{3}$/.test(initials)){
-      $('saveMessage').textContent='Enter exactly three initials (A–Z).';return;
-    }
-    if(!window.SkubertLeaderboard){
-      $('saveMessage').textContent='Leaderboard script unavailable; try refreshing the page.';
-      return;
-    }
-    const score=game.score;
-    if(!Number.isSafeInteger(score) || score<0){
-      $('saveMessage').textContent='Cannot submit an invalid score.';return;
-    }
-    const token={runId};
-    scoreSubmissionToken=token;
-    const button=$('scoreForm').querySelector('button[type="submit"]');
-    button.disabled=true;$('initialsInput').disabled=true;
-    $('saveMessage').textContent='Submitting and verifying your score…';
-    try{
-      const result=await window.SkubertLeaderboard.submitScore('rollup',initials,score);
-      // The player may have started another round while the network was busy.
-      if(scoreRunId!==runId || game.status!=='finished')return;
-      if(!result?.saved)throw new Error('Submission was not confirmed.');
-      game.saved=true;
-      $('scoreForm').hidden=true;
-      $('saveMessage').textContent='Score saved to the shared leaderboard!';
-      await renderLeaders();
-    }catch(error){
-      console.warn('Roll Up score submission could not be confirmed:',error);
-      if(scoreRunId!==runId || game.status!=='finished')return;
-      // An opaque Apps Script POST can succeed even if receipt verification fails.
-      // Do not auto-resubmit; a new submission ID could create duplicate rows.
-      $('saveMessage').textContent='Could not confirm saving. Check the Google Sheet before trying again; the score may already be there.';
-    }finally{
-      if(scoreSubmissionToken===token)scoreSubmissionToken=null;
-      if(scoreRunId===runId){
-        button.disabled=false;$('initialsInput').disabled=false;
-      }
-    }
-  });
   function frame(now){
     if(!game.previous)game.previous=now;
     const dt=clamp((now-game.previous)/1000,0,.06);game.previous=now;
