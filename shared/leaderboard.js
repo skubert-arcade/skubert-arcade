@@ -5,7 +5,7 @@
   'use strict';
 
   // REPLACE with the deployed Apps Script WEB APP /exec URL (not /dev).
-  const API_URL = 'const API_URL = "https://skubert-arcade-api.ajones14test.workers.dev";';
+  const API_URL = 'https://skubert-arcade-api.ajones14test.workers.dev';
   const TIMEOUT_MS = 10000;
 
   function endpoint() {
