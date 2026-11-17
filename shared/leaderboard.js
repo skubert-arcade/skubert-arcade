@@ -59,6 +59,8 @@
     // NEVER interpret fetch resolving as proof that the score was stored.
     await fetch(endpoint(), {
       method: 'POST',
+      credentials: "omit", // Prevents Chrome from sending the user's Google profile cookies
+      redirect: "follow",   // Follows Google's 302 redirect to ://googleusercontent.com cleanly
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
       body: JSON.stringify({ game, initials, score, scoreVersion, submissionId })
