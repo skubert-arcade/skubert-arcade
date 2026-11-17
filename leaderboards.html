@@ -119,7 +119,7 @@
         }
         thead.appendChild(headings);
         const tbody = document.createElement('tbody');
-        scores.slice(0, 5).forEach((entry, i) => {
+        scores.slice(0, 50).forEach((entry, i) => {
           const tr = document.createElement('tr');
           const rank = document.createElement('td');
           rank.textContent = String(i + 1);
@@ -147,7 +147,7 @@
           refreshButton.disabled = false;
           return;
         }
-        const results = await Promise.allSettled(gameIds.map(game => leaderboard.getLeaderboard(game, 5)));
+        const results = await Promise.allSettled(gameIds.map(game => leaderboard.getLeaderboard(game, 50)));
         if (generation !== refreshGeneration) return;
         let failed = 0;
         results.forEach((result, index) => {
