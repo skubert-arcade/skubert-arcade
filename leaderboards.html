@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#030015">
+  <title>Leaderboards | Skubert Arcade</title>
+  <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
+  <style>
+    :root { color-scheme: dark; font-family: Arial, Helvetica, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: radial-gradient(ellipse at 50% 0%, #27185b 0%, transparent 53%), #030015; color: #f9f6ff; }
+    a { color: inherit; }
+    button { cursor: pointer; font: inherit; }
+    button:focus-visible, a:focus-visible { outline: 3px solid #ffd58e; outline-offset: 3px; }
+    .page { max-width: 1130px; margin: 0 auto; padding: clamp(19px, 4vw, 46px) clamp(16px, 3vw, 32px) 48px; }
+    .top { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 46px; }
+    .home { display: inline-flex; align-items: center; padding: 10px 15px; text-decoration: none; border: 1px solid #514493; border-radius: 11px; background: #17133b; font-weight: 700; font-size: 13px; }
+    .home:hover { background: #282054; }
+    .eyebrow { margin: 0; font-size: 11px; font-weight: 800; letter-spacing: .19em; color: #c6baf4; text-transform: uppercase; }
+    h1 { font-size: clamp(35px, 6.5vw, 62px); letter-spacing: -.055em; line-height: 1.05; margin: 7px 0 14px; }
+    .intro { max-width: 740px; color: #c6c0df; font-size: 15px; line-height: 1.6; margin: 0 auto; }
+    .hero { text-align: center; margin: 0 auto 32px; }
+    .actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px; margin-top: 23px; }
+    .refresh { border: 0; border-radius: 11px; padding: 13px 23px; background: #f3be65; color: #17213a; font-weight: 800; box-shadow: 0 3px 18px #ffa82f25; }
+    .refresh:hover { background: #ffd58e; }
+    .refresh:disabled { opacity: .65; cursor: wait; }
+    #lastUpdated { font-size: 12px; color: #b5aecd; }
+    .boards { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 18px; align-items: stretch; }
+    .board { display: flex; flex-direction: column; min-width: 0; border: 1px solid #524292; border-radius: 19px; background: linear-gradient(145deg, #1c184b, #121032); overflow: hidden; box-shadow: 0 18px 32px #0004; }
+    .board-header { padding: 23px 22px 17px; border-bottom: 1px solid #473980; }
+    .game-icon { font-size: 31px; margin-bottom: 12px; }
+    .board h2 { margin: 0 0 7px; font-size: 23px; letter-spacing: -.025em; }
+    .board-subtitle { color: #b6a8df; font-size: 12px; line-height: 1.4; margin: 0; }
+    .board-body { padding: 16px 21px; flex: 1; }
+    .board-status { color: #c5b8e7; font-size: 13px; line-height: 1.6; padding: 10px 2px; }
+    .score-table { width: 100%; border-collapse: collapse; }
+    .score-table th { color: #ad9fda; font-size: 10px; letter-spacing: .09em; text-transform: uppercase; text-align: left; padding: 7px 3px 10px; }
+    .score-table th:last-child { text-align: right; }
+    .score-table td { border-top: 1px solid #403771; padding: 13px 3px; font-size: 15px; }
+    .score-table td:first-child { width: 36px; color: #ebc376; font-weight: 800; }
+    .score-table td:nth-child(2) { font-weight: 800; letter-spacing: .09em; }
+    .score-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 800; color: #f7d58f; }
+    .board-footer { padding: 0 21px 21px; }
+    .play-link { display: block; text-align: center; padding: 11px; border: 1px solid #6654aa; border-radius: 10px; background: #251c60; text-decoration: none; font-size: 13px; font-weight: 700; }
+    .play-link:hover { background: #3c2b85; }
+    .footnote { margin: 24px auto 0; text-align: center; color: #9189b1; font-size: 12px; line-height: 1.6; }
+    @media (max-width: 900px) { .boards { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+    @media (max-width: 610px) { .boards { grid-template-columns: 1fr; } .top { margin-bottom: 30px; } .page { padding-bottom: 32px; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <nav class="top" aria-label="Navigation">
+      <a class="home" href="index.html">← Back to Arcade</a>
+      <span class="eyebrow">Skubert Arcade</span>
+    </nav>
+    <header class="hero">
+      <p class="eyebrow">🏆 Hall of Fame</p>
+      <h1>Arcade Leaderboards</h1>
+      <p class="intro">The five highest scores for each game, shared across all players. Rankings refresh from Google Sheets; viewing them doesn't submit a score.</p>
+      <div class="actions">
+        <button id="refreshAll" class="refresh" type="button">↻ Refresh Rankings</button>
+        <span id="lastUpdated" role="status" aria-live="polite">Loading rankings…</span>
+      </div>
+    </header>
+    <div class="boards">
+      <section class="board" aria-labelledby="title-rollup" data-game="rollup">
+        <header class="board-header"><div class="game-icon" aria-hidden="true">📦</div><h2 id="title-rollup">Roll Up</h2><p class="board-subtitle">One-minute product lifecycle challenge</p></header>
+        <div class="board-body" id="scores-rollup" aria-live="polite"><p class="board-status">Loading scores…</p></div>
+        <footer class="board-footer"><a class="play-link" href="games/rollup/">Play Roll Up</a></footer>
+      </section>
+      <section class="board" aria-labelledby="title-typing" data-game="typing">
+        <header class="board-header"><div class="game-icon" aria-hidden="true">⌨️</div><h2 id="title-typing">Typing Frenzy</h2><p class="board-subtitle">Product data terminology typing challenge</p></header>
+        <div class="board-body" id="scores-typing" aria-live="polite"><p class="board-status">Loading scores…</p></div>
+        <footer class="board-footer"><a class="play-link" href="games/typing/">Play Typing Frenzy</a></footer>
+      </section>
+      <section class="board" aria-labelledby="title-find-skubert" data-game="find-skubert">
+        <header class="board-header"><div class="game-icon" aria-hidden="true">🔍</div><h2 id="title-find-skubert">Find Skubert</h2><p class="board-subtitle">Norman Conquest tapestry scavenger hunt</p></header>
+        <div class="board-body" id="scores-find-skubert" aria-live="polite"><p class="board-status">Loading scores…</p></div>
+        <footer class="board-footer"><a class="play-link" href="games/find-skubert/">Play Find Skubert</a></footer>
+      </section>
+    </div>
+    <p class="footnote">Only scores submitted to the shared leaderboard appear here. A game with no submitted scores will display an empty ranking.</p>
+  </main>
+
+  <!-- Reuse the existing read-only Google Apps Script helper; no backend changes. -->
+  <script src="shared/leaderboard.js"></script>
+  <script>
+    (() => {
+      'use strict';
+      const gameIds = ['rollup', 'typing', 'find-skubert'];
+      const refreshButton = document.getElementById('refreshAll');
+      const updatedLabel = document.getElementById('lastUpdated');
+      let refreshGeneration = 0;
+
+      function status(container, message) {
+        const note = document.createElement('p');
+        note.className = 'board-status';
+        note.textContent = message;
+        container.replaceChildren(note);
+      }
+
+      function showScores(container, scores) {
+        if (!scores.length) {
+          status(container, 'No scores submitted yet. Be the first!');
+          return;
+        }
+        const table = document.createElement('table');
+        table.className = 'score-table';
+        table.setAttribute('aria-label', 'Top five player scores');
+        const thead = document.createElement('thead');
+        const headings = document.createElement('tr');
+        for (const label of ['Rank', 'Player', 'Score']) {
+          const th = document.createElement('th');
+          th.scope = 'col';
+          th.textContent = label;
+          headings.appendChild(th);
+        }
+        thead.appendChild(headings);
+        const tbody = document.createElement('tbody');
+        scores.slice(0, 5).forEach((entry, i) => {
+          const tr = document.createElement('tr');
+          const rank = document.createElement('td');
+          rank.textContent = String(i + 1);
+          const initials = document.createElement('td');
+          initials.textContent = String(entry.initials || '').toUpperCase();
+          const score = document.createElement('td');
+          const scoreValue = Number(entry.score);
+          score.textContent = Number.isFinite(scoreValue) ? scoreValue.toLocaleString() : '—';
+          tr.append(rank, initials, score);
+          tbody.appendChild(tr);
+        });
+        table.append(thead, tbody);
+        container.replaceChildren(table);
+      }
+
+      async function refresh() {
+        const generation = ++refreshGeneration;
+        refreshButton.disabled = true;
+        updatedLabel.textContent = 'Loading rankings…';
+        for (const game of gameIds) status(document.getElementById('scores-' + game), 'Loading scores…');
+        const leaderboard = window.SkubertLeaderboard;
+        if (!leaderboard || typeof leaderboard.getLeaderboard !== 'function') {
+          for (const game of gameIds) status(document.getElementById('scores-' + game), 'Unable to load rankings. Check shared/leaderboard.js.');
+          updatedLabel.textContent = 'Rankings unavailable';
+          refreshButton.disabled = false;
+          return;
+        }
+        const results = await Promise.allSettled(gameIds.map(game => leaderboard.getLeaderboard(game, 5)));
+        if (generation !== refreshGeneration) return;
+        let failed = 0;
+        results.forEach((result, index) => {
+          const container = document.getElementById('scores-' + gameIds[index]);
+          if (result.status === 'rejected') {
+            failed++;
+            status(container, 'Could not load this leaderboard. Try Refresh Rankings.');
+            console.warn('Leaderboard read failed for ' + gameIds[index], result.reason);
+          } else if (!Array.isArray(result.value)) {
+            failed++;
+            status(container, 'Unexpected leaderboard response.');
+          } else {
+            showScores(container, result.value);
+          }
+        });
+        const now = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        updatedLabel.textContent = failed ? `Updated ${now} · ${failed} unavailable` : `Updated ${now}`;
+        refreshButton.disabled = false;
+      }
+
+      refreshButton.addEventListener('click', () => void refresh());
+      void refresh();
+    })();
+  </script>
+</body>
+</html>
