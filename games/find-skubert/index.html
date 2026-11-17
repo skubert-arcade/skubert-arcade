@@ -9,6 +9,8 @@
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"}}
   </script>
+  <!-- Shared Cloudflare-backed score submission UI; deployed at repository root. -->
+  <link rel="stylesheet" href="../../shared/score-entry.css">
   <style>
     :root{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;color:#fff9ee;background:#dfd0b6}
     *{box-sizing:border-box}
@@ -167,6 +169,22 @@
     @media(max-width:700px){.chromebar{padding:7px 8px 20px}.heading{font-size:13px}.location{font-size:10px}.home{font-size:11px}.head-left,.head-right{gap:5px}.arrow{width:28px;height:55px;font-size:23px}.arrow.prev{left:4px}.arrow.next{right:4px}.toolbar{bottom:7px;width:calc(100vw - 16px);gap:8px;padding:8px 10px}.editor{top:43px;right:8px;width:min(295px,calc(100vw - 16px));max-height:calc(100dvh - 105px)}.note{top:43px;left:8px;max-width:min(250px,calc(100% - 16px))}.game.placement .note{display:none}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important}}
     #gameReadyMessage {display: none;}
+    /* End-of-game UI can contain the shared ranking preview and must scroll on phones. */
+    #endOverlay .overlay-card {
+      width:min(96vw,510px);
+      max-height:calc(100vh - 28px);
+      max-height:calc(100dvh - 28px);
+      overflow-y:auto;
+      overscroll-behavior:contain;
+      padding:22px 18px;
+    }
+    #endOverlay #findScoreMount {margin-top:12px}
+    #endOverlay .sk-score {margin:0 auto}
+    /* The game's dark-overlay paragraph rule must not recolor the pale widget's messages. */
+    #endOverlay .sk-score .sk-score__status {color:#4a647e;font-size:12px;margin:10px auto}
+    #endOverlay .sk-score .sk-score__status[data-tone="error"] {color:#a42332}
+    #endOverlay .sk-score .sk-score__status[data-tone="success"] {color:#176644}
+    @media(max-width:480px){#endOverlay .overlay-card{padding:16px 11px}}
   </style>
 </head>
 <body>
@@ -212,6 +230,7 @@
       <div class="overlay-score" id="endScore">0</div>
       <p id="endSummary">0 Skuberts found</p>
       <p id="endBest"></p>
+      <div id="findScoreMount" aria-label="Find Skubert shared score submission"></div>
       <button class="overlay-action" id="restartGame" type="button">Play again</button>
     </div>
   </div>
@@ -284,6 +303,8 @@
   </aside>
   <div class="status" id="status" role="status" hidden></div>
 </main>
-<script src="./tapestry-game.js?v=20261116-moving-skuberts" defer></script>
+<script src="../../shared/leaderboard.js" defer></script>
+<script src="../../shared/score-entry.js" defer></script>
+<script src="./tapestry-game.js?v=20261117-shared-score-ui" defer></script>
 </body>
 </html>

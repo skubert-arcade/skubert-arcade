@@ -33,6 +33,7 @@
   let debounceSave = 0, timerMessage = 0;
   let phase = EDITOR_MODE ? 'editor' : 'ready';
   let score = 0, deadline = 0, secondsLeft = RUN_SECONDS, runToken = 0;
+  let sharedScoreUI = null; // Shared Skubert Arcade form, initialized at game over.
   let countdownEnd = 0, countdownShown = 0;
   const scoredIds = new Set(), completedIds = new Set(), collectionEffects = new Map();
   const collectionTimers = new Set();
@@ -474,6 +475,8 @@
     collectionTimers.add(timer);
   }
   function clearRun(){
+    // Invalidates any pending responses from the previous run; never auto-submits.
+    sharedScoreUI?.reset();
     runToken++;
     for(const t of collectionTimers)clearTimeout(t);
     collectionTimers.clear();collectionEffects.clear();scoredIds.clear();completedIds.clear();
@@ -520,6 +523,37 @@
       showCountdownNumber(Math.max(1,Math.ceil((countdownEnd-now)/1000)));
     }
   }
+  function showSharedScoreUI(){
+    const mount=$('findScoreMount');
+    const fallback=$('endScore');
+    if(!mount)return false;
+    // The final score and Play again stay available even if shared assets fail.
+    fallback.hidden=false;
+    if(!window.SkubertScoreUI?.create){
+      mount.textContent='Shared score submission is unavailable. You can still play again.';
+      console.warn('Find Skubert: shared score-entry.js is not available.');
+      return false;
+    }
+    try {
+      if(!sharedScoreUI){
+        sharedScoreUI=window.SkubertScoreUI.create(mount,{
+          game:'find-skubert',
+          previewCount:5,
+          rankingsHref:'../../leaderboards.html'
+        });
+      }
+      sharedScoreUI.show({score,eligible:true});
+      fallback.hidden=true; // The shared form shows the score itself.
+      return true;
+    }catch(error){
+      console.error('Find Skubert: could not display score submission.',error);
+      try{sharedScoreUI?.destroy();}catch(_){}
+      sharedScoreUI=null;
+      mount.textContent='Shared score submission is unavailable. You can still play again.';
+      return false;
+    }
+  }
+
   function finishGame(){
     if(phase!=='playing')return;
     phase='finished';secondsLeft=0;setAuto(false);updateGameHud();
@@ -531,7 +565,9 @@
     const earnedSeconds=scoredIds.size*BONUS_SECONDS;
     $('endSummary').textContent=`Found ${scoredIds.size} of ${heads.length} Skubert heads · +${earnedSeconds} seconds earned.`;
     $('endBest').textContent=`Personal best: ${best.toLocaleString()} points`;
-    $('endOverlay').hidden=false;$('restartGame').focus({preventScroll:true});
+    $('endOverlay').hidden=false;
+    const scoreEntryReady=showSharedScoreUI();
+    if(!scoreEntryReady)$('restartGame').focus({preventScroll:true});
   }
   function tickGameTimer(now){
     if(phase!=='playing')return;
