@@ -294,7 +294,7 @@
       <h1>🎮 Skubert Arcade</h1>
     <h2>🔒 Team Access</h2>
 
-    <form id="loginForm">
+    <form id="loginForm" method="post">
       <input
         id="passwordInput"
         type="password"
@@ -372,87 +372,170 @@
 </div>
 
 <script>
-  // Existing client-side password gate retained from the supplied homepage.
-  // Note: this is not secure access control on a public GitHub Pages site.
-  const TEAM_PASSWORD = "SKUBERT";
-  const UNLOCKED_KEY = "skubertArcadeUnlocked";
-  const STARTED_KEY = "skubertArcadeStarted";
-  const POKE_IMAGE = "assets/Skubert64_poke_compressed.gif";
-  const ROTATE_IMAGE = "assets/Skubert64_rotate_compressed.gif";
+  // The password is checked by the Cloudflare Worker; it is never embedded here.
+  // Page guards use the browser-session flag only as a casual access deterrent.
+  (() => {
+    'use strict';
+    const ARCADE_API = 'https://skubert-arcade-api.ajones14test.workers.dev';
+    const UNLOCKED_KEY = 'skubertArcadeUnlocked';
+    const STARTED_KEY = 'skubertArcadeStarted';
+    const POKE_IMAGE = 'assets/Skubert64_poke_compressed.gif';
+    const ROTATE_IMAGE = 'assets/Skubert64_rotate_compressed.gif';
 
-  const loginScreen = document.getElementById("loginScreen");
-  const arcadeScreen = document.getElementById("arcadeScreen");
-  const loginForm = document.getElementById("loginForm");
-  const passwordInput = document.getElementById("passwordInput");
-  const errorMessage = document.getElementById("errorMessage");
-  const lockButton = document.getElementById("lockButton");
-  const pressStartButton = document.getElementById("pressStartButton");
-  const arcadeImage = document.getElementById("arcadeImage");
-  const gameChoices = document.getElementById("gameChoices");
-  const chooseGameHeading = document.getElementById("chooseGameHeading");
+    const loginScreen = document.getElementById('loginScreen');
+    const arcadeScreen = document.getElementById('arcadeScreen');
+    const loginForm = document.getElementById('loginForm');
+    const passwordInput = document.getElementById('passwordInput');
+    const errorMessage = document.getElementById('errorMessage');
+    const lockButton = document.getElementById('lockButton');
+    const pressStartButton = document.getElementById('pressStartButton');
+    const arcadeImage = document.getElementById('arcadeImage');
+    const gameChoices = document.getElementById('gameChoices');
+    const chooseGameHeading = document.getElementById('chooseGameHeading');
+    const submitButton = loginForm.querySelector('button[type="submit"]');
 
-  // Preload the second image while the user sees the first, avoiding a flash.
-  const rotatePreload = new Image();
-  rotatePreload.src = ROTATE_IMAGE;
+    function getSession(key) {
+      try { return sessionStorage.getItem(key); } catch (_) { return null; }
+    }
+    function setSession(key, value) {
+      try { sessionStorage.setItem(key, value); return true; }
+      catch (_) { return false; }
+    }
+    function removeSession(key) {
+      try { sessionStorage.removeItem(key); } catch (_) { /* Already inaccessible. */ }
+    }
 
-  function showPhase(started) {
-    arcadeScreen.classList.toggle("started", started);
-    arcadeImage.src = started ? ROTATE_IMAGE : POKE_IMAGE;
-    arcadeImage.alt = started
-      ? "Skubert Arcade rotating Skubert artwork"
-      : "Skubert Arcade title screen featuring Skubert and PRESS START";
-    pressStartButton.hidden = started;
-    pressStartButton.setAttribute("aria-expanded", String(started));
-    gameChoices.hidden = !started;
-  }
+    // Preload the second title-screen image without changing the original UI.
+    const rotatePreload = new Image();
+    rotatePreload.src = ROTATE_IMAGE;
 
-  function unlockArcade(resume = false) {
-    loginScreen.hidden = true;
-    arcadeScreen.hidden = false;
-    document.body.classList.add("arcade-unlocked");
-    sessionStorage.setItem(UNLOCKED_KEY, "true");
-    showPhase(resume && sessionStorage.getItem(STARTED_KEY) === "true");
-  }
+    function showPhase(started) {
+      arcadeScreen.classList.toggle('started', started);
+      arcadeImage.src = started ? ROTATE_IMAGE : POKE_IMAGE;
+      arcadeImage.alt = started
+        ? 'Skubert Arcade rotating Skubert artwork'
+        : 'Skubert Arcade title screen featuring Skubert and PRESS START';
+      pressStartButton.hidden = started;
+      pressStartButton.setAttribute('aria-expanded', String(started));
+      gameChoices.hidden = !started;
+    }
 
-  function pressStart() {
-    sessionStorage.setItem(STARTED_KEY, "true");
-    showPhase(true);
-    chooseGameHeading.focus({ preventScroll: true });
-  }
+    function unlockArcade(resume = false) {
+      loginScreen.hidden = true;
+      arcadeScreen.hidden = false;
+      document.body.classList.add('arcade-unlocked');
+      showPhase(resume && getSession(STARTED_KEY) === 'true');
+    }
 
-  function lockArcade() {
-    sessionStorage.removeItem(UNLOCKED_KEY);
-    sessionStorage.removeItem(STARTED_KEY);
-    showPhase(false);
-    arcadeScreen.hidden = true;
-    loginScreen.hidden = false;
-    document.body.classList.remove("arcade-unlocked");
-    passwordInput.value = "";
-    errorMessage.hidden = true;
-    passwordInput.focus();
-  }
+    function pressStart() {
+      setSession(STARTED_KEY, 'true');
+      showPhase(true);
+      chooseGameHeading.focus({ preventScroll: true });
+    }
 
-  loginForm.addEventListener("submit", function (event) {
-    event.preventDefault();
-    if (passwordInput.value === TEAM_PASSWORD) {
-      sessionStorage.removeItem(STARTED_KEY);
+    function lockArcade() {
+      removeSession(UNLOCKED_KEY);
+      removeSession(STARTED_KEY);
+      showPhase(false);
+      arcadeScreen.hidden = true;
+      loginScreen.hidden = false;
+      document.body.classList.remove('arcade-unlocked');
+      passwordInput.value = '';
       errorMessage.hidden = true;
-      unlockArcade(false);
-      pressStartButton.focus({ preventScroll: true });
-    } else {
-      errorMessage.hidden = false;
-      passwordInput.value = "";
       passwordInput.focus();
     }
-  });
 
-  pressStartButton.addEventListener("click", pressStart);
-  lockButton.addEventListener("click", lockArcade);
+    // Used only when a game-page guard sends the visitor back to the login.
+    // Never follow an external URL or a URL outside this GitHub Pages site root.
+    function safeReturnDestination() {
+      const raw = new URLSearchParams(location.search).get('next');
+      const siteRoot = new URL('./', location.href).pathname;
+      if (!raw || !raw.startsWith(siteRoot)) return null;
+      try {
+        const target = new URL(raw, location.origin);
+        if (target.origin !== location.origin || !target.pathname.startsWith(siteRoot)) return null;
+        if (target.pathname === siteRoot || target.pathname === siteRoot + 'index.html') return null;
+        return target.href;
+      } catch (_) {
+        return null;
+      }
+    }
 
-  // Returning from a game (or refreshing the tab) preserves the current phase.
-  if (sessionStorage.getItem(UNLOCKED_KEY) === "true") {
-    unlockArcade(true);
-  }
+    let checking = false;
+    loginForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (checking) return;
+      checking = true;
+      submitButton.disabled = true;
+      submitButton.setAttribute('aria-busy', 'true');
+      const previousLabel = submitButton.textContent;
+      submitButton.textContent = 'Checking…';
+      errorMessage.hidden = true;
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      try {
+        const response = await fetch(`${ARCADE_API}/api/arcade/unlock`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: passwordInput.value }),
+          cache: 'no-store',
+          credentials: 'omit',
+          signal: controller.signal
+        });
+
+        let result = null;
+        try { result = await response.json(); } catch (_) { /* Unexpected API response. */ }
+
+        if (response.status === 401) {
+          passwordInput.value = '';
+          throw new Error('Incorrect password. Please try again.');
+        }
+        if (response.status === 429) {
+          throw new Error('Too many attempts. Please try again shortly.');
+        }
+        if (response.status === 503 || response.status >= 500) {
+          throw new Error('Password verification is temporarily unavailable. Please try again.');
+        }
+        if (!response.ok || result?.ok !== true) {
+          throw new Error('Unable to verify the password. Please try again.');
+        }
+        if (!setSession(UNLOCKED_KEY, 'true')) {
+          throw new Error('Browser session storage is blocked. Allow site data to continue.');
+        }
+
+        removeSession(STARTED_KEY);
+        passwordInput.value = '';
+        errorMessage.hidden = true;
+        unlockArcade(false);
+        const destination = safeReturnDestination();
+        if (destination) {
+          location.replace(destination);
+          return;
+        }
+        pressStartButton.focus({ preventScroll: true });
+      } catch (error) {
+        errorMessage.textContent = error?.name === 'AbortError'
+          ? 'The password check timed out. Please try again.'
+          : (error?.message || 'Unable to contact the password service. Please try again.');
+        errorMessage.hidden = false;
+        passwordInput.focus();
+      } finally {
+        clearTimeout(timeout);
+        checking = false;
+        submitButton.disabled = false;
+        submitButton.removeAttribute('aria-busy');
+        submitButton.textContent = previousLabel;
+      }
+    });
+
+    pressStartButton.addEventListener('click', pressStart);
+    lockButton.addEventListener('click', lockArcade);
+
+    // A successful unlock lasts for this browser tab's session; it is not a
+    // signed token and does not protect public GitHub Pages HTML or assets.
+    if (getSession(UNLOCKED_KEY) === 'true') unlockArcade(true);
+  })();
 </script>
 
 </body>
