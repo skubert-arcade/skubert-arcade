@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#fafafa">
   <title>Skubert Evolution | Skubert Arcade</title>
+  <script type="importmap">
+    {"imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+    }}
+  </script>
+  <link rel="preload" href="../typing/models/skubert.glb" as="fetch" crossorigin="anonymous" />
   <style>
 :root { font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif; color-scheme:light; }
 * { box-sizing:border-box; }
@@ -16,7 +23,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
 /* The PNG is never cropped, dimmed or made transparent. Its full square is visible at once. */
 .scene { position:relative; width:min(100vw,100svh); max-width:100%; aspect-ratio:1; flex:none; }
 .scene > img { width:100%; height:100%; display:block; object-fit:contain; opacity:1; }
-#game { position:absolute; inset:0; display:block; width:100%; height:100%; background:transparent; touch-action:none; cursor:crosshair; }
+#game { position:absolute; inset:0; z-index:1; display:block; width:100%; height:100%; background:transparent; touch-action:none; cursor:crosshair; }
+#skubert3d { position:absolute; inset:0; z-index:2; pointer-events:none; width:100%; height:100%; display:block; }
 .arcade-link {
   position:fixed; top:max(12px,env(safe-area-inset-top)); left:max(12px,env(safe-area-inset-left)); z-index:5;
   padding:9px 14px; background:#fff; border:1px solid #bcbcbc; border-radius:999px;
@@ -61,6 +69,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   </div>
 </main>
 <div id="message" class="visually-hidden" role="status" aria-live="polite"></div>
+<script type="module" src="skubert-3d-overlay.js"></script>
 <script>
 (() => {
   'use strict';
@@ -74,7 +83,11 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     { name:'Hominidae', color:'#ad315d' },
     { name:'Ponginae', color:'#f18a35' },
     { name:'Gigantopithecus', color:'#7840c6' },
-    { name:'Skubert', color:'#1677e5' }
+    { name:'Skubert', color:'#1677e5' },
+    { name:'Skubert ×2', color:'#1677e5' },
+    { name:'Skubert ×4', color:'#1677e5' },
+    { name:'Skubert ×8', color:'#1677e5' },
+    { name:'Skubert ×16', color:'#1677e5' }
   ];
   const canvas=document.getElementById('game');
   const ctx=canvas.getContext('2d');
@@ -83,6 +96,10 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   const scoreEl=$('score');
   const overlay=$('overlay'), endTitle=$('endTitle'), endMessage=$('endMessage'), endScore=$('endScore');
   const fmt=new Intl.NumberFormat('en-US');
+  const SKUBERT_LEVEL=9;
+  const MAX_LEVEL=LEVELS.length-1;
+  // The top Skubert tier is earned by merging; it is too large to be dropped.
+  const MAX_DROP_LEVEL=9;
   const storageKey='skubertEvolutionPrototypeBestV1';
   let best=0;
   try { best=Number(localStorage.getItem(storageKey))||0; } catch (_) {}
@@ -92,7 +109,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   let radius0=18,balls=[],particles=[],floating=[],shockwaves=[],score=0,highest=0;
   let unlocked=new Set([0]);
   let aimX=200,current=0,next=1,ended=false,win=false,overflowAge=0,dropWait=0;
-  let time=0,lastMergeTime=-100,combo=0,lastFrame=0,accumulator=0,down=false,ballId=0;
+  let time=0,lastMergeTime=-100,combo=0,lastFrame=0,accumulator=0,down=false,ballId=0,pendingWin=0;
   const step=1/60;
   const factor=1.23;
   // Rotation is radians/second; strong damping avoids spin that persists in a settled pile.
@@ -106,7 +123,11 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   // Only classifications previously produced by an actual merge can enter the drop queue.
   // Weight later stages higher and discount those already filling the container.
   function choice(){
-    const available=Array.from(unlocked).filter(level=>level<LEVELS.length-1 && radius(level) < (topRight-topLeft)*.42);
+    // Larger Skubert models must exist from a merge before they may appear.
+    // Restrict random drops to the first Skubert tier: all larger Skuberts
+    // must be created by combining two existing Skuberts.
+    const available=Array.from(unlocked).filter(level=>
+      level<=MAX_DROP_LEVEL && radius(level)*2 < (right-left)*.75);
     const counts=new Array(LEVELS.length).fill(0);
     for(const ball of balls)counts[ball.level]++;
     const weights=available.map(level=>(1+level*.72)/Math.pow(1+counts[level]*.68,1.15));
@@ -149,7 +170,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     const oldW=W,oldH=H;
     W=newW;H=newH;
     boxTop=H*.259; floor=H*.927; overflowY=H*.315;
-    left=W*.185; right=W*.815;
+    // Full pyramid base in the 1254×1254 source: approximately x=6..1137.
+    // These are still straight rectangular walls, NOT pyramid-shaped walls.
+    left=W*.006; right=W*.907;
     topLeft=left; topRight=right;
     bottomLeft=left; bottomRight=right;
     radius0=clamp(W*.024,9.5,20.5);
@@ -164,9 +187,21 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   function reset(){
     balls=[];particles=[];floating=[];shockwaves=[];score=0;highest=0;unlocked=new Set([0]);
     aimX=(topLeft+topRight)/2;current=choice();next=choice();updateUnlocks();
-    ended=false;win=false;overflowAge=0;dropWait=0;combo=0;lastMergeTime=-100;time=0;ballId=0;
+    ended=false;win=false;pendingWin=0;overflowAge=0;dropWait=0;combo=0;lastMergeTime=-100;time=0;ballId=0;
     overlay.hidden=true;updateScore();updateNext();
     setMessage('Aim with mouse, touch, or arrows. Click / Space to drop.');
+    // Optional test: ?test=skubert creates two Skuberts to verify GLB merging.
+    if(new URLSearchParams(location.search).get('test')==='skubert'){
+      const r=radius(SKUBERT_LEVEL);
+      const y=floor-r-10;
+      const cx=(left+right)/2;
+      const separation=r*1.55;
+      balls.push(createBall(SKUBERT_LEVEL,cx-separation/2,y,30,0));
+      balls.push(createBall(SKUBERT_LEVEL,cx+separation/2,y,-30,0));
+      for(let i=0;i<=SKUBERT_LEVEL;i++)unlocked.add(i);
+      current=SKUBERT_LEVEL; next=SKUBERT_LEVEL;
+      setMessage('Test mode: two 3D Skuberts merge into a larger Skubert.');
+    }
   }
   function createBall(level,x,y,vx=0,vy=0){
     const r=radius(level);
@@ -244,7 +279,15 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     if(!unlocked.has(newLevel)){unlocked.add(newLevel);updateUnlocks();}
     if(newLevel>highest)highest=newLevel;
     setMessage(`${LEVELS[a.level].name} + ${LEVELS[b.level].name} → ${LEVELS[newLevel].name}${combo>1?' · '+combo+'× combo!':''}`);
-    if(newLevel===9)endGame(true);
+    if(newLevel===SKUBERT_LEVEL){
+      setMessage('Skubert created! Two Skuberts make Skubert ×2. Keep merging.');
+    }
+    // Reaching ×16 is the ultimate objective; show the new model before the ending.
+    if(newLevel===MAX_LEVEL){
+      win=true;
+      setMessage('Maximum Skubert created!');
+      pendingWin=time+2.0;
+    }
   }
   function collide(a,b){
     let dx=b.x-a.x,dy=b.y-a.y,dist2=dx*dx+dy*dy;
@@ -321,7 +364,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
           const a=balls[i],b=balls[j];
           const dx=b.x-a.x,dy=b.y-a.y,s=a.r+b.r;
           if(dx*dx+dy*dy>=s*s)continue;
-          if(a.level===b.level&&a.level<9&&merges<7){mergeAt(i,j);merges++;didMerge=true;break outer;}
+          if(a.level===b.level&&a.level<MAX_LEVEL&&merges<7){mergeAt(i,j);merges++;didMerge=true;break outer;}
           collide(a,b);
         }
       }
@@ -344,15 +387,16 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     }
     const isOverflow=balls.some(b=>time-b.born>1.65 && b.y-b.r<overflowY && b.y+b.r>boxTop && Math.abs(b.vy)<100);
     overflowAge=clamp(overflowAge+(isOverflow?dt:-dt*2),0,3);
-    if(overflowAge>=3)endGame(false);
+    if(pendingWin>0 && time>=pendingWin){pendingWin=0;endGame(true);}
+    if(!ended && overflowAge>=3)endGame(false);
     for(let i=shockwaves.length-1;i>=0;i--){const w=shockwaves[i];w.life-=dt;w.r+=(w.maxR-w.r)*Math.min(1,dt*11);if(w.life<=0)shockwaves.splice(i,1);}
     for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.life-=dt;p.vy+=170*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;if(p.life<=0)particles.splice(i,1);}
     for(let i=floating.length-1;i>=0;i--){floating[i].life-=dt;floating[i].y-=25*dt;if(floating[i].life<=0)floating.splice(i,1);}
   }
   function endGame(won){
     if(ended)return;
-    ended=true;win=won;endTitle.textContent=won?'You made Skubert! 🎉':'Box overflowed!';
-    endMessage.textContent=won?'You completed all ten classifications.':'Keep merging matching spheres to make room in the box.';
+    ended=true;win=won;endTitle.textContent=won?'Skubert ×16! 🎉':'Box overflowed!';
+    endMessage.textContent=won?'You combined Skubert models into the largest tier.':'Keep merging matching spheres to make room in the box.';
     endScore.textContent=fmt.format(score)+' points';
     overlay.hidden=false;
     $('playAgain').focus({preventScroll:true});
@@ -408,7 +452,20 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     ctx.beginPath();
     ctx.rect(left,boxTop,right-left,floor-boxTop);
     ctx.clip();
-    for(const b of balls)drawSphere(b.x,b.y,b.r,b.level,false,b.pulse,b.angle,b.squish,b.squishAxis);
+    // Rendering uses WebGL models only for Skubert-tier bodies.
+    // All collision and merge rules remain 2D and deterministic.
+    const preview=!ended?{id:'preview',level:current,r:radius(current),x:clampAim(aimX),
+      y:boxTop+radius(current)+6,angle:0,squish:0,pulse:0}:null;
+    let threeIds=null;
+    try {
+      threeIds=window.SkubertEvolution3D?.render({balls,preview,W,H,left,right,boxTop,floor,time})||null;
+    } catch(err) {
+      // If WebGL fails, preserve the playable 2D version and its labels.
+      threeIds=null;
+    }
+    for(const b of balls){
+      if(!threeIds?.has(b.id))drawSphere(b.x,b.y,b.r,b.level,false,b.pulse,b.angle,b.squish,b.squishAxis);
+    }
     for(const w of shockwaves){
       ctx.globalAlpha=(w.life/w.maxLife)*.55;
       ctx.beginPath();ctx.arc(w.x,w.y,w.r,0,Math.PI*2);
@@ -435,7 +492,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       ctx.save();ctx.beginPath();ctx.setLineDash([3,5]);ctx.strokeStyle='#45454590';ctx.lineWidth=1.5;
       const previewY=boxTop+r+6;
       ctx.moveTo(x,previewY);ctx.lineTo(x,overflowY);ctx.stroke();ctx.restore();
-      drawSphere(x,previewY,r,current,true);
+      if(!threeIds?.has('preview'))drawSphere(x,previewY,r,current,true);
     }
   }
   function frame(ms){
