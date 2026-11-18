@@ -66,8 +66,14 @@ function resize(w,h){
 function render({balls,preview,W,H,left,right,boxTop,floor,time}){
   if(!ready||disabled)return null;
   shown.clear();
-  const visible=balls.filter(b=>b.level>=SKUBERT_LEVEL).slice(0,MAX_VISIBLE_3D);
-  if(preview?.level>=SKUBERT_LEVEL && visible.length<MAX_VISIBLE_3D)visible.push(preview);
+  // The queued Skubert must always be visible as a 3D head *before* dropping.
+  // Reserve a renderer slot for the preview instead of allowing the pile to
+  // exhaust the pool. On small devices, this is still just one WebGL canvas.
+  const previewIsSkubert=preview?.level>=SKUBERT_LEVEL;
+  const visible=[];
+  if(previewIsSkubert)visible.push(preview);
+  visible.push(...balls.filter(b=>b.level>=SKUBERT_LEVEL)
+    .slice(0,MAX_VISIBLE_3D-(previewIsSkubert?1:0)));
   resize(W,H);
   for(let i=0;i<visible.length;i++){
     const b=visible[i],holder=ensurePool(i);
@@ -78,7 +84,10 @@ function render({balls,preview,W,H,left,right,boxTop,floor,time}){
     const scale=(b.r*2*.88)/dimension;
     const puff=1+Math.max(0,b.pulse||0)*.15;
     holder.scale.setScalar(scale*puff);
-    holder.rotation.set(0,Math.sin(time*.8+b.id*.3)*.12,-(b.angle||0));
+    // A held Skubert faces the player and only rocks gently as they aim.
+    // Dropped Skuberts continue to rotate with their physical rolling angle.
+    holder.rotation.set(0,b.isPreview ? Math.sin(time*1.2)*.09 : Math.sin(time*.8+b.id*.3)*.12,
+                         b.isPreview ? 0 : -(b.angle||0));
     if(b.squish){
       const squish=THREE.MathUtils.clamp(b.squish,-.2,.27);
       holder.scale.x*=1-squish;

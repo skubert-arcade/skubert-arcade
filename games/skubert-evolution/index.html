@@ -112,14 +112,28 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   let time=0,lastMergeTime=-100,combo=0,lastFrame=0,accumulator=0,down=false,ballId=0,pendingWin=0;
   const step=1/60;
   const factor=1.23;
+  const SIZE_MULTIPLIER=4/3; // 33.3% larger diameters and model visuals
+  const SETTLE_AFTER=.22;
+  const SUPPORT_STOP_HORIZONTAL=12;
+  const SUPPORT_STOP_VERTICAL=48;
   // Rotation is radians/second; strong damping avoids spin that persists in a settled pile.
   const MAX_ANGULAR_SPEED=8;
-  const ANGULAR_DRAG=1.8;
-  const SPIN_STOP_THRESHOLD=.045;
+  const ANGULAR_DRAG=3.2;
+  const SPIN_STOP_THRESHOLD=.07;
   const SPIN_IMPACT_MIN=55;
   const SPIN_CONTACT_COOLDOWN=.12;
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
-  const radius=level=>radius0*Math.pow(factor,level);
+  function radius(level){
+    // Preserve +33.3% for all existing circle levels and the first 3D Skubert.
+    // The final four giant Skubert tiers are gently size-limited, only when
+    // needed, so their circular collision bodies still fit inside the box.
+    const firstSkubert=radius0*Math.pow(factor,SKUBERT_LEVEL);
+    if(level<=SKUBERT_LEVEL)return radius0*Math.pow(factor,level);
+    const maxRadius=(right-left)*.47;
+    const remaining=MAX_LEVEL-SKUBERT_LEVEL;
+    const growth=Math.min(factor,Math.pow(Math.max(1,maxRadius/firstSkubert),1/remaining));
+    return firstSkubert*Math.pow(growth,level-SKUBERT_LEVEL);
+  }
   // Only classifications previously produced by an actual merge can enter the drop queue.
   // Weight later stages higher and discount those already filling the container.
   function choice(){
@@ -175,7 +189,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     left=W*.006; right=W*.907;
     topLeft=left; topRight=right;
     bottomLeft=left; bottomRight=right;
-    radius0=clamp(W*.024,9.5,20.5);
+    radius0=clamp(W*.024,9.5,20.5)*SIZE_MULTIPLIER;
     const dpr=Math.min(window.devicePixelRatio||1,2);
     canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -195,18 +209,19 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       const r=radius(SKUBERT_LEVEL);
       const y=floor-r-10;
       const cx=(left+right)/2;
-      const separation=r*1.55;
+      const separation=r*2.12;
       balls.push(createBall(SKUBERT_LEVEL,cx-separation/2,y,30,0));
       balls.push(createBall(SKUBERT_LEVEL,cx+separation/2,y,-30,0));
       for(let i=0;i<=SKUBERT_LEVEL;i++)unlocked.add(i);
       current=SKUBERT_LEVEL; next=SKUBERT_LEVEL;
-      setMessage('Test mode: two 3D Skuberts merge into a larger Skubert.');
+      setMessage('Test mode: aim the queued 3D Skubert at either Skubert in the box, then drop to merge.');
     }
   }
   function createBall(level,x,y,vx=0,vy=0){
     const r=radius(level);
     return {id:++ballId,level,r,x:clamp(x,left+r,right-r),y,vx,vy,angle:0,omega:0,lastSpin:-10,
-      squish:0,squishV:0,squishAxis:0,lastImpact:-10,born:time,pulse:0};
+      squish:0,squishV:0,squishAxis:0,lastImpact:-10,born:time,pulse:0,
+      supported:false,contactCount:0,settleAge:0};
   }
   function drop(){
     if(ended||dropWait>0)return;
@@ -295,6 +310,10 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     if(dist2>=min*min)return false;
     if(dist2<.00001){dx=.01;dy=-.01;dist2=dx*dx+dy*dy;}
     const dist=Math.sqrt(dist2),nx=dx/dist,ny=dy/dist;
+    a.contactCount++;b.contactCount++;
+    // The upper object is supported by a body underneath it.
+    if(ny>.42)a.supported=true;
+    else if(ny<-.42)b.supported=true;
     const invA=1/(a.r*a.r),invB=1/(b.r*b.r),sum=invA+invB;
     const correction=(min-dist)*.90/sum;
     a.x-=nx*correction*invA;a.y-=ny*correction*invA;
@@ -303,7 +322,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     if(normalSpeed<0){
       // Lively impacts, but low restitution for near-rest contacts prevents endless jitter.
       const impactSpeed=-normalSpeed;
-      const restitution=normalSpeed < -75 ? .55 : .04;
+      const restitution=normalSpeed < -125 ? .41 : .012;
       impact(a,-nx,-ny,impactSpeed);
       impact(b,nx,ny,impactSpeed);
       const impulse=-(1+restitution)*normalSpeed/sum;
@@ -311,7 +330,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       b.vx+=impulse*nx*invB;b.vy+=impulse*ny*invB;
       const tx=-ny,ty=nx;
       const tangentSpeed=rvx*tx+rvy*ty;
-      const tangentImpulse=clamp(-tangentSpeed/sum,-impulse*.21,impulse*.21);
+      const tangentImpulse=clamp(-tangentSpeed/sum,-impulse*.30,impulse*.30);
       a.vx-=tangentImpulse*tx*invA;a.vy-=tangentImpulse*ty*invA;
       b.vx+=tangentImpulse*tx*invB;b.vy+=tangentImpulse*ty*invB;
       // Spin only on genuinely strong, glancing impacts. The cooldown stops
@@ -332,7 +351,11 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     time+=dt;dropWait=Math.max(0,dropWait-dt);
     if(ended)return;
     for(const b of balls){
-      b.vy+=clamp(H*4.1,1300,2600)*dt;b.vx*=.998;b.vy*=.999;
+      b.supported=false;b.contactCount=0;
+      // Horizontal motion slows once an impact has passed; gravity still feels heavy.
+      b.vy+=clamp(H*4.1,1300,2600)*dt;
+      b.vx*=Math.exp(-.65*dt);
+      b.vy*=Math.exp(-.12*dt);
       b.pulse=Math.max(0,b.pulse-dt);
       b.vx=clamp(b.vx,-1100,1100);b.vy=clamp(b.vy,-1150,1150);
       b.x+=b.vx*dt;b.y+=b.vy*dt;
@@ -340,7 +363,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       if(Math.abs(b.omega)<SPIN_STOP_THRESHOLD)b.omega=0;
       b.angle+=b.omega*dt;
       // Damped spring produces a short, elastic wobble after impact.
-      b.squishV+=(-150*b.squish-17*b.squishV)*dt;
+      b.squishV+=(-150*b.squish-27*b.squishV)*dt;
       b.squish=clamp(b.squish+b.squishV*dt,-.24,.3);
     }
     let merges=0;
@@ -349,12 +372,13 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
         enforceWall(b,'left');
         enforceWall(b,'right');
         if(b.y+b.r>floor){
+          b.supported=true;b.contactCount++;
           b.y=floor-b.r;
           if(b.vy>0){
             impact(b,0,-1,b.vy);
-            b.vy=b.vy>70?-b.vy*.44:0;
+            b.vy=b.vy>115?-b.vy*.35:0;
           }
-          b.vx*=.955;
+          b.vx*=.88;
           // Rolling torque is applied once per frame after the contact passes.
         }
       }
@@ -377,13 +401,32 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       const slowLinear=Math.abs(b.vx)<8 && Math.abs(b.vy)<15;
       if(grounded && slowLinear){
         if(Math.abs(b.vx)<2)b.vx=0;
-        b.omega*=Math.exp(-9*dt);
+        b.omega*=Math.exp(-14*dt);
       } else if(grounded && Math.abs(b.vx)>=8){
         const target=clamp(b.vx/Math.max(1,b.r),-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
         b.omega+=clamp(target-b.omega,-3,3)*Math.min(1,dt*7);
       }
       b.omega=clamp(b.omega,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
       if(Math.abs(b.omega)<SPIN_STOP_THRESHOLD && slowLinear)b.omega=0;
+      // Settling applies to objects supported by other objects, not just the floor.
+      // This drains tiny contact-solver impulses that otherwise jiggle a whole pile.
+      const nearlyStill=Math.abs(b.vx)<SUPPORT_STOP_HORIZONTAL &&
+                        Math.abs(b.vy)<SUPPORT_STOP_VERTICAL &&
+                        time-b.lastImpact>.16;
+      if(b.supported && nearlyStill){
+        b.settleAge+=dt;
+        if(b.settleAge>=SETTLE_AFTER){
+          b.vx*=Math.exp(-16*dt);
+          b.vy*=Math.exp(-22*dt);
+          b.omega*=Math.exp(-20*dt);
+          if(Math.abs(b.vx)<2)b.vx=0;
+          if(Math.abs(b.vy)<5)b.vy=0;
+          if(Math.abs(b.omega)<.12)b.omega=0;
+          if(Math.abs(b.squish)<.003 && Math.abs(b.squishV)<.04){b.squish=0;b.squishV=0;}
+        }
+      }else{
+        b.settleAge=0;
+      }
     }
     const isOverflow=balls.some(b=>time-b.born>1.65 && b.y-b.r<overflowY && b.y+b.r>boxTop && Math.abs(b.vy)<100);
     overflowAge=clamp(overflowAge+(isOverflow?dt:-dt*2),0,3);
@@ -454,7 +497,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     ctx.clip();
     // Rendering uses WebGL models only for Skubert-tier bodies.
     // All collision and merge rules remain 2D and deterministic.
-    const preview=!ended?{id:'preview',level:current,r:radius(current),x:clampAim(aimX),
+    const preview=!ended?{id:'preview',isPreview:true,level:current,r:radius(current),x:clampAim(aimX),
       y:boxTop+radius(current)+6,angle:0,squish:0,pulse:0}:null;
     let threeIds=null;
     try {
@@ -492,6 +535,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       ctx.save();ctx.beginPath();ctx.setLineDash([3,5]);ctx.strokeStyle='#45454590';ctx.lineWidth=1.5;
       const previewY=boxTop+r+6;
       ctx.moveTo(x,previewY);ctx.lineTo(x,overflowY);ctx.stroke();ctx.restore();
+      // The 3D renderer draws the Skubert head whenever a Skubert is queued,
+      // including before it is dropped. The flat sphere is a loading/failure fallback.
       if(!threeIds?.has('preview'))drawSphere(x,previewY,r,current,true);
     }
   }
