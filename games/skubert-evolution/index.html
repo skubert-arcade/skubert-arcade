@@ -19,8 +19,8 @@ button { cursor:pointer; }
 a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #ca7914; outline-offset:3px; }
 .scene { position:relative; width:min(100vw,100svh); max-width:100%; aspect-ratio:1; flex:none; }
 .scene > img { width:100%; height:100%; display:block; object-fit:contain; opacity:1; }
-/* Solid-color bands temporarily hide the silhouettes, while the source PNG
-   remains completely unchanged underneath. */
+/* A band is concealed only while its classification has a live ball on the board.
+   The source PNG always stays intact underneath this transparent overlay. */
 #discovery-layer {
   position:absolute; inset:0; z-index:1; display:block; width:100%; height:100%;
   background:transparent; pointer-events:none;
@@ -65,6 +65,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
 .modal p { font-size:14px; line-height:1.4; margin:0; }
 .final-score { font-size:27px; font-weight:900; margin:12px 0; }
 .modal button { margin-top:8px; color:#fff; background:#245ca2; padding:11px 18px; border:0; border-radius:10px; font-weight:800; }
+.modal button+button { margin-left:6px; background:#f0f4f8; color:#18385a; border:1px solid #9aacbb; }
+.modal button[hidden] { display:none; }
 .visually-hidden { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important; overflow:hidden!important; clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important; }
 @media (max-width:520px) {
   .start-prompt { align-items:center; padding-top:0; }
@@ -89,6 +91,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       <p id="endMessage">The container overflowed.</p>
       <div id="endScore" class="final-score">0</div>
       <button id="playAgain" type="button">Play again</button>
+      <button id="continueGame" type="button" hidden>Keep playing</button>
     </div>
   </div>
 </main>
@@ -118,7 +121,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   const fmt=new Intl.NumberFormat('en-US');
   const MAX_LEVEL=LEVELS.length-1;
   const MAX_DROP_LEVEL=MAX_LEVEL-1;
-  const storageKey='skubertEvolutionPrototypeBestV13TexturePilot';
+  const storageKey='skubertEvolutionPrototypeBestV14';
   let best=0;
   try { best=Number(localStorage.getItem(storageKey))||0; } catch (_) {}
 
@@ -130,8 +133,13 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   let radius0=18,balls=[],particles=[],floating=[],shockwaves=[],score=0,highest=0;
   let unlocked=new Set([0]);
   let aimX=200,current=0,next=1,ended=false,win=false,overflowAge=0,dropWait=0;
-  let started=false, startTime=0;
-  const revealAt=new Array(8).fill(null);
+  let started=false;
+  // Covers change continuously according to which ranks are on the board.
+  // There is no permanent discovery/reveal state.
+  const bandAlpha=new Array(8).fill(0);
+  let milestoneOpen=false, domainCreated=false, domainAcknowledged=false;
+  const collisionDeflections=new Map();
+  let lastDroppedLevel=null;
   const startPrompt=document.getElementById('startPrompt');
   // Colors match the original pyramid, while sphere textures use a more saturated palette.
   const BAND_COLORS=['#eea5e9','#b8aaf8','#9bc8fb','#a8fcfc','#b5fb9a','#fee083','#fda46f','#fe9390'];
@@ -177,28 +185,26 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   function artRight(y){
     return ART_TOP_RIGHT.x+(ART_APEX.x-ART_TOP_RIGHT.x)*(y-ART_TOP_RIGHT.y)/(ART_APEX.y-ART_TOP_RIGHT.y);
   }
-  function revealRank(level){
-    if(Number.isInteger(level)&&level>=0&&level<8&&revealAt[level]===null){
-      revealAt[level]=performance.now();
-    }
-  }
-  function drawBandOverlay(now=performance.now()){
+  function drawBandOverlay(dt=1/60){
     discoveryCtx.clearRect(0,0,W,H);
     if(!started) return;
+    const present=new Array(LEVELS.length).fill(false);
+    for(const b of balls) present[b.level]=true;
     discoveryCtx.save();
     discoveryCtx.scale(W/ART_SIZE,H/ART_SIZE);
-    const fadeIn=Math.min(1,(now-startTime)/400);
+    let anyCovered=false;
     for(let band=0;band<8;band++){
       const level=7-band;
-      const revealTime=revealAt[level];
-      const fadeOut=revealTime===null?1:Math.max(0,1-(now-revealTime)/440);
-      if(fadeOut<=0) continue;
-      const alpha=fadeIn*fadeOut;
-      discoveryCtx.globalAlpha=alpha;
+      const target=present[level]?1:0;
+      // Smooth, but responsive, transitions for balls being born or merging.
+      const speed=target?8:5;
+      bandAlpha[level]+=(target-bandAlpha[level])*Math.min(1,dt*speed);
+      if(Math.abs(target-bandAlpha[level])<.008)bandAlpha[level]=target;
+      if(bandAlpha[level]<=.001)continue;
+      anyCovered=true;
+      discoveryCtx.globalAlpha=bandAlpha[level];
       discoveryCtx.fillStyle=BAND_COLORS[level];
-      // Inset from the source art's black dividing lines. Only the pyramid
-      // is covered; its title and the rank labels at the right remain visible.
-      const y0=BAND_Y[band]-3, y1=BAND_Y[band+1]+3;
+      const y0=BAND_Y[band]-3,y1=BAND_Y[band+1]+3;
       const inset=1.6;
       discoveryCtx.beginPath();
       discoveryCtx.moveTo(artLeft(y0)+inset,y0);
@@ -208,18 +214,15 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       discoveryCtx.closePath();
       discoveryCtx.fill();
     }
-    // Restore the source image's thin horizontal rank dividers, which are
-    // otherwise hidden by the opaque silhouette-covering stripes.
-    const anyCovered=BAND_COLORS.some((_,level)=>revealAt[level]===null || now-revealAt[level]<440);
     if(anyCovered){
-      discoveryCtx.globalAlpha=fadeIn;
+      discoveryCtx.globalAlpha=1;
       discoveryCtx.beginPath();
       for(let band=1;band<8;band++){
         const y=BAND_Y[band];
         discoveryCtx.moveTo(artLeft(y),y);
         discoveryCtx.lineTo(artRight(y),y);
       }
-      discoveryCtx.lineWidth=1.0;
+      discoveryCtx.lineWidth=1;
       discoveryCtx.strokeStyle='#403b3a';
       discoveryCtx.stroke();
     }
@@ -228,22 +231,41 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   function startGame(){
     if(started||ended)return;
     started=true;
-    startTime=performance.now();
     startPrompt.hidden=true;
-    dropDeadline=startTime+AUTO_DROP_MS;
-    setMessage('Drop a sphere within three seconds. Merge matching ranks to reveal their silhouettes.');
+    dropDeadline=performance.now()+AUTO_DROP_MS;
+    setMessage('Drop within three seconds. Each taxonomy row is covered while its ball is in play.');
   }
   function radius(level){ return radius0*Math.pow(factor,level); }
-  function choice(){
-    const available=Array.from(unlocked).filter(level=>level<=MAX_DROP_LEVEL && radius(level)*2 < (topRight-topLeft)*.7);
+  function choice(excludeLevel=null){
+    const available=Array.from(unlocked)
+      .filter(level=>level<=MAX_DROP_LEVEL && radius(level)*2<(topRight-topLeft)*.7)
+      .sort((a,b)=>a-b);
+    if(available.length===0)return 0;
+    // Hard no-repeat when at least two classifications are possible.
+    const candidates=available.length>1 && available.includes(excludeLevel)
+      ?available.filter(level=>level!==excludeLevel):available;
+    if(candidates.length===1)return candidates[0];
+    const highestAvailable=available[available.length-1];
     const counts=new Array(LEVELS.length).fill(0);
     for(const ball of balls)counts[ball.level]++;
-    const weights=available.map(level=>(1+level*.72)/Math.pow(1+counts[level]*.68,1.15));
+    const weights=candidates.map(level=>{
+      // Favor useful mid-tier spheres, but avoid excessive board duplicates.
+      let weight=Math.pow(1.4,level)/Math.pow(1+counts[level]*.75,1.15);
+      // Highest unlocked droppable tier: ~3% of its normal selection weight.
+      if(level===highestAvailable && candidates.length>1)weight*=.03;
+      return weight;
+    });
     let roll=Math.random()*weights.reduce((sum,w)=>sum+w,0);
-    for(let i=0;i<available.length;i++) if((roll-=weights[i])<=0) return available[i];
-    return available[available.length-1] ?? 0;
+    for(let i=0;i<candidates.length;i++)if((roll-=weights[i])<=0)return candidates[i];
+    return candidates[candidates.length-1];
   }
-  function updateUnlocks(){}
+  function updateUnlocks(){
+    // A merge may unlock variety while Species is already queued twice.
+    // Reroll the preview without changing the sphere already on deck.
+    if(requestedTestLevel===null && unlocked.size>1 && next===current){
+      next=choice(current);
+    }
+  }
   function setMessage(value){ $('message').textContent=value; }
   function updateNext(){}
   function updateScore(){ scoreEl.textContent=fmt.format(score); if(score>best){ best=score; try{ localStorage.setItem(storageKey,String(best)); }catch(_){}} }
@@ -292,8 +314,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   }
   function reset(){
     started=false;
-    startTime=0;
-    revealAt.fill(null);
+    bandAlpha.fill(0);
+    milestoneOpen=false; domainCreated=false; domainAcknowledged=false;
+    collisionDeflections.clear(); lastDroppedLevel=null;
     startPrompt.hidden=false;
     balls=[];particles=[];floating=[];shockwaves=[];score=0;highest=0;
     if(requestedTestLevel!==null){
@@ -303,10 +326,11 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     } else {
       unlocked=new Set([0]);
       current=0;
-      next=choice();
+      next=choice(current);
     }
     aimX=(topLeft+topRight)/2; updateUnlocks();
     ended=false; win=false; pendingWin=0; overflowAge=0; dropWait=0; combo=0; lastMergeTime=-100; time=0; ballId=0;
+    $('playAgain').textContent='Play again'; $('continueGame').hidden=true;
     overlay.hidden=true; updateScore(); updateNext();
     dropDeadline=Infinity;
     setMessage(requestedTestLevel!==null ? `Test mode: dropping ${LEVELS[current].name}. Click / Space to drop.` : 'Aim with mouse, touch, or arrows. Click / Space to drop.');
@@ -319,11 +343,14 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       supported:false,contactCount:0,settleAge:0};
   }
   function drop(automatic=false){
-    if(!started||ended||pendingWin>0||dropWait>0) return;
+    if(!started||ended||milestoneOpen||pendingWin>0||dropWait>0) return;
     const r=radius(current), x=clampAim(aimX), y=topY+r+8;
-    balls.push(createBall(current,x,y,0,15));
-    revealRank(current);
-    current=next; next=requestedTestLevel!==null ? requestedTestLevel : choice(); updateNext(); dropWait=.28; aimX=clampAim(aimX);
+    const droppedLevel=current;
+    balls.push(createBall(droppedLevel,x,y,0,15));
+    lastDroppedLevel=droppedLevel;
+    current=next;
+    next=requestedTestLevel!==null ? requestedTestLevel : choice(current);
+    updateNext(); dropWait=.28; aimX=clampAim(aimX);
     dropDeadline=performance.now()+AUTO_DROP_MS;
     setMessage(`${automatic?'Auto-dropped':'Dropped'} ${LEVELS[balls[balls.length-1].level].name}. Match two to evolve!`);
   }
@@ -352,7 +379,6 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     merged.omega=clamp((a.omega+b.omega)*.18+(Math.random()-.5)*1.0,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
     merged.squish=.23; merged.squishV=-2.0; merged.squishAxis=Math.PI/2;
     merged.born=time; merged.pulse=.24; balls.push(merged);
-    revealRank(newLevel);
     const range=merged.r*3.1+70;
     for(const other of balls){
       if(other===merged) continue;
@@ -384,8 +410,31 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     if(newLevel>highest) highest=newLevel;
     setMessage(`${LEVELS[a.level].name} + ${LEVELS[b.level].name} → ${LEVELS[newLevel].name}${combo>1?' · '+combo+'× combo!':''}`);
     if(newLevel===MAX_LEVEL){
-      win=true; setMessage('Domain created!'); pendingWin=time+1.6;
+      domainCreated=true;
+      setMessage('Domain achieved! You can finish your run or keep playing.');
+      if(!domainAcknowledged)pendingWin=time+1.2;
     }
+  }
+  function deflectVerticalStack(a,b,nx,ny,impactSpeed){
+    // Head-on contacts between different tiers form unnatural towers.
+    // Apply one lateral nudge per substantial contact, not every solver pass,
+    // so the pile still settles instead of endlessly jittering.
+    if(a.level===b.level || Math.abs(nx)>.24 || Math.abs(ny)<.9 || impactSpeed<65)return;
+    const key=a.id<b.id?`${a.id}:${b.id}`:`${b.id}:${a.id}`;
+    if(time-(collisionDeflections.get(key)??-100)<1.0)return;
+    collisionDeflections.set(key,time);
+    const upper=a.y<b.y?a:b;
+    const lower=upper===a?b:a;
+    const leftSpace=upper.x-xOnLeft(upper.y)-upper.r;
+    const rightSpace=xOnRight(upper.y)-upper.x-upper.r;
+    let direction=leftSpace>rightSpace ? -1 : 1;
+    if(Math.abs(leftSpace-rightSpace)<upper.r*.25){
+      direction=((upper.id+lower.id)%2===0)?-1:1;
+    }
+    const impulse=clamp(impactSpeed*.32,55,135);
+    upper.vx+=direction*impulse;
+    lower.vx-=direction*impulse*.25;
+    upper.x+=direction*Math.min(upper.r*.035,1.4);
   }
   function collide(a,b){
     let dx=b.x-a.x, dy=b.y-a.y, dist2=dx*dx+dy*dy;
@@ -402,6 +451,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     const rvx=b.vx-a.vx, rvy=b.vy-a.vy, normalSpeed=rvx*nx+rvy*ny;
     if(normalSpeed<0){
       const impactSpeed=-normalSpeed;
+      deflectVerticalStack(a,b,nx,ny,impactSpeed);
       const restitution=normalSpeed < -125 ? .38 : .01;
       impact(a,-nx,-ny,impactSpeed);
       impact(b,nx,ny,impactSpeed);
@@ -423,7 +473,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     return true;
   }
   function physics(dt){
-    if(!started||ended)return;
+    if(!started||ended||milestoneOpen)return;
     time+=dt; dropWait=Math.max(0,dropWait-dt);
     for(const b of balls){
       b.supported=false; b.contactCount=0;
@@ -457,6 +507,12 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       if(ended) break;
       if(didMerge){ pass=-1; continue; }
     }
+    // Contact memory is bounded even on a long-running session.
+    if(collisionDeflections.size>512){
+      for(const [key,last] of collisionDeflections){
+        if(time-last>2)collisionDeflections.delete(key);
+      }
+    }
     for(const b of balls){
       const leftDist = (b.x-xOnLeft(b.y));
       const rightDist = (xOnRight(b.y)-b.x);
@@ -485,19 +541,51 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     }
     const y0=overflowY;
     const x0=xOnLeft(y0), x1=xOnRight(y0);
-    const isOverflow=balls.some(b=>time-b.born>1.5 && b.y-b.r<y0 && b.y+b.r>topY && b.x+b.r>x0 && b.x-b.r<x1 && Math.abs(b.vy)<100);
-    overflowAge=clamp(overflowAge+(isOverflow?dt:-dt*2),0,3);
-    if(pendingWin>0 && time>=pendingWin){ pendingWin=0; endGame(true); }
-    if(!ended && overflowAge>=3) endGame(false);
+    // A newly spawned ball gets time to fall; only a genuinely congested,
+    // slow-moving ball counts. The timer resets fully if the pile clears.
+    const isOverflow=balls.some(b=>time-b.born>1.35 && b.y-b.r<y0 && b.y+b.r>topY &&
+      b.x+b.r>x0 && b.x-b.r<x1 && Math.abs(b.vy)<85);
+    overflowAge=isOverflow ? Math.min(4.5,overflowAge+dt) : 0;
+    if(pendingWin>0 && time>=pendingWin){ pendingWin=0; showDomainMilestone(); }
+    if(!ended && overflowAge>=4.5)endGame(domainCreated);
     for(let i=shockwaves.length-1;i>=0;i--){ const w=shockwaves[i]; w.life-=dt; w.r+=(w.maxR-w.r)*Math.min(1,dt*11); if(w.life<=0) shockwaves.splice(i,1); }
     for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life-=dt; p.vy+=170*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.life<=0) particles.splice(i,1); }
     for(let i=floating.length-1;i>=0;i--){ floating[i].life-=dt; floating[i].y-=25*dt; if(floating[i].life<=0) floating.splice(i,1); }
   }
+  function showDomainMilestone(){
+    if(ended || domainAcknowledged || milestoneOpen)return;
+    domainAcknowledged=true;
+    milestoneOpen=true;
+    endTitle.textContent='Domain achieved! 🎉';
+    endMessage.textContent='You reached the top of the taxonomy. Finish your run or keep playing for a higher score.';
+    endScore.textContent=fmt.format(score)+' points';
+    $('playAgain').textContent='Finish run';
+    $('continueGame').hidden=false;
+    overlay.hidden=false;
+    $('continueGame').focus({preventScroll:true});
+  }
+  function continueAfterDomain(){
+    if(!milestoneOpen || ended)return;
+    milestoneOpen=false;
+    overlay.hidden=true;
+    dropWait=.25;
+    dropDeadline=performance.now()+AUTO_DROP_MS;
+    setMessage('Domain achieved. Keep merging for a higher score!');
+    canvas.focus({preventScroll:true});
+  }
   function endGame(won){
-    if(ended) return;
-    ended=true; win=won; endTitle.textContent=won?'Domain reached! 🎉':'Pyramid overflowed!';
-    endMessage.textContent=won?'You combined spheres all the way up to Domain.':'Keep merging matching spheres to make room in the pyramid.';
-    endScore.textContent=fmt.format(score)+' points'; overlay.hidden=false; $('playAgain').focus({preventScroll:true});
+    if(ended)return;
+    ended=true; milestoneOpen=false; pendingWin=0;
+    win=won;
+    endTitle.textContent=won?'Evolution completed! 🎉':'Pyramid overflowed!';
+    endMessage.textContent=won
+      ?'You created Domain and finished your run. Great work!'
+      :'The spheres remained above the overflow line for 4.5 seconds. Try merging faster.';
+    endScore.textContent=fmt.format(score)+' points';
+    $('playAgain').textContent='Play again';
+    $('continueGame').hidden=true;
+    overlay.hidden=false;
+    $('playAgain').focus({preventScroll:true});
   }
   function hexRGB(hex){ const c=hex.replace('#',''); return [parseInt(c.slice(0,2),16), parseInt(c.slice(2,4),16), parseInt(c.slice(4,6),16)]; }
   function tint(hex,t){ const rgb=hexRGB(hex); return `rgb(${rgb.map(n=>Math.round(n+(t>=0?(255-n):n)*t)).join(',')})`; }
@@ -539,8 +627,10 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     ctx.strokeStyle='#fff2'; ctx.lineWidth=Math.max(2,r*.12); ctx.stroke();
     ctx.restore(); ctx.restore();
   }
+  let lastBandFrame=0;
   function render(){
-    drawBandOverlay();
+    drawBandOverlay(Math.min(1/20,(performance.now()-(lastBandFrame||performance.now()))/1000));
+    lastBandFrame=performance.now();
     ctx.clearRect(0,0,W,H);
     if(!started){
       // Clear any meshes remaining from the previous game and show the full
@@ -554,7 +644,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     ctx.clip();
     // One render request per gameplay frame; the Three.js module never runs
     // an independent animation loop. Until it becomes ready, use v12 sprites.
-    const preview=!ended ? {
+    const preview=!ended && !milestoneOpen ? {
       x:clampAim(aimX), y:topY+radius(current)+8,
       r:radius(current),level:current,angle:0,squish:0,squishAxis:0,pulse:0
     } : null;
@@ -588,7 +678,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     ctx.setLineDash([4,5]); ctx.beginPath(); ctx.moveTo(x0,overflowY); ctx.lineTo(x1,overflowY);
     ctx.lineWidth=1.6; ctx.strokeStyle=overflowAge>0?'#c32428':'#c3242890'; ctx.stroke(); ctx.setLineDash([]);
     ctx.restore();
-    if(!ended){
+    if(!ended && !milestoneOpen){
       const r=radius(current), x=clampAim(aimX), previewY=topY+r+8;
       ctx.save(); ctx.beginPath(); ctx.setLineDash([3,5]); ctx.strokeStyle='#45454590'; ctx.lineWidth=1.5;
       ctx.moveTo(x,previewY); ctx.lineTo(x,overflowY); ctx.stroke(); ctx.restore();
@@ -607,14 +697,14 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     let loops=0; while(accumulator>=step&&loops<4){ physics(step); accumulator-=step; loops++; }
     // Wall-clock deadline ensures that dropping never waits for the physics
     // simulation to accumulate a full three seconds on slower devices.
-    if(started && !ended && pendingWin<=0 && dropWait<=0 && performance.now()>=dropDeadline){
+    if(started && !ended && !milestoneOpen && pendingWin<=0 && dropWait<=0 && performance.now()>=dropDeadline){
       drop(true);
     }
     render(); requestAnimationFrame(frame);
   }
   function aimFromPointer(e){ const rect=canvas.getBoundingClientRect(); const local=(e.clientX-rect.left)*W/rect.width; aimX=clampAim(local); }
   canvas.addEventListener('pointerdown',e=>{
-    if(ended)return;
+    if(ended||milestoneOpen)return;
     e.preventDefault(); aimFromPointer(e);
     if(!started){ startGame(); down=false; return; }
     down=true; canvas.setPointerCapture(e.pointerId);
@@ -623,7 +713,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   canvas.addEventListener('pointerup',e=>{ if(!down) return; down=false; aimFromPointer(e); drop(); });
   canvas.addEventListener('pointercancel',()=>{ down=false; });
   document.addEventListener('keydown',e=>{
-    if(ended||e.altKey||e.ctrlKey||e.metaKey) return;
+    if(ended||milestoneOpen||e.altKey||e.ctrlKey||e.metaKey) return;
     if(!started){
       if((e.code==='Space'||e.code==='Enter')&&!e.repeat){e.preventDefault();startGame();}
       return;
@@ -638,7 +728,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     }
   });
   $('startButton').addEventListener('click',startGame);
-  $('playAgain').addEventListener('click',reset);
+  $('playAgain').addEventListener('click',()=>{ if(milestoneOpen)endGame(true); else reset(); });
+  $('continueGame').addEventListener('click',continueAfterDomain);
   document.addEventListener('keydown',e=>{ if((e.key==='r'||e.key==='R')&&!e.ctrlKey&&!e.metaKey&&!e.altKey) reset(); });
   window.addEventListener('resize',resize);
   resize(); reset();
