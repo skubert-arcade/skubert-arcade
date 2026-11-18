@@ -6,111 +6,258 @@
   <meta name="theme-color" content="#17143a">
   <title>Skubert Evolution | Skubert Arcade</title>
   <style>
-    :root { color-scheme: dark; font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif; }
-    * { box-sizing: border-box; }
-    body { margin:0; min-height:100vh; color:#fff; background: radial-gradient(ellipse at 45% -15%, #6657c6 0, #342568 36%, #17143a 80%); }
-    body::before { content:""; position:fixed; inset:0; pointer-events:none; background:radial-gradient(circle at 8% 12%,#f9c66b15 0 4px,transparent 6px),radial-gradient(circle at 83% 21%,#f9c66b15 0 3px,transparent 5px); background-size:150px 170px,215px 185px; opacity:.7; }
-    a { color:#e6d5ff; }
-    button { font:inherit; cursor:pointer; }
-    button:focus-visible, a:focus-visible { outline:3px solid #ffcd6c; outline-offset:3px; }
-    .page { width:min(100%,800px); margin:auto; padding:20px 18px 38px; position:relative; }
-    .topbar { display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:15px; }
-    .brand h1 { font-size:clamp(27px,4vw,40px); margin:0; letter-spacing:-1.2px; line-height:1.1; text-shadow:0 3px 0 #1b1645; }
-    .brand h1 span { color:#ffd86c; }
-    .tagline { margin:6px 0 0; color:#d9d0fb; font-size:14px; }
-    .toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-    .btn { border:1px solid #7964c3; border-radius:12px; padding:10px 15px; background:#332962; color:#fff; font-weight:750; transition:background .15s, transform .15s; }
-    .btn:hover { background:#4e3b8d; }
-    .btn:active { transform:translateY(1px); }
-    .btn.primary { background:#f2bb56; color:#261c42; border-color:#ffe2a2; }
-    .btn.primary:hover { background:#ffce70; }
-    .layout { display:grid; grid-template-columns:minmax(0,416px) minmax(230px,1fr); gap:16px; align-items:start; }
-    .board-card, .sidebar { background:#251d52; border:1px solid #7663bd; border-radius:20px; box-shadow:0 15px 40px #09051e65; overflow:hidden; }
-    .hud { display:grid; grid-template-columns:1fr 1fr 1.12fr; gap:8px; padding:13px 15px; background:linear-gradient(145deg,#40317f,#2a205a); border-bottom:1px solid #6c59ad; }
-    .stat { background:#1e1741ab; border:1px solid #6656a3; border-radius:12px; padding:7px 10px; min-width:0; }
-    .stat .key { display:block; color:#d5cafa; font-size:11px; letter-spacing:.06em; text-transform:uppercase; font-weight:700; }
-    .stat .value { display:block; font-size:clamp(18px,2.6vw,26px); font-weight:850; font-variant-numeric:tabular-nums; margin-top:2px; }
-    .next-row { display:flex; align-items:center; gap:7px; margin-top:4px; }
-    .next-orb { display:inline-block; width:25px; height:25px; flex:none; border-radius:50%; border:1px solid #ffffff77; background:radial-gradient(circle at 30% 27%,#fff8d6,#b8a65e 65%,#5b4431); box-shadow:inset -3px -3px 5px #0003; }
-    .next-name { font-size:12px; font-weight:750; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .arena { position:relative; background:#674692; }
-    canvas { display:block; width:100%; height:clamp(430px,66vh,605px); touch-action:none; cursor:crosshair; }
-    .status { padding:9px 14px 10px; background:#302563; font-size:12px; color:#e0d7ff; display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; }
-    .status strong { color:#ffdda0; }
-    .controls { display:flex; gap:9px; padding:12px 14px 15px; align-items:center; justify-content:center; background:#292157; }
-    .controls .btn { flex:1; max-width:180px; }
-    .sidebar { padding:15px 14px; }
-    .sidebar h2 { margin:0; font-size:18px; }
-    .sidebar .sub { color:#c7b8ed; font-size:12px; margin:4px 0 13px; line-height:1.5; }
-    .ladder { display:grid; grid-template-columns:1fr; gap:6px; }
-    .level { border:1px solid #67549a; display:flex; gap:10px; align-items:center; border-radius:10px; padding:6px 9px; background:#302565; min-height:36px; }
-    .level.goal { border-color:#6bb7ff; background:#244b8c; }
-    .level.locked { opacity:.43; filter:saturate(.42); }
-    .level.unlocked { border-color:#c7a45c; }
-    .level .availability { margin-left:auto; color:#ffdc8a; font-size:9px; font-weight:850; }
-    .dot { flex:none; display:block; width:22px; height:22px; border-radius:50%; background:var(--orb); box-shadow:inset -4px -4px 6px #0003, inset 3px 3px 6px #fff6; border:1px solid #fffa; }
-    .level .rank { font-size:10px; color:#c2b7e5; width:15px; text-align:center; }
-    .level .name { font-size:12px; font-weight:700; overflow-wrap:anywhere; }
-    .sidebar .hint { padding:12px; border:1px solid #58478b; background:#1d173f; border-radius:12px; color:#d6c8f3; font-size:12px; line-height:1.6; margin-top:14px; }
-    .sidebar .hint b { color:#ffdf9a; }
-    .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#140d35d9; z-index:3; padding:18px; text-align:center; }
-    .overlay[hidden] { display:none; }
-    .modal { background:linear-gradient(155deg,#4a388a,#241a52); border:2px solid #d0a6ff; border-radius:22px; box-shadow:0 18px 45px #0008; padding:24px; width:min(100%,350px); }
-    .modal h2 { margin:2px 0 10px; color:#ffda77; font-size:31px; }
-    .modal p { color:#eee5ff; font-size:14px; line-height:1.5; }
-    .modal .final-score { font-size:32px; font-weight:900; margin:7px 0; }
-    .modal .btn { margin-top:8px; min-width:160px; }
-    footer { margin-top:17px; text-align:center; font-size:12px; color:#c5b9e9; }
-    @media (max-width:760px) { .layout { grid-template-columns:1fr; justify-items:center; } .board-card, .sidebar { width:min(100%,416px); } .level { gap:6px; padding:6px 7px; } .level .rank { width:12px; } .level .name { font-size:11px; letter-spacing:-.25px; } .ladder { grid-template-columns:repeat(2,minmax(0,1fr)); } .page { padding:12px 9px 30px; } .sidebar { padding:12px; } .sidebar .hint { margin-top:10px; } .topbar { padding:0 5px; } .hud { padding:9px; } canvas { height:clamp(420px,65vh,560px); } }
-    @media (max-width:370px) { .tagline { font-size:12px; } .level .name { font-size:11px; } .hud { gap:4px; } .stat { padding:6px; } }
-    @media (prefers-reduced-motion:reduce) { .btn { transition:none; } }
-  </style>
+  :root {
+    color-scheme: light;
+    font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    --panel: rgba(255,255,255,.78);
+    --panel-strong: rgba(255,255,255,.9);
+    --ink: #161616;
+    --muted: #4b4b4b;
+    --accent: #1b63da;
+    --accent-2: #1453bc;
+  }
+  * { box-sizing: border-box; }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background: #ececec url('./taxonomy-ranking-system.png') center center / cover no-repeat fixed;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(rgba(255,255,255,.38), rgba(255,255,255,.46));
+    pointer-events: none;
+  }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; cursor: pointer; }
+  button:focus-visible, a:focus-visible, canvas:focus-visible {
+    outline: 3px solid #ffb100;
+    outline-offset: 3px;
+  }
+  .page {
+    position: relative;
+    z-index: 1;
+    width: min(100%, 520px);
+    margin: 0 auto;
+    padding: 16px 12px 24px;
+  }
+  .topbar {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .title-block {
+    text-align: center;
+    background: var(--panel);
+    border: 1px solid rgba(0,0,0,.08);
+    border-radius: 16px;
+    padding: 10px 12px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 10px 24px rgba(0,0,0,.08);
+  }
+  .title-block h1 {
+    margin: 0;
+    font-size: clamp(26px, 6vw, 36px);
+    line-height: 1;
+    letter-spacing: -.04em;
+  }
+  .title-block p {
+    margin: 6px 0 0;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .btn {
+    appearance: none;
+    border: 1px solid rgba(0,0,0,.08);
+    border-radius: 14px;
+    background: var(--panel-strong);
+    color: var(--ink);
+    padding: 10px 12px;
+    font-weight: 800;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 8px 18px rgba(0,0,0,.08);
+  }
+  .btn:hover { background: rgba(255,255,255,.96); }
+  .btn.primary {
+    background: #0f5fe0;
+    color: #fff;
+    border-color: rgba(0,0,0,.05);
+  }
+  .btn.primary:hover { background: #0d58cf; }
+  .board-card {
+    background: var(--panel);
+    border: 1px solid rgba(0,0,0,.08);
+    border-radius: 22px;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 18px 36px rgba(0,0,0,.14);
+  }
+  .hud {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    padding: 12px;
+    background: rgba(255,255,255,.32);
+    border-bottom: 1px solid rgba(0,0,0,.08);
+  }
+  .stat {
+    min-width: 0;
+    background: rgba(255,255,255,.62);
+    border: 1px solid rgba(0,0,0,.06);
+    border-radius: 14px;
+    padding: 8px 10px;
+  }
+  .stat .key {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    font-weight: 800;
+    color: var(--muted);
+  }
+  .stat .value {
+    display: block;
+    margin-top: 2px;
+    font-size: clamp(17px, 4vw, 23px);
+    font-weight: 900;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .next-row { display: flex; align-items: center; gap: 7px; margin-top: 4px; }
+  .next-orb {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.8);
+    background: radial-gradient(circle at 30% 27%, #fff8d6, #b8a65e 65%, #5b4431);
+    box-shadow: inset -3px -3px 5px rgba(0,0,0,.15);
+    flex: none;
+  }
+  .next-name {
+    font-size: 12px;
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .arena {
+    position: relative;
+    background: rgba(255,255,255,.12);
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: clamp(430px, 68vh, 610px);
+    touch-action: none;
+    cursor: crosshair;
+  }
+  .mini-status {
+    display: grid;
+    gap: 4px;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: #2f2f2f;
+    background: rgba(255,255,255,.48);
+    border-top: 1px solid rgba(0,0,0,.08);
+  }
+  .mini-status span { overflow-wrap: anywhere; }
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(255,255,255,.32);
+    border-top: 1px solid rgba(0,0,0,.08);
+  }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(255,255,255,.5);
+    backdrop-filter: blur(3px);
+    z-index: 3;
+  }
+  .overlay[hidden] { display: none; }
+  .modal {
+    width: min(100%, 320px);
+    padding: 22px 18px;
+    text-align: center;
+    background: rgba(255,255,255,.94);
+    border: 1px solid rgba(0,0,0,.08);
+    border-radius: 20px;
+    box-shadow: 0 16px 32px rgba(0,0,0,.16);
+  }
+  .modal h2 { margin: 0 0 8px; font-size: 30px; line-height: 1; }
+  .modal p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+  .modal .final-score { font-size: 30px; font-weight: 900; margin: 10px 0 6px; }
+  .modal .btn { margin-top: 10px; min-width: 150px; }
+  #ladder { display: none; }
+  @media (max-width: 520px) {
+    .page { padding: 10px 8px 18px; }
+    .topbar { grid-template-columns: 1fr 1fr; }
+    .title-block { grid-column: 1 / -1; order: -1; }
+    .hud { gap: 6px; padding: 8px; }
+    .stat { padding: 7px 8px; }
+    .controls { padding: 10px; }
+    canvas { height: clamp(420px, 66vh, 560px); }
+  }
+</style>
 </head>
 <body>
 <div class="page">
   <header class="topbar">
-    <div class="brand">
-      <h1>Skubert <span>Evolution</span></h1>
-      <p class="tagline">Merge two matching spheres to climb the taxonomy.</p>
+    <a href="../../index.html" class="btn" aria-label="Back to Skubert Arcade">← Arcade</a>
+    <div class="title-block">
+      <h1>Skubert Evolution</h1>
+      <p>Merge matching ranks until you reach Skubert.</p>
     </div>
-    <div class="toolbar">
-      <a href="../../index.html" class="btn" aria-label="Back to Skubert Arcade">← Arcade</a>
-      <button id="restartTop" class="btn" type="button">↻ New game</button>
-    </div>
+    <button id="restartTop" class="btn" type="button">↻ New game</button>
   </header>
-  <main class="layout">
-    <section class="board-card" aria-label="Skubert Evolution game">
-      <div class="hud">
-        <div class="stat"><span class="key">Score</span><span id="score" class="value">0</span></div>
-        <div class="stat"><span class="key">Best (this browser)</span><span id="best" class="value">0</span></div>
-        <div class="stat"><span class="key">Next drop</span><span class="next-row"><span class="next-orb" id="nextOrb"></span><span id="nextName" class="next-name">Animalia</span></span></div>
-      </div>
-      <div class="arena">
-        <canvas id="game" aria-label="Drop spheres into the cardboard box. Matching classifications merge into the next classification." tabindex="0"></canvas>
-        <div id="overlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
-          <div class="modal">
-            <h2 id="endTitle">Game Over</h2>
-            <p id="endMessage">The box overflowed.</p>
-            <div id="endScore" class="final-score">0</div>
-            <button id="playAgain" class="btn primary" type="button">Play again</button>
-          </div>
+
+  <main class="board-card" aria-label="Skubert Evolution game">
+    <div class="hud">
+      <div class="stat"><span class="key">Score</span><span id="score" class="value">0</span></div>
+      <div class="stat"><span class="key">Best</span><span id="best" class="value">0</span></div>
+      <div class="stat"><span class="key">Next</span><span class="next-row"><span class="next-orb" id="nextOrb"></span><span id="nextName" class="next-name">Animalia</span></span></div>
+    </div>
+
+    <div class="arena">
+      <canvas id="game" aria-label="Drop spheres into the cardboard box. Matching classifications merge into the next classification." tabindex="0"></canvas>
+      <div id="overlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
+        <div class="modal">
+          <h2 id="endTitle">Game Over</h2>
+          <p id="endMessage">The box overflowed.</p>
+          <div id="endScore" class="final-score">0</div>
+          <button id="playAgain" class="btn primary" type="button">Play again</button>
         </div>
       </div>
-      <div class="status"><span id="message" aria-live="polite">Move your cursor to aim. Click to drop.</span><span id="progress">Highest: Eukarya</span><span id="dropPool">Available drops: Eukarya</span></div>
-      <div class="controls">
-        <button type="button" id="leftButton" class="btn" aria-label="Aim left">◀ Left</button>
-        <button type="button" id="dropButton" class="btn primary">Drop ↓</button>
-        <button type="button" id="rightButton" class="btn" aria-label="Aim right">Right ▶</button>
-      </div>
-    </section>
-    <aside class="sidebar" aria-label="Evolution chain">
-      <h2>Evolution chain</h2>
-      <p class="sub">Two of the same sphere become one of the next classification.</p>
-      <div class="ladder" id="ladder"></div>
-      <div class="hint"><b>How to play</b>: Move the cursor or use ← → to aim. Click, tap, or press Space to drop. Matching spheres merge automatically. <b>Only classifications you have created by merging can fall.</b> Higher-level and less abundant spheres appear more often once unlocked. Keep the pile below the dashed overflow line. Reach <b>Skubert</b> to win!<br><br><b>Prototype:</b> Local high score only. No account, leaderboard API, or external dependencies.</div>
-    </aside>
+    </div>
+
+    <div class="mini-status">
+      <span id="message" aria-live="polite">Move your cursor to aim. Click to drop.</span>
+      <span id="progress">Highest: Eukarya</span>
+      <span id="dropPool">Available drops: Eukarya</span>
+    </div>
+
+    <div class="controls">
+      <button type="button" id="leftButton" class="btn" aria-label="Aim left">◀</button>
+      <button type="button" id="dropButton" class="btn primary">Drop</button>
+      <button type="button" id="rightButton" class="btn" aria-label="Aim right">▶</button>
+    </div>
   </main>
-  <footer>Skubert Arcade · Physics prototype v2 · Works on GitHub Pages</footer>
+
+  <div id="ladder" hidden></div>
 </div>
 <script>
 (() => {
@@ -134,7 +281,7 @@
   const scoreEl=$('score'), bestEl=$('best'), nextNameEl=$('nextName'), nextOrbEl=$('nextOrb');
   const overlay=$('overlay'), endTitle=$('endTitle'), endMessage=$('endMessage'), endScore=$('endScore');
   const fmt=new Intl.NumberFormat('en-US');
-  const storageKey='skubertEvolutionPrototypeBestV1';
+  const storageKey='skubertEvolutionPrototypeBestV2Simplified';
   let best=0;
   try { best=Number(localStorage.getItem(storageKey))||0; } catch (_) {}
   bestEl.textContent=fmt.format(best);
