@@ -82,7 +82,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   const fmt=new Intl.NumberFormat('en-US');
   const MAX_LEVEL=LEVELS.length-1;
   const MAX_DROP_LEVEL=MAX_LEVEL-1;
-  const storageKey='skubertEvolutionPrototypeBestV9';
+  const storageKey='skubertEvolutionPrototypeBestV10';
   let best=0;
   try { best=Number(localStorage.getItem(storageKey))||0; } catch (_) {}
 
@@ -90,6 +90,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   let radius0=18,balls=[],particles=[],floating=[],shockwaves=[],score=0,highest=0;
   let unlocked=new Set([0]);
   let aimX=200,current=0,next=1,ended=false,win=false,overflowAge=0,dropWait=0;
+  const AUTO_DROP_MS=3000;
+  let dropDeadline=0;
   let time=0,lastMergeTime=-100,combo=0,lastFrame=0,accumulator=0,down=false,ballId=0,pendingWin=0;
   const step=1/60;
   const factor=1.23;
@@ -103,6 +105,24 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   const SPIN_IMPACT_MIN=55;
   const SPIN_CONTACT_COOLDOWN=.12;
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  // Each transparent icon was extracted from the corresponding band of the
+  // supplied taxonomy infographic. Icons rotate and deform with the sphere.
+  const silhouettePaths=[
+    'silhouettes/00-species.png',
+    'silhouettes/01-genus.png',
+    'silhouettes/02-family.png',
+    'silhouettes/03-order.png',
+    'silhouettes/04-class.png',
+    'silhouettes/05-phylum.png',
+    'silhouettes/06-kingdom.png',
+    'silhouettes/07-domain.png'
+  ];
+  const silhouettes=silhouettePaths.map(path=>{
+    const image=new Image();
+    image.decoding='async';
+    image.src=path;
+    return image;
+  });
   function radius(level){ return radius0*Math.pow(factor,level); }
   function choice(){
     const available=Array.from(unlocked).filter(level=>level<=MAX_DROP_LEVEL && radius(level)*2 < (topRight-topLeft)*.7);
@@ -163,6 +183,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     aimX=(topLeft+topRight)/2; current=0; next=choice(); updateUnlocks();
     ended=false; win=false; pendingWin=0; overflowAge=0; dropWait=0; combo=0; lastMergeTime=-100; time=0; ballId=0;
     overlay.hidden=true; updateScore(); updateNext();
+    dropDeadline=performance.now()+AUTO_DROP_MS;
     setMessage('Aim with mouse, touch, or arrows. Click / Space to drop.');
   }
   function createBall(level,x,y,vx=0,vy=0){
@@ -172,12 +193,13 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       squish:0,squishV:0,squishAxis:0,lastImpact:-10,born:time,pulse:0,
       supported:false,contactCount:0,settleAge:0};
   }
-  function drop(){
-    if(ended||dropWait>0) return;
+  function drop(automatic=false){
+    if(ended||pendingWin>0||dropWait>0) return;
     const r=radius(current), x=clampAim(aimX), y=topY+r+8;
     balls.push(createBall(current,x,y,0,15));
-    current=next; next=choice(); updateNext(); dropWait=.28; aimX=clampAim(aimX); 
-    setMessage(`Dropped ${LEVELS[balls[balls.length-1].level].name}. Match two to evolve!`);
+    current=next; next=choice(); updateNext(); dropWait=.28; aimX=clampAim(aimX);
+    dropDeadline=performance.now()+AUTO_DROP_MS;
+    setMessage(`${automatic?'Auto-dropped':'Dropped'} ${LEVELS[balls[balls.length-1].level].name}. Match two to evolve!`);
   }
   function impact(ball, normalX, normalY, speed){
     if(speed<65 || time-ball.lastImpact<.055) return;
@@ -370,6 +392,15 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     ctx.shadowBlur=0; ctx.shadowOffsetY=0;
     ctx.strokeStyle=tint(color,-.57); ctx.lineWidth=Math.max(1.3,r*.055); ctx.stroke();
     ctx.save(); ctx.beginPath(); ctx.arc(0,0,r-1,0,Math.PI*2); ctx.clip();
+    const icon=silhouettes[level];
+    if(icon && icon.complete && icon.naturalWidth>0){
+      // Print the silhouette onto the curved surface; its orientation follows
+      // this sphere's rotation and squash/stretch transforms.
+      const iconSize=r*1.65;
+      ctx.globalAlpha=ghost ? .78 : .92;
+      ctx.drawImage(icon,-iconSize/2,-iconSize/2,iconSize,iconSize);
+      ctx.globalAlpha=ghost ? .85 : 1;
+    }
     ctx.beginPath(); ctx.ellipse(-r*.31,-r*.47,r*.38,Math.max(2,r*.13),-.45,0,Math.PI*2);
     ctx.fillStyle='#fff9'; ctx.fill();
     ctx.beginPath(); ctx.arc(r*.29,r*.28,r*.62,0,Math.PI*2);
@@ -408,12 +439,23 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       ctx.save(); ctx.beginPath(); ctx.setLineDash([3,5]); ctx.strokeStyle='#45454590'; ctx.lineWidth=1.5;
       ctx.moveTo(x,previewY); ctx.lineTo(x,overflowY); ctx.stroke(); ctx.restore();
       drawSphere(x,previewY,r,current,true);
+      // Unobtrusive three-second auto-drop indicator follows the queued ball.
+      const remaining=clamp((dropDeadline-performance.now())/AUTO_DROP_MS,0,1);
+      ctx.save(); ctx.beginPath();
+      ctx.arc(x,previewY,r+5,-Math.PI/2,-Math.PI/2+Math.PI*2*remaining);
+      ctx.strokeStyle=remaining<.34?'#d73f31':'#242424ae';
+      ctx.lineWidth=2.1; ctx.lineCap='round';ctx.stroke();ctx.restore();
     }
   }
   function frame(ms){
     if(!lastFrame) lastFrame=ms;
     accumulator+=clamp((ms-lastFrame)/1000,0,.05); lastFrame=ms;
     let loops=0; while(accumulator>=step&&loops<4){ physics(step); accumulator-=step; loops++; }
+    // Wall-clock deadline ensures that dropping never waits for the physics
+    // simulation to accumulate a full three seconds on slower devices.
+    if(!ended && pendingWin<=0 && dropWait<=0 && performance.now()>=dropDeadline){
+      drop(true);
+    }
     render(); requestAnimationFrame(frame);
   }
   function aimFromPointer(e){ const rect=canvas.getBoundingClientRect(); const local=(e.clientX-rect.left)*W/rect.width; aimX=clampAim(local); }
