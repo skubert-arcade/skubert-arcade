@@ -198,6 +198,15 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     overlay.hidden=true; updateScore(); updateNext();
     dropDeadline=performance.now()+AUTO_DROP_MS;
     setMessage('Aim with mouse, touch, or arrows. Click / Space to drop.');
+    // Optional artwork-only smoke test: start with Genus in the queue.
+    // Normal gameplay is unaffected without ?test=genus.
+    if(new URLSearchParams(location.search).get('test')==='genus'){
+      unlocked.add(1);
+      current=1;
+      next=1;
+      updateNext();
+      setMessage('Genus texture test: drag, drop or wait 3 seconds.');
+    }
   }
   function createBall(level,x,y,vx=0,vy=0){
     const r=radius(level);

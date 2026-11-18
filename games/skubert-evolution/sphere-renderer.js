@@ -2,7 +2,8 @@
  * Skubert Evolution - Phase 1 GPU sphere rendering.
  * Original game physics, 3-second auto-drop, score, clipping and effects remain
  * owned by index.html. This module owns only the visual meshes and WebGL canvas.
- * Materials intentionally have NO animal graphics yet (Phase 2).
+ * Only Genus has a wrapped silhouette UV texture in this trial. All other
+ * materials remain plain colored spheres, as in Phase 1.
  */
 import * as THREE from 'three';
 
@@ -25,6 +26,8 @@ let renderer=null,scene=null,camera=null,geometry=null,materials=[],previewMater
 let previewMesh=null;
 const meshes=new Map();
 let width=0,height=0,disabled=false;
+const TEXTURED_LEVEL=1; // Genus: Cryptopithecus; single-row proof of concept
+let genusTexture=null;
 
 function disable(){
   bridge.ready=false;
@@ -33,6 +36,33 @@ function disable(){
   for(const mesh of meshes.values())mesh.parent?.remove(mesh);
   meshes.clear();
   previewMesh?.parent?.remove(previewMesh);
+}
+
+function loadGenusTexture(){
+  const url=new URL('./textures/01-genus.png',import.meta.url);
+  new THREE.TextureLoader().load(
+    url.href,
+    texture=>{
+      if(disabled){texture.dispose();return;}
+      texture.colorSpace=THREE.SRGBColorSpace;
+      texture.wrapS=THREE.RepeatWrapping;
+      texture.wrapT=THREE.ClampToEdgeWrapping;
+      texture.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),4);
+      texture.needsUpdate=true;
+      genusTexture=texture;
+      // Important: no second color tint over the baked purple texture.
+      for(const material of [materials[TEXTURED_LEVEL],previewMaterials[TEXTURED_LEVEL]]){
+        material.color.set(0xffffff);
+        material.map=genusTexture;
+        material.needsUpdate=true;
+      }
+      console.info('Skubert Evolution: Genus silhouette texture loaded.');
+    },
+    undefined,
+    error=>{
+      console.warn('Skubert Evolution: Genus texture not loaded; using solid purple sphere.',error);
+    }
+  );
 }
 
 function init(){
@@ -71,6 +101,7 @@ function init(){
     previewMesh.visible=false;
     previewMesh.renderOrder=10;
     scene.add(previewMesh);
+    loadGenusTexture();
     canvas.addEventListener('webglcontextlost',event=>{
       event.preventDefault();
       console.warn('Skubert Evolution: WebGL context lost; reverting to 2D.');
@@ -99,9 +130,14 @@ function syncMesh(mesh,ball,h){
   const pulse=ball.pulse>0?1+.1*ball.pulse/.26:1;
   // Mesh scaling is purely visual: collisions remain mathematically circular.
   mesh.scale.set(ball.r*pulse*(1-squish),ball.r*pulse*(1+squish*.7),ball.r*pulse);
-  mesh.rotation.set(0,0,ball.angle||0);
-  // The physics simulator owns the final orientation. Once animal textures are
-  // added in Phase 2, this same angle will rotate their artwork as well.
+  const angle=ball.angle||0;
+  if(ball.level===TEXTURED_LEVEL){
+    // A small Y-axis tumble exposes the printed motifs around the entire sphere;
+    // rotation is still driven ONLY by the existing physics (no idle spinning).
+    mesh.rotation.set(angle*.14,angle*.65,angle*.32);
+  } else {
+    mesh.rotation.set(0,0,angle);
+  }
 }
 
 function render({balls,preview,width:w,height:h}){
