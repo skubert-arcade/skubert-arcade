@@ -1,9 +1,7 @@
 /**
- * Skubert Evolution - Phase 1 GPU sphere rendering.
- * Original game physics, 3-second auto-drop, score, clipping and effects remain
- * owned by index.html. This module owns only the visual meshes and WebGL canvas.
- * Only Genus has a wrapped silhouette UV texture in this trial. All other
- * materials remain plain colored spheres, as in Phase 1.
+ * Skubert Evolution - Phase 2 pilot: GPU sphere rendering with texture maps
+ * for Genus, Family, Order, and Class. Original physics, timer, clipping and effects remain
+ * owned by index.html.
  */
 import * as THREE from 'three';
 
@@ -19,6 +17,7 @@ const LEVEL_COLORS=[
   '#fca571', // Kingdom (orange)
   '#fa9796'  // Domain (salmon)
 ];
+const TEXTURE_PATHS={1:'textures/01-genus.png',2:'textures/02-family.png',3:'textures/03-order.png',4:'textures/04-class.png'};
 
 const bridge={ready:false,render,disable};
 window.SkubertSphere3D=bridge;
@@ -26,8 +25,17 @@ let renderer=null,scene=null,camera=null,geometry=null,materials=[],previewMater
 let previewMesh=null;
 const meshes=new Map();
 let width=0,height=0,disabled=false;
-const TEXTURED_LEVEL=1; // Genus: Cryptopithecus; single-row proof of concept
-let genusTexture=null;
+
+function buildMaterial(color,map,preview=false){
+  return new THREE.MeshStandardMaterial({
+    color:map ? new THREE.Color(0xffffff) : new THREE.Color(color),
+    roughness:0.34,metalness:0.02,
+    map: map || null,
+    transparent: preview,
+    opacity: preview ? 0.82 : 1,
+    depthWrite: preview ? false : true
+  });
+}
 
 function disable(){
   bridge.ready=false;
@@ -38,31 +46,22 @@ function disable(){
   previewMesh?.parent?.remove(previewMesh);
 }
 
-function loadGenusTexture(){
-  const url=new URL('./textures/01-genus.png',import.meta.url);
-  new THREE.TextureLoader().load(
-    url.href,
-    texture=>{
-      if(disabled){texture.dispose();return;}
-      texture.colorSpace=THREE.SRGBColorSpace;
-      texture.wrapS=THREE.RepeatWrapping;
-      texture.wrapT=THREE.ClampToEdgeWrapping;
-      texture.anisotropy=Math.min(renderer.capabilities.getMaxAnisotropy(),4);
-      texture.needsUpdate=true;
-      genusTexture=texture;
-      // Important: no second color tint over the baked purple texture.
-      for(const material of [materials[TEXTURED_LEVEL],previewMaterials[TEXTURED_LEVEL]]){
-        material.color.set(0xffffff);
-        material.map=genusTexture;
-        material.needsUpdate=true;
-      }
-      console.info('Skubert Evolution: Genus silhouette texture loaded.');
-    },
-    undefined,
-    error=>{
-      console.warn('Skubert Evolution: Genus texture not loaded; using solid purple sphere.',error);
+function loadTextures(loader){
+  const arr=new Array(LEVEL_COLORS.length).fill(null);
+  for(const [level,path] of Object.entries(TEXTURE_PATHS)){
+    try{
+      const tex=loader.load(path);
+      tex.colorSpace=THREE.SRGBColorSpace;
+      tex.wrapS=THREE.RepeatWrapping;
+      tex.wrapT=THREE.ClampToEdgeWrapping;
+      tex.minFilter=THREE.LinearMipmapLinearFilter;
+      tex.magFilter=THREE.LinearFilter;
+      arr[Number(level)]=tex;
+    }catch(err){
+      console.warn('Texture load failed for',path,err);
     }
-  );
+  }
+  return arr;
 }
 
 function init(){
@@ -78,8 +77,6 @@ function init(){
     camera=new THREE.OrthographicCamera(0,1,1,0,0.1,2000);
     camera.position.set(0,0,900);
     camera.lookAt(0,0,0);
-    // World-space lighting makes the existing pastel colors look round without
-    // real-time shadows or any extra environment-map downloads.
     const hemi=new THREE.HemisphereLight(0xffffff,0xd7daea,1.05);
     scene.add(hemi);
     const key=new THREE.DirectionalLight(0xffffff,2.0);
@@ -88,20 +85,15 @@ function init(){
     const fill=new THREE.DirectionalLight(0xf0f5ff,0.35);
     fill.position.set(270,-150,210);
     scene.add(fill);
-    // Only one geometry and eight materials, regardless of sphere count.
     geometry=new THREE.SphereGeometry(1,32,24);
-    materials=LEVEL_COLORS.map(color=>new THREE.MeshStandardMaterial({
-      color:new THREE.Color(color),roughness:0.34,metalness:0.02
-    }));
-    previewMaterials=LEVEL_COLORS.map(color=>new THREE.MeshStandardMaterial({
-      color:new THREE.Color(color),roughness:0.34,metalness:0.02,
-      transparent:true,opacity:0.78,depthWrite:false
-    }));
+    const loader=new THREE.TextureLoader();
+    const maps=loadTextures(loader);
+    materials=LEVEL_COLORS.map((color,level)=>buildMaterial(color,maps[level],false));
+    previewMaterials=LEVEL_COLORS.map((color,level)=>buildMaterial(color,maps[level],true));
     previewMesh=new THREE.Mesh(geometry,previewMaterials[0]);
     previewMesh.visible=false;
     previewMesh.renderOrder=10;
     scene.add(previewMesh);
-    loadGenusTexture();
     canvas.addEventListener('webglcontextlost',event=>{
       event.preventDefault();
       console.warn('Skubert Evolution: WebGL context lost; reverting to 2D.');
@@ -128,16 +120,8 @@ function syncMesh(mesh,ball,h){
   mesh.position.set(ball.x,h-ball.y,0);
   const squish=clamp(ball.squish||0,-.22,.27);
   const pulse=ball.pulse>0?1+.1*ball.pulse/.26:1;
-  // Mesh scaling is purely visual: collisions remain mathematically circular.
   mesh.scale.set(ball.r*pulse*(1-squish),ball.r*pulse*(1+squish*.7),ball.r*pulse);
-  const angle=ball.angle||0;
-  if(ball.level===TEXTURED_LEVEL){
-    // A small Y-axis tumble exposes the printed motifs around the entire sphere;
-    // rotation is still driven ONLY by the existing physics (no idle spinning).
-    mesh.rotation.set(angle*.14,angle*.65,angle*.32);
-  } else {
-    mesh.rotation.set(0,0,angle);
-  }
+  mesh.rotation.set(0,0,ball.angle||0);
 }
 
 function render({balls,preview,width:w,height:h}){
