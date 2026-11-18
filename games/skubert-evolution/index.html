@@ -5,13 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#fafafa">
   <title>Skubert Evolution | Skubert Arcade</title>
-  <script type="importmap">
-    {"imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
-    }}
-  </script>
-  <link rel="preload" href="../typing/models/skubert.glb" as="fetch" crossorigin="anonymous" />
   <style>
 :root { font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif; color-scheme:light; }
 * { box-sizing:border-box; }
@@ -20,11 +13,9 @@ body { min-height:100svh; display:flex; align-items:center; justify-content:cent
 a,button { font:inherit; }
 button { cursor:pointer; }
 a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #ca7914; outline-offset:3px; }
-/* The PNG is never cropped, dimmed or made transparent. Its full square is visible at once. */
 .scene { position:relative; width:min(100vw,100svh); max-width:100%; aspect-ratio:1; flex:none; }
 .scene > img { width:100%; height:100%; display:block; object-fit:contain; opacity:1; }
 #game { position:absolute; inset:0; z-index:1; display:block; width:100%; height:100%; background:transparent; touch-action:none; cursor:crosshair; }
-#skubert3d { position:absolute; inset:0; z-index:2; pointer-events:none; width:100%; height:100%; display:block; }
 .arcade-link {
   position:fixed; top:max(12px,env(safe-area-inset-top)); left:max(12px,env(safe-area-inset-left)); z-index:5;
   padding:9px 14px; background:#fff; border:1px solid #bcbcbc; border-radius:999px;
@@ -51,14 +42,14 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   .arcade-link { left:max(7px,env(safe-area-inset-left)); }
   .score-display { right:max(7px,env(safe-area-inset-right)); }
 }
-</style>
+  </style>
 </head>
 <body>
 <a class="arcade-link" href="../../index.html" aria-label="Return to Skubert Arcade">← Arcade</a>
 <div class="score-display" aria-label="Current score">Score <span id="score">0</span></div>
 <main class="scene" aria-label="Skubert Evolution game over the taxonomy pyramid">
-  <img src="taxonomy-ranking-system.png" width="1254" height="1254" alt="Taxonomic Ranking System pyramid, from Eukarya at the base to species at the apex." decoding="async">
-  <canvas id="game" tabindex="0" aria-label="Skubert Evolution. Move the pointer or use left and right arrow keys to aim, then click, tap or press Space to drop a sphere. Matching spheres merge."></canvas>
+  <img src="taxonomy-ranking-system.png" width="1254" height="1254" alt="Taxonomic Ranking System inverted pyramid, from Domain Eukarya at the top to Species Mascotus Skubertus at the bottom." decoding="async">
+  <canvas id="game" tabindex="0" aria-label="Skubert Evolution. Move the pointer or use left and right arrow keys to aim, then click, tap or press Space to drop a sphere. Matching spheres merge into the next taxonomic rank."></canvas>
   <div id="overlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
     <div class="modal">
       <h2 id="endTitle">Game Over</h2>
@@ -69,25 +60,18 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   </div>
 </main>
 <div id="message" class="visually-hidden" role="status" aria-live="polite"></div>
-<script type="module" src="skubert-3d-overlay.js"></script>
 <script>
 (() => {
   'use strict';
   const LEVELS = [
-    { name:'Eukarya', color:'#8db45e' },
-    { name:'Animalia', color:'#efb92d' },
-    { name:'Chordata', color:'#25b9b9' },
-    { name:'Vertebrata', color:'#48a7f3' },
-    { name:'Mammalia', color:'#b18be7' },
-    { name:'Primates', color:'#f36d78' },
-    { name:'Hominidae', color:'#ad315d' },
-    { name:'Ponginae', color:'#f18a35' },
-    { name:'Gigantopithecus', color:'#7840c6' },
-    { name:'Skubert', color:'#1677e5' },
-    { name:'Skubert ×2', color:'#1677e5' },
-    { name:'Skubert ×4', color:'#1677e5' },
-    { name:'Skubert ×8', color:'#1677e5' },
-    { name:'Skubert ×16', color:'#1677e5' }
+    { name:'Species', color:'#eaaeea' },
+    { name:'Genus', color:'#b2adf6' },
+    { name:'Family', color:'#97cbfc' },
+    { name:'Order', color:'#a0fbf7' },
+    { name:'Class', color:'#b5fa9d' },
+    { name:'Phylum', color:'#fdde89' },
+    { name:'Kingdom', color:'#fca571' },
+    { name:'Domain', color:'#fa9796' }
   ];
   const canvas=document.getElementById('game');
   const ctx=canvas.getContext('2d');
@@ -96,356 +80,277 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   const scoreEl=$('score');
   const overlay=$('overlay'), endTitle=$('endTitle'), endMessage=$('endMessage'), endScore=$('endScore');
   const fmt=new Intl.NumberFormat('en-US');
-  const SKUBERT_LEVEL=9;
   const MAX_LEVEL=LEVELS.length-1;
-  // The top Skubert tier is earned by merging; it is too large to be dropped.
-  const MAX_DROP_LEVEL=9;
-  const storageKey='skubertEvolutionPrototypeBestV1';
+  const MAX_DROP_LEVEL=MAX_LEVEL-1;
+  const storageKey='skubertEvolutionPrototypeBestV9';
   let best=0;
   try { best=Number(localStorage.getItem(storageKey))||0; } catch (_) {}
 
-  let W=400,H=400,left=12,right=362,floor=372,boxTop=104,overflowY=131;
-  let topLeft=153,topRight=219,bottomLeft=12,bottomRight=362;
+  let W=400,H=400,topY=60,topLeft=0,topRight=0,apexX=0,apexY=0,overflowY=0;
   let radius0=18,balls=[],particles=[],floating=[],shockwaves=[],score=0,highest=0;
   let unlocked=new Set([0]);
   let aimX=200,current=0,next=1,ended=false,win=false,overflowAge=0,dropWait=0;
   let time=0,lastMergeTime=-100,combo=0,lastFrame=0,accumulator=0,down=false,ballId=0,pendingWin=0;
   const step=1/60;
   const factor=1.23;
-  const SIZE_MULTIPLIER=4/3; // 33.3% larger diameters and model visuals
+  const SIZE_MULTIPLIER=4/3;
   const SETTLE_AFTER=.22;
   const SUPPORT_STOP_HORIZONTAL=12;
   const SUPPORT_STOP_VERTICAL=48;
-  // Rotation is radians/second; strong damping avoids spin that persists in a settled pile.
-  const MAX_ANGULAR_SPEED=8;
-  const ANGULAR_DRAG=3.2;
-  const SPIN_STOP_THRESHOLD=.07;
+  const MAX_ANGULAR_SPEED=7;
+  const ANGULAR_DRAG=3.8;
+  const SPIN_STOP_THRESHOLD=.075;
   const SPIN_IMPACT_MIN=55;
   const SPIN_CONTACT_COOLDOWN=.12;
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
-  function radius(level){
-    // Preserve +33.3% for all existing circle levels and the first 3D Skubert.
-    // The final four giant Skubert tiers are gently size-limited, only when
-    // needed, so their circular collision bodies still fit inside the box.
-    const firstSkubert=radius0*Math.pow(factor,SKUBERT_LEVEL);
-    if(level<=SKUBERT_LEVEL)return radius0*Math.pow(factor,level);
-    const maxRadius=(right-left)*.47;
-    const remaining=MAX_LEVEL-SKUBERT_LEVEL;
-    const growth=Math.min(factor,Math.pow(Math.max(1,maxRadius/firstSkubert),1/remaining));
-    return firstSkubert*Math.pow(growth,level-SKUBERT_LEVEL);
-  }
-  // Only classifications previously produced by an actual merge can enter the drop queue.
-  // Weight later stages higher and discount those already filling the container.
+  function radius(level){ return radius0*Math.pow(factor,level); }
   function choice(){
-    // Larger Skubert models must exist from a merge before they may appear.
-    // Restrict random drops to the first Skubert tier: all larger Skuberts
-    // must be created by combining two existing Skuberts.
-    const available=Array.from(unlocked).filter(level=>
-      level<=MAX_DROP_LEVEL && radius(level)*2 < (right-left)*.75);
+    const available=Array.from(unlocked).filter(level=>level<=MAX_DROP_LEVEL && radius(level)*2 < (topRight-topLeft)*.7);
     const counts=new Array(LEVELS.length).fill(0);
     for(const ball of balls)counts[ball.level]++;
     const weights=available.map(level=>(1+level*.72)/Math.pow(1+counts[level]*.68,1.15));
     let roll=Math.random()*weights.reduce((sum,w)=>sum+w,0);
-    for(let i=0;i<available.length;i++)if((roll-=weights[i])<=0)return available[i];
-    return available[available.length-1]??0;
+    for(let i=0;i<available.length;i++) if((roll-=weights[i])<=0) return available[i];
+    return available[available.length-1] ?? 0;
   }
-  function updateUnlocks(){ /* Unlock state is intentionally kept off-screen. */ }
-  function setMessage(value){$('message').textContent=value;}
-  function updateNext(){ /* The visible hovering sphere identifies the current drop. */ }
-  function updateScore(){scoreEl.textContent=fmt.format(score);if(score>best){best=score;try{localStorage.setItem(storageKey,String(best));}catch(_){}}}
+  function updateUnlocks(){}
+  function setMessage(value){ $('message').textContent=value; }
+  function updateNext(){}
+  function updateScore(){ scoreEl.textContent=fmt.format(score); if(score>best){ best=score; try{ localStorage.setItem(storageKey,String(best)); }catch(_){}} }
+  function xOnLeft(y){ return topLeft + (apexX-topLeft) * ((y-topY)/Math.max(1,apexY-topY)); }
+  function xOnRight(y){ return topRight + (apexX-topRight) * ((y-topY)/Math.max(1,apexY-topY)); }
   function aimRange(level=current){
     const r=radius(level);
-    return [left+r+4,right-r-4];
+    const y = topY + r + 8;
+    return [xOnLeft(y)+r+4, xOnRight(y)-r-4];
   }
-  function clampAim(x,level=current){const [lo,hi]=aimRange(level);return clamp(x,lo,hi);}
-  // Simple rectangular boundaries keep the drop area conventional while remaining transparent.
-  function enforceWall(b,side){
-    if(b.y+b.r<boxTop)return;
-    if(side==='left' && b.x-b.r<left){
-      b.x=left+b.r;
-      if(b.vx<0){
-        impact(b,1,0,-b.vx);
-        b.vx=b.vx<-65?-b.vx*.52:0;
-        // Head-on wall bounces do not add rotational energy.
-      }
-    }
-    if(side==='right' && b.x+b.r>right){
-      b.x=right-b.r;
-      if(b.vx>0){
-        impact(b,-1,0,b.vx);
-        b.vx=b.vx>65?-b.vx*.52:0;
-        // Head-on wall bounces do not add rotational energy.
-      }
+  function clampAim(x,level=current){ const [lo,hi]=aimRange(level); return clamp(x,lo,hi); }
+  function enforceSlope(b,ax,ay,bx,by,isLeft){
+    const dx=bx-ax, dy=by-ay, length=Math.hypot(dx,dy);
+    const nx=isLeft ? dy/length : -dy/length;
+    const ny=isLeft ? -dx/length : dx/length;
+    const distance=(b.x-ax)*nx+(b.y-ay)*ny;
+    const overlap=b.r-distance;
+    if(overlap<=0 || b.y+b.r<topY) return;
+    b.supported=true; b.contactCount++;
+    b.x+=nx*overlap; b.y+=ny*overlap;
+    const speed=b.vx*nx+b.vy*ny;
+    if(speed<0){
+      impact(b,nx,ny,-speed);
+      const bounce=(-speed>125)? .34 : .01;
+      b.vx-=(1+bounce)*speed*nx;
+      b.vy-=(1+bounce)*speed*ny;
     }
   }
   function resize(){
     const rect=canvas.getBoundingClientRect();
     const newW=Math.max(200,rect.width),newH=Math.max(200,rect.height);
     const oldW=W,oldH=H;
-    W=newW;H=newH;
-    boxTop=H*.259; floor=H*.927; overflowY=H*.315;
-    // Full pyramid base in the 1254×1254 source: approximately x=6..1137.
-    // These are still straight rectangular walls, NOT pyramid-shaped walls.
-    left=W*.006; right=W*.907;
-    topLeft=left; topRight=right;
-    bottomLeft=left; bottomRight=right;
-    radius0=clamp(W*.024,9.5,20.5)*SIZE_MULTIPLIER;
+    W=newW; H=newH;
+    topY=H*.150; apexY=H*.941; apexX=W*.457; overflowY=H*.255;
+    topLeft=W*.012; topRight=W*.901;
+    radius0=clamp(W*.0205,8.8,17.2)*SIZE_MULTIPLIER;
     const dpr=Math.min(window.devicePixelRatio||1,2);
-    canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);
+    canvas.width=Math.round(W*dpr); canvas.height=Math.round(H*dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
     if(balls.length){
-      for(const b of balls){b.x*=W/Math.max(1,oldW);b.y*=H/Math.max(1,oldH);b.r=radius(b.level);}
+      for(const b of balls){ b.x*=W/Math.max(1,oldW); b.y*=H/Math.max(1,oldH); b.r=radius(b.level); }
     }
     aimX=clampAim(aimX*W/Math.max(1,oldW));
   }
   function reset(){
     balls=[];particles=[];floating=[];shockwaves=[];score=0;highest=0;unlocked=new Set([0]);
-    aimX=(topLeft+topRight)/2;current=choice();next=choice();updateUnlocks();
-    ended=false;win=false;pendingWin=0;overflowAge=0;dropWait=0;combo=0;lastMergeTime=-100;time=0;ballId=0;
-    overlay.hidden=true;updateScore();updateNext();
+    aimX=(topLeft+topRight)/2; current=0; next=choice(); updateUnlocks();
+    ended=false; win=false; pendingWin=0; overflowAge=0; dropWait=0; combo=0; lastMergeTime=-100; time=0; ballId=0;
+    overlay.hidden=true; updateScore(); updateNext();
     setMessage('Aim with mouse, touch, or arrows. Click / Space to drop.');
-    // Optional test: ?test=skubert creates two Skuberts to verify GLB merging.
-    if(new URLSearchParams(location.search).get('test')==='skubert'){
-      const r=radius(SKUBERT_LEVEL);
-      const y=floor-r-10;
-      const cx=(left+right)/2;
-      const separation=r*2.12;
-      balls.push(createBall(SKUBERT_LEVEL,cx-separation/2,y,30,0));
-      balls.push(createBall(SKUBERT_LEVEL,cx+separation/2,y,-30,0));
-      for(let i=0;i<=SKUBERT_LEVEL;i++)unlocked.add(i);
-      current=SKUBERT_LEVEL; next=SKUBERT_LEVEL;
-      setMessage('Test mode: aim the queued 3D Skubert at either Skubert in the box, then drop to merge.');
-    }
   }
   function createBall(level,x,y,vx=0,vy=0){
     const r=radius(level);
-    return {id:++ballId,level,r,x:clamp(x,left+r,right-r),y,vx,vy,angle:0,omega:0,lastSpin:-10,
+    const minX=xOnLeft(y)+r, maxX=xOnRight(y)-r;
+    return {id:++ballId,level,r,x:clamp(x,minX,maxX),y,vx,vy,angle:0,omega:0,lastSpin:-10,
       squish:0,squishV:0,squishAxis:0,lastImpact:-10,born:time,pulse:0,
       supported:false,contactCount:0,settleAge:0};
   }
   function drop(){
-    if(ended||dropWait>0)return;
-    const r=radius(current),x=clampAim(aimX);
-    balls.push(createBall(current,x,boxTop+r+8,0,15));
-    current=next;next=choice();updateNext();dropWait=.28;
-    aimX=clampAim(aimX);
+    if(ended||dropWait>0) return;
+    const r=radius(current), x=clampAim(aimX), y=topY+r+8;
+    balls.push(createBall(current,x,y,0,15));
+    current=next; next=choice(); updateNext(); dropWait=.28; aimX=clampAim(aimX); 
     setMessage(`Dropped ${LEVELS[balls[balls.length-1].level].name}. Match two to evolve!`);
   }
-  // Visual soft-body response: spring-driven deformation layered over stable circle colliders.
-  // This creates squash/stretch without making the collision solver unpredictable.
   function impact(ball, normalX, normalY, speed){
-    if(speed<65 || time-ball.lastImpact<.055)return;
+    if(speed<65 || time-ball.lastImpact<.055) return;
     ball.lastImpact=time;
     ball.squishAxis=Math.atan2(normalY,normalX);
-    ball.squish=clamp(ball.squish + Math.min(.24, speed*.00048), -.20, .29);
-    ball.squishV=Math.max(ball.squishV, Math.min(2.6,speed*.004));
+    ball.squish=clamp(ball.squish + Math.min(.22, speed*.00044), -.18, .26);
+    ball.squishV=Math.max(ball.squishV, Math.min(2.2,speed*.0036));
   }
   function makeParticles(x,y,color,n=14){
     for(let i=0;i<n;i++){
-      const a=Math.random()*Math.PI*2,s=45+Math.random()*175;
+      const a=Math.random()*Math.PI*2, s=45+Math.random()*175;
       particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-42,life:.55+Math.random()*.3,max:.85,color,r:2+Math.random()*3});
     }
-    if(particles.length>140)particles.splice(0,particles.length-140);
+    if(particles.length>140) particles.splice(0,particles.length-140);
   }
   function mergeAt(i,j){
-    const a=balls[i],b=balls[j];
+    const a=balls[i], b=balls[j];
     const newLevel=a.level+1;
-    const cx=(a.x+b.x)/2,cy=(a.y+b.y)/2;
-    const vx=(a.vx+b.vx)*.35,vy=-Math.min(480,205+newLevel*26+combo*12);
-    // Delete higher index first so the lower index stays valid.
-    balls.splice(j,1);balls.splice(i,1);
-    const merged=createBall(newLevel,cx,Math.min(cy,floor-radius(newLevel)),vx,vy);
+    const cx=(a.x+b.x)/2, cy=(a.y+b.y)/2;
+    const vx=(a.vx+b.vx)*.35, vy=-Math.min(480,205+newLevel*26+combo*12);
+    balls.splice(j,1); balls.splice(i,1);
+    const merged=createBall(newLevel,cx,cy,vx,vy);
     merged.angle=(a.angle+b.angle)/2;
-    // Inherit just a little spin, plus a short celebratory wobble.
-    merged.omega=clamp((a.omega+b.omega)*.22+(Math.random()-.5)*1.25,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
-    merged.squish=.25; merged.squishV=-2.2; merged.squishAxis=Math.PI/2;
-    // Newly merged bodies receive a short overflow grace period while the pile reacts.
-    merged.born=time;merged.pulse=.26;balls.push(merged);
-    // An outward shockwave turns each merge into a visible, physical event.
-    // Nearby small spheres move more than larger, heavier spheres.
+    merged.omega=clamp((a.omega+b.omega)*.18+(Math.random()-.5)*1.0,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
+    merged.squish=.23; merged.squishV=-2.0; merged.squishAxis=Math.PI/2;
+    merged.born=time; merged.pulse=.24; balls.push(merged);
     const range=merged.r*3.1+70;
     for(const other of balls){
-      if(other===merged)continue;
-      let dx=other.x-cx,dy=other.y-cy;
+      if(other===merged) continue;
+      let dx=other.x-cx, dy=other.y-cy;
       const dist=Math.hypot(dx,dy)||1;
       const reach=Math.max(0,1-dist/range);
-      if(reach===0)continue;
-      if(dist<1){dx=(Math.random()-.5)*2;dy=-1;}
+      if(reach===0) continue;
+      if(dist<1){ dx=(Math.random()-.5)*2; dy=-1; }
       const massResponse=clamp(Math.pow(merged.r/other.r,.7),.35,2);
-      const kick=(130+newLevel*19)*reach*massResponse;
+      const kick=(118+newLevel*18)*reach*massResponse;
       const norm=Math.hypot(dx,dy)||1;
       other.vx+=(dx/norm)*kick;
-      other.vy+=(dy/norm)*kick-kick*.30;
-      other.pulse=Math.max(other.pulse,.095);
+      other.vy+=(dy/norm)*kick-kick*.27;
+      other.pulse=Math.max(other.pulse,.09);
       other.squishAxis=Math.atan2(dy,dx);
-      other.squish=clamp(other.squish+reach*.095,-.18,.24);
-      other.squishV+=reach*.45;
-      // Off-center pressure spins nearby medallions, including their printed labels.
-      other.omega=clamp(other.omega+(dx/Math.max(1,dist))*(dy>0?-1:1)*reach*.9,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
+      other.squish=clamp(other.squish+reach*.085,-.16,.22);
+      other.squishV+=reach*.40;
+      other.omega=clamp(other.omega+(dx/Math.max(1,dist))*(dy>0?-1:1)*reach*.8,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
     }
     shockwaves.push({x:cx,y:cy,r:merged.r*.35,maxR:range*.55,life:.35,maxLife:.35,color:LEVELS[newLevel].color});
     combo=(time-lastMergeTime)<1.35?Math.min(combo+1,8):1;
     lastMergeTime=time;
     const awarded=20*Math.pow(2,newLevel-1)*combo;
-    score+=awarded;updateScore();
-    makeParticles(cx,cy,LEVELS[newLevel].color,newLevel>=6?22:13);
-    floating.push({x:cx,y:cy,life:1.05,label:`+${fmt.format(awarded)}  ${LEVELS[newLevel].name}`,color:LEVELS[newLevel].color});
-    if(floating.length>8)floating.shift();
-    if(!unlocked.has(newLevel)){unlocked.add(newLevel);updateUnlocks();}
-    if(newLevel>highest)highest=newLevel;
+    score+=awarded; updateScore();
+    makeParticles(cx,cy,LEVELS[newLevel].color,newLevel>=4?20:12);
+    floating.push({x:cx,y:cy,life:1.0,label:`+${fmt.format(awarded)}`,color:LEVELS[newLevel].color});
+    if(floating.length>8) floating.shift();
+    if(!unlocked.has(newLevel)){ unlocked.add(newLevel); updateUnlocks(); }
+    if(newLevel>highest) highest=newLevel;
     setMessage(`${LEVELS[a.level].name} + ${LEVELS[b.level].name} → ${LEVELS[newLevel].name}${combo>1?' · '+combo+'× combo!':''}`);
-    if(newLevel===SKUBERT_LEVEL){
-      setMessage('Skubert created! Two Skuberts make Skubert ×2. Keep merging.');
-    }
-    // Reaching ×16 is the ultimate objective; show the new model before the ending.
     if(newLevel===MAX_LEVEL){
-      win=true;
-      setMessage('Maximum Skubert created!');
-      pendingWin=time+2.0;
+      win=true; setMessage('Domain created!'); pendingWin=time+1.6;
     }
   }
   function collide(a,b){
-    let dx=b.x-a.x,dy=b.y-a.y,dist2=dx*dx+dy*dy;
+    let dx=b.x-a.x, dy=b.y-a.y, dist2=dx*dx+dy*dy;
     const min=a.r+b.r;
-    if(dist2>=min*min)return false;
-    if(dist2<.00001){dx=.01;dy=-.01;dist2=dx*dx+dy*dy;}
-    const dist=Math.sqrt(dist2),nx=dx/dist,ny=dy/dist;
-    a.contactCount++;b.contactCount++;
-    // The upper object is supported by a body underneath it.
-    if(ny>.42)a.supported=true;
-    else if(ny<-.42)b.supported=true;
-    const invA=1/(a.r*a.r),invB=1/(b.r*b.r),sum=invA+invB;
+    if(dist2>=min*min) return false;
+    if(dist2<.00001){ dx=.01; dy=-.01; dist2=dx*dx+dy*dy; }
+    const dist=Math.sqrt(dist2), nx=dx/dist, ny=dy/dist;
+    a.contactCount++; b.contactCount++;
+    if(ny>.42) a.supported=true; else if(ny<-.42) b.supported=true;
+    const invA=1/(a.r*a.r), invB=1/(b.r*b.r), sum=invA+invB;
     const correction=(min-dist)*.90/sum;
-    a.x-=nx*correction*invA;a.y-=ny*correction*invA;
-    b.x+=nx*correction*invB;b.y+=ny*correction*invB;
-    const rvx=b.vx-a.vx,rvy=b.vy-a.vy,normalSpeed=rvx*nx+rvy*ny;
+    a.x-=nx*correction*invA; a.y-=ny*correction*invA;
+    b.x+=nx*correction*invB; b.y+=ny*correction*invB;
+    const rvx=b.vx-a.vx, rvy=b.vy-a.vy, normalSpeed=rvx*nx+rvy*ny;
     if(normalSpeed<0){
-      // Lively impacts, but low restitution for near-rest contacts prevents endless jitter.
       const impactSpeed=-normalSpeed;
-      const restitution=normalSpeed < -125 ? .41 : .012;
+      const restitution=normalSpeed < -125 ? .38 : .01;
       impact(a,-nx,-ny,impactSpeed);
       impact(b,nx,ny,impactSpeed);
       const impulse=-(1+restitution)*normalSpeed/sum;
-      a.vx-=impulse*nx*invA;a.vy-=impulse*ny*invA;
-      b.vx+=impulse*nx*invB;b.vy+=impulse*ny*invB;
-      const tx=-ny,ty=nx;
+      a.vx-=impulse*nx*invA; a.vy-=impulse*ny*invA;
+      b.vx+=impulse*nx*invB; b.vy+=impulse*ny*invB;
+      const tx=-ny, ty=nx;
       const tangentSpeed=rvx*tx+rvy*ty;
-      const tangentImpulse=clamp(-tangentSpeed/sum,-impulse*.30,impulse*.30);
-      a.vx-=tangentImpulse*tx*invA;a.vy-=tangentImpulse*ty*invA;
-      b.vx+=tangentImpulse*tx*invB;b.vy+=tangentImpulse*ty*invB;
-      // Spin only on genuinely strong, glancing impacts. The cooldown stops
-      // multi-pass contact solving from injecting torque repeatedly.
+      const tangentImpulse=clamp(-tangentSpeed/sum,-impulse*.28,impulse*.28);
+      a.vx-=tangentImpulse*tx*invA; a.vy-=tangentImpulse*ty*invA;
+      b.vx+=tangentImpulse*tx*invB; b.vy+=tangentImpulse*ty*invB;
       if(impactSpeed>SPIN_IMPACT_MIN && Math.abs(tangentSpeed)>35 &&
-         time-a.lastSpin>SPIN_CONTACT_COOLDOWN &&
-         time-b.lastSpin>SPIN_CONTACT_COOLDOWN){
-        a.omega=clamp(a.omega+clamp(tangentSpeed*.0024*(24/Math.max(12,a.r)),-2,2),
-                      -MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
-        b.omega=clamp(b.omega+clamp(tangentSpeed*.0024*(24/Math.max(12,b.r)),-2,2),
-                      -MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
-        a.lastSpin=time;b.lastSpin=time;
+         time-a.lastSpin>SPIN_CONTACT_COOLDOWN && time-b.lastSpin>SPIN_CONTACT_COOLDOWN){
+        a.omega=clamp(a.omega+clamp(tangentSpeed*.0023*(24/Math.max(12,a.r)),-2,2),-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
+        b.omega=clamp(b.omega+clamp(tangentSpeed*.0023*(24/Math.max(12,b.r)),-2,2),-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
+        a.lastSpin=time; b.lastSpin=time;
       }
     }
     return true;
   }
   function physics(dt){
-    time+=dt;dropWait=Math.max(0,dropWait-dt);
-    if(ended)return;
+    time+=dt; dropWait=Math.max(0,dropWait-dt); if(ended) return;
     for(const b of balls){
-      b.supported=false;b.contactCount=0;
-      // Horizontal motion slows once an impact has passed; gravity still feels heavy.
+      b.supported=false; b.contactCount=0;
       b.vy+=clamp(H*4.1,1300,2600)*dt;
-      b.vx*=Math.exp(-.65*dt);
-      b.vy*=Math.exp(-.12*dt);
+      b.vx*=Math.exp(-.75*dt); b.vy*=Math.exp(-.14*dt);
       b.pulse=Math.max(0,b.pulse-dt);
-      b.vx=clamp(b.vx,-1100,1100);b.vy=clamp(b.vy,-1150,1150);
-      b.x+=b.vx*dt;b.y+=b.vy*dt;
+      b.vx=clamp(b.vx,-1100,1100); b.vy=clamp(b.vy,-1150,1150);
+      b.x+=b.vx*dt; b.y+=b.vy*dt;
       b.omega*=Math.exp(-ANGULAR_DRAG*dt);
-      if(Math.abs(b.omega)<SPIN_STOP_THRESHOLD)b.omega=0;
+      if(Math.abs(b.omega)<SPIN_STOP_THRESHOLD) b.omega=0;
       b.angle+=b.omega*dt;
-      // Damped spring produces a short, elastic wobble after impact.
       b.squishV+=(-150*b.squish-27*b.squishV)*dt;
-      b.squish=clamp(b.squish+b.squishV*dt,-.24,.3);
+      b.squish=clamp(b.squish+b.squishV*dt,-.22,.27);
     }
     let merges=0;
-    for(let pass=0;pass<4;pass++){
+    for(let pass=0; pass<4; pass++){
       for(const b of balls){
-        enforceWall(b,'left');
-        enforceWall(b,'right');
-        if(b.y+b.r>floor){
-          b.supported=true;b.contactCount++;
-          b.y=floor-b.r;
-          if(b.vy>0){
-            impact(b,0,-1,b.vy);
-            b.vy=b.vy>115?-b.vy*.35:0;
-          }
-          b.vx*=.88;
-          // Rolling torque is applied once per frame after the contact passes.
-        }
+        enforceSlope(b,topLeft,topY,apexX,apexY,true);
+        enforceSlope(b,topRight,topY,apexX,apexY,false);
       }
       let didMerge=false;
-      outer:for(let i=0;i<balls.length;i++){
+      outer: for(let i=0;i<balls.length;i++){
         for(let j=i+1;j<balls.length;j++){
-          const a=balls[i],b=balls[j];
-          const dx=b.x-a.x,dy=b.y-a.y,s=a.r+b.r;
-          if(dx*dx+dy*dy>=s*s)continue;
-          if(a.level===b.level&&a.level<MAX_LEVEL&&merges<7){mergeAt(i,j);merges++;didMerge=true;break outer;}
+          const a=balls[i], b=balls[j];
+          const dx=b.x-a.x, dy=b.y-a.y, s=a.r+b.r;
+          if(dx*dx+dy*dy>=s*s) continue;
+          if(a.level===b.level && a.level<MAX_LEVEL && merges<7){ mergeAt(i,j); merges++; didMerge=true; break outer; }
           collide(a,b);
         }
       }
-      if(ended)break;
-      if(didMerge){pass=-1;continue;}
+      if(ended) break;
+      if(didMerge){ pass=-1; continue; }
     }
-    // Couple rolling to movement only when grounded; brake stationary spheres.
     for(const b of balls){
-      const grounded=b.y+b.r>=floor-.8;
+      const leftDist = (b.x-xOnLeft(b.y));
+      const rightDist = (xOnRight(b.y)-b.x);
+      const onSlope = leftDist <= b.r+1.5 || rightDist <= b.r+1.5 || b.supported;
       const slowLinear=Math.abs(b.vx)<8 && Math.abs(b.vy)<15;
-      if(grounded && slowLinear){
-        if(Math.abs(b.vx)<2)b.vx=0;
-        b.omega*=Math.exp(-14*dt);
-      } else if(grounded && Math.abs(b.vx)>=8){
+      if(onSlope && slowLinear){
+        if(Math.abs(b.vx)<2) b.vx=0;
+        b.omega*=Math.exp(-15*dt);
+      } else if(onSlope && Math.abs(b.vx)>=8){
         const target=clamp(b.vx/Math.max(1,b.r),-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
         b.omega+=clamp(target-b.omega,-3,3)*Math.min(1,dt*7);
       }
       b.omega=clamp(b.omega,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
-      if(Math.abs(b.omega)<SPIN_STOP_THRESHOLD && slowLinear)b.omega=0;
-      // Settling applies to objects supported by other objects, not just the floor.
-      // This drains tiny contact-solver impulses that otherwise jiggle a whole pile.
-      const nearlyStill=Math.abs(b.vx)<SUPPORT_STOP_HORIZONTAL &&
-                        Math.abs(b.vy)<SUPPORT_STOP_VERTICAL &&
-                        time-b.lastImpact>.16;
-      if(b.supported && nearlyStill){
+      if(Math.abs(b.omega)<SPIN_STOP_THRESHOLD && slowLinear) b.omega=0;
+      const nearlyStill=Math.abs(b.vx)<SUPPORT_STOP_HORIZONTAL && Math.abs(b.vy)<SUPPORT_STOP_VERTICAL && time-b.lastImpact>.16;
+      if(onSlope && nearlyStill){
         b.settleAge+=dt;
         if(b.settleAge>=SETTLE_AFTER){
-          b.vx*=Math.exp(-16*dt);
-          b.vy*=Math.exp(-22*dt);
-          b.omega*=Math.exp(-20*dt);
-          if(Math.abs(b.vx)<2)b.vx=0;
-          if(Math.abs(b.vy)<5)b.vy=0;
-          if(Math.abs(b.omega)<.12)b.omega=0;
-          if(Math.abs(b.squish)<.003 && Math.abs(b.squishV)<.04){b.squish=0;b.squishV=0;}
+          b.vx*=Math.exp(-18*dt); b.vy*=Math.exp(-24*dt); b.omega*=Math.exp(-22*dt);
+          if(Math.abs(b.vx)<2) b.vx=0;
+          if(Math.abs(b.vy)<5) b.vy=0;
+          if(Math.abs(b.omega)<.12) b.omega=0;
+          if(Math.abs(b.squish)<.003 && Math.abs(b.squishV)<.04){ b.squish=0; b.squishV=0; }
         }
-      }else{
-        b.settleAge=0;
-      }
+      } else { b.settleAge=0; }
     }
-    const isOverflow=balls.some(b=>time-b.born>1.65 && b.y-b.r<overflowY && b.y+b.r>boxTop && Math.abs(b.vy)<100);
+    const y0=overflowY;
+    const x0=xOnLeft(y0), x1=xOnRight(y0);
+    const isOverflow=balls.some(b=>time-b.born>1.5 && b.y-b.r<y0 && b.y+b.r>topY && b.x+b.r>x0 && b.x-b.r<x1 && Math.abs(b.vy)<100);
     overflowAge=clamp(overflowAge+(isOverflow?dt:-dt*2),0,3);
-    if(pendingWin>0 && time>=pendingWin){pendingWin=0;endGame(true);}
-    if(!ended && overflowAge>=3)endGame(false);
-    for(let i=shockwaves.length-1;i>=0;i--){const w=shockwaves[i];w.life-=dt;w.r+=(w.maxR-w.r)*Math.min(1,dt*11);if(w.life<=0)shockwaves.splice(i,1);}
-    for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.life-=dt;p.vy+=170*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;if(p.life<=0)particles.splice(i,1);}
-    for(let i=floating.length-1;i>=0;i--){floating[i].life-=dt;floating[i].y-=25*dt;if(floating[i].life<=0)floating.splice(i,1);}
+    if(pendingWin>0 && time>=pendingWin){ pendingWin=0; endGame(true); }
+    if(!ended && overflowAge>=3) endGame(false);
+    for(let i=shockwaves.length-1;i>=0;i--){ const w=shockwaves[i]; w.life-=dt; w.r+=(w.maxR-w.r)*Math.min(1,dt*11); if(w.life<=0) shockwaves.splice(i,1); }
+    for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life-=dt; p.vy+=170*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.life<=0) particles.splice(i,1); }
+    for(let i=floating.length-1;i>=0;i--){ floating[i].life-=dt; floating[i].y-=25*dt; if(floating[i].life<=0) floating.splice(i,1); }
   }
   function endGame(won){
-    if(ended)return;
-    ended=true;win=won;endTitle.textContent=won?'Skubert ×16! 🎉':'Box overflowed!';
-    endMessage.textContent=won?'You combined Skubert models into the largest tier.':'Keep merging matching spheres to make room in the box.';
-    endScore.textContent=fmt.format(score)+' points';
-    overlay.hidden=false;
-    $('playAgain').focus({preventScroll:true});
+    if(ended) return;
+    ended=true; win=won; endTitle.textContent=won?'Domain reached! 🎉':'Pyramid overflowed!';
+    endMessage.textContent=won?'You combined spheres all the way up to Domain.':'Keep merging matching spheres to make room in the pyramid.';
+    endScore.textContent=fmt.format(score)+' points'; overlay.hidden=false; $('playAgain').focus({preventScroll:true});
   }
-  function hexRGB(hex){const c=hex.replace('#','');return [parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16)];}
-  function tint(hex,t){const rgb=hexRGB(hex);return `rgb(${rgb.map(n=>Math.round(n+(t>=0?(255-n):n)*t)).join(',')})`;}
+  function hexRGB(hex){ const c=hex.replace('#',''); return [parseInt(c.slice(0,2),16), parseInt(c.slice(2,4),16), parseInt(c.slice(4,6),16)]; }
+  function tint(hex,t){ const rgb=hexRGB(hex); return `rgb(${rgb.map(n=>Math.round(n+(t>=0?(255-n):n)*t)).join(',')})`; }
   function drawSphere(x,y,r,level,ghost=false,pulse=0,angle=0,squish=0,squishAxis=0){
     const color=LEVELS[level].color;
     ctx.save();
@@ -453,125 +358,84 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     ctx.translate(x,y);
     const puff=pulse>0?(1+.10*pulse/.26):1;
     ctx.scale(puff,puff);
-    // Keep the body physically circular while rendering an elastic soft sphere.
-    // The deformation axis follows the impact normal, independently of surface rotation.
     ctx.rotate(squishAxis);
-    ctx.scale(1-clamp(squish,-.24,.3),1+clamp(squish,-.24,.3)*.7);
+    ctx.scale(1-clamp(squish,-.22,.27),1+clamp(squish,-.22,.27)*.7);
     ctx.rotate(-squishAxis);
-    // Everything painted onto the surface (including the text) rotates with the sphere.
     ctx.rotate(angle);
-    ctx.shadowColor='#20170d75';ctx.shadowBlur=8;ctx.shadowOffsetY=4;
-    ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);
+    ctx.shadowColor='#20170d75'; ctx.shadowBlur=8; ctx.shadowOffsetY=4;
+    ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2);
     const gradient=ctx.createRadialGradient(-r*.42,-r*.54,r*.08,r*.22,r*.27,r*1.35);
-    gradient.addColorStop(0,tint(color,.52));gradient.addColorStop(.47,color);gradient.addColorStop(1,tint(color,-.51));
-    ctx.fillStyle=gradient;ctx.fill();
-    ctx.shadowBlur=0;ctx.shadowOffsetY=0;
-    ctx.strokeStyle=tint(color,-.57);ctx.lineWidth=Math.max(1.3,r*.055);ctx.stroke();
-    ctx.save();ctx.beginPath();ctx.arc(0,0,r-1,0,Math.PI*2);ctx.clip();
-    ctx.beginPath();ctx.ellipse(-r*.31,-r*.47,r*.38,Math.max(2,r*.13),-.45,0,Math.PI*2);
-    ctx.fillStyle='#fff9';ctx.fill();
-    ctx.beginPath();ctx.arc(r*.29,r*.28,r*.62,0,Math.PI*2);
-    ctx.strokeStyle='#fff2';ctx.lineWidth=Math.max(2,r*.12);ctx.stroke();
-    // Printed lettering is part of the ball texture: it is not screen-aligned.
-    const label=LEVELS[level].name;
-    let fontSize=clamp(r*.56,9,level===9?29:22);
-    ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
-    ctx.font=`900 ${fontSize}px system-ui,Arial,sans-serif`;
-    const maxWidth=r*1.76;
-    if(ctx.measureText(label).width>maxWidth){
-      fontSize=Math.max(8,fontSize*maxWidth/ctx.measureText(label).width);
-      ctx.font=`900 ${fontSize}px system-ui,Arial,sans-serif`;
-    }
-    ctx.lineWidth=clamp(fontSize*.27,2,5);
-    ctx.strokeStyle='#1d1735da';ctx.strokeText(label,0,1);
-    ctx.fillStyle='#fff';ctx.fillText(label,0,1);
-    ctx.restore();ctx.restore();
+    gradient.addColorStop(0,tint(color,.52)); gradient.addColorStop(.47,color); gradient.addColorStop(1,tint(color,-.51));
+    ctx.fillStyle=gradient; ctx.fill();
+    ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+    ctx.strokeStyle=tint(color,-.57); ctx.lineWidth=Math.max(1.3,r*.055); ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.arc(0,0,r-1,0,Math.PI*2); ctx.clip();
+    ctx.beginPath(); ctx.ellipse(-r*.31,-r*.47,r*.38,Math.max(2,r*.13),-.45,0,Math.PI*2);
+    ctx.fillStyle='#fff9'; ctx.fill();
+    ctx.beginPath(); ctx.arc(r*.29,r*.28,r*.62,0,Math.PI*2);
+    ctx.strokeStyle='#fff2'; ctx.lineWidth=Math.max(2,r*.12); ctx.stroke();
+    ctx.restore(); ctx.restore();
   }
   function render(){
-    // Transparent Canvas: leave every pixel of the original taxonomy PNG intact.
     ctx.clearRect(0,0,W,H);
-    // All balls and effects stay inside the transparent rectangular playfield.
     ctx.save();
     ctx.beginPath();
-    ctx.rect(left,boxTop,right-left,floor-boxTop);
+    ctx.moveTo(topLeft,topY); ctx.lineTo(topRight,topY); ctx.lineTo(apexX,apexY); ctx.closePath();
     ctx.clip();
-    // Rendering uses WebGL models only for Skubert-tier bodies.
-    // All collision and merge rules remain 2D and deterministic.
-    const preview=!ended?{id:'preview',isPreview:true,level:current,r:radius(current),x:clampAim(aimX),
-      y:boxTop+radius(current)+6,angle:0,squish:0,pulse:0}:null;
-    let threeIds=null;
-    try {
-      threeIds=window.SkubertEvolution3D?.render({balls,preview,W,H,left,right,boxTop,floor,time})||null;
-    } catch(err) {
-      // If WebGL fails, preserve the playable 2D version and its labels.
-      threeIds=null;
-    }
-    for(const b of balls){
-      if(!threeIds?.has(b.id))drawSphere(b.x,b.y,b.r,b.level,false,b.pulse,b.angle,b.squish,b.squishAxis);
-    }
+    for(const b of balls) drawSphere(b.x,b.y,b.r,b.level,false,b.pulse,b.angle,b.squish,b.squishAxis);
     for(const w of shockwaves){
       ctx.globalAlpha=(w.life/w.maxLife)*.55;
-      ctx.beginPath();ctx.arc(w.x,w.y,w.r,0,Math.PI*2);
-      ctx.strokeStyle=w.color;ctx.lineWidth=5*(w.life/w.maxLife)+1;ctx.stroke();
+      ctx.beginPath(); ctx.arc(w.x,w.y,w.r,0,Math.PI*2);
+      ctx.strokeStyle=w.color; ctx.lineWidth=5*(w.life/w.maxLife)+1; ctx.stroke();
     }
     ctx.globalAlpha=1;
-    for(const p of particles){ctx.globalAlpha=clamp(p.life/p.max,0,1);ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();}
+    for(const p of particles){ ctx.globalAlpha=clamp(p.life/p.max,0,1); ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); }
     ctx.globalAlpha=1;
-    for(const f of floating){ctx.globalAlpha=Math.min(1,f.life*1.7);ctx.font='900 13px system-ui,Arial';ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#29203d';ctx.strokeText(f.label,f.x,f.y);ctx.fillStyle='#fff';ctx.fillText(f.label,f.x,f.y);}
+    for(const f of floating){ ctx.globalAlpha=Math.min(1,f.life*1.7); ctx.font='900 13px system-ui,Arial'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='#29203d'; ctx.strokeText(f.label,f.x,f.y); ctx.fillStyle='#fff'; ctx.fillText(f.label,f.x,f.y); }
     ctx.globalAlpha=1;
     ctx.restore();
-    // Only thin, unfilled boundary lines are drawn over the pyramid image.
     ctx.save();
-    ctx.lineJoin='round';ctx.lineCap='round';
-    ctx.beginPath();ctx.rect(left,boxTop,right-left,floor-boxTop);
-    ctx.strokeStyle='#ffffffc8';ctx.lineWidth=4;ctx.stroke();
-    ctx.strokeStyle='#23201da8';ctx.lineWidth=1.6;ctx.stroke();
-    // Discreet overflow indicator.
-    ctx.setLineDash([4,5]);ctx.beginPath();ctx.moveTo(left,overflowY);ctx.lineTo(right,overflowY);
-    ctx.lineWidth=1.6;ctx.strokeStyle=overflowAge>0?'#c32428':'#c3242890';ctx.stroke();ctx.setLineDash([]);
+    ctx.lineJoin='round'; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(topLeft,topY); ctx.lineTo(apexX,apexY); ctx.lineTo(topRight,topY);
+    ctx.strokeStyle='#ffffffc8'; ctx.lineWidth=4; ctx.stroke();
+    ctx.strokeStyle='#23201da8'; ctx.lineWidth=1.6; ctx.stroke();
+    const x0=xOnLeft(overflowY), x1=xOnRight(overflowY);
+    ctx.setLineDash([4,5]); ctx.beginPath(); ctx.moveTo(x0,overflowY); ctx.lineTo(x1,overflowY);
+    ctx.lineWidth=1.6; ctx.strokeStyle=overflowAge>0?'#c32428':'#c3242890'; ctx.stroke(); ctx.setLineDash([]);
     ctx.restore();
     if(!ended){
-      const r=radius(current),x=clampAim(aimX);
-      ctx.save();ctx.beginPath();ctx.setLineDash([3,5]);ctx.strokeStyle='#45454590';ctx.lineWidth=1.5;
-      const previewY=boxTop+r+6;
-      ctx.moveTo(x,previewY);ctx.lineTo(x,overflowY);ctx.stroke();ctx.restore();
-      // The 3D renderer draws the Skubert head whenever a Skubert is queued,
-      // including before it is dropped. The flat sphere is a loading/failure fallback.
-      if(!threeIds?.has('preview'))drawSphere(x,previewY,r,current,true);
+      const r=radius(current), x=clampAim(aimX), previewY=topY+r+8;
+      ctx.save(); ctx.beginPath(); ctx.setLineDash([3,5]); ctx.strokeStyle='#45454590'; ctx.lineWidth=1.5;
+      ctx.moveTo(x,previewY); ctx.lineTo(x,overflowY); ctx.stroke(); ctx.restore();
+      drawSphere(x,previewY,r,current,true);
     }
   }
   function frame(ms){
-    if(!lastFrame)lastFrame=ms;
-    accumulator+=clamp((ms-lastFrame)/1000,0,.05);lastFrame=ms;
-    let loops=0;while(accumulator>=step&&loops<4){physics(step);accumulator-=step;loops++;}
-    render();requestAnimationFrame(frame);
+    if(!lastFrame) lastFrame=ms;
+    accumulator+=clamp((ms-lastFrame)/1000,0,.05); lastFrame=ms;
+    let loops=0; while(accumulator>=step&&loops<4){ physics(step); accumulator-=step; loops++; }
+    render(); requestAnimationFrame(frame);
   }
-  function aimFromPointer(e){
-    const rect=canvas.getBoundingClientRect();
-    const local=(e.clientX-rect.left)*W/rect.width;
-    aimX=clampAim(local);
-  }
-  canvas.addEventListener('pointerdown',e=>{if(ended)return;e.preventDefault();aimFromPointer(e);down=true;canvas.setPointerCapture(e.pointerId);});
-  canvas.addEventListener('pointermove',e=>{if(!ended)aimFromPointer(e);});
-  canvas.addEventListener('pointerup',e=>{if(!down)return;down=false;aimFromPointer(e);drop();});
-  canvas.addEventListener('pointercancel',()=>{down=false;});
+  function aimFromPointer(e){ const rect=canvas.getBoundingClientRect(); const local=(e.clientX-rect.left)*W/rect.width; aimX=clampAim(local); }
+  canvas.addEventListener('pointerdown',e=>{ if(ended) return; e.preventDefault(); aimFromPointer(e); down=true; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointermove',e=>{ if(!ended) aimFromPointer(e); });
+  canvas.addEventListener('pointerup',e=>{ if(!down) return; down=false; aimFromPointer(e); drop(); });
+  canvas.addEventListener('pointercancel',()=>{ down=false; });
   document.addEventListener('keydown',e=>{
-    if(ended||e.altKey||e.ctrlKey||e.metaKey)return;
+    if(ended||e.altKey||e.ctrlKey||e.metaKey) return;
     if(['ArrowLeft','ArrowRight','Space',' '].includes(e.code)||['ArrowLeft','ArrowRight',' '].includes(e.key)){
       const target=e.target;
-      if(target&&['INPUT','TEXTAREA','SELECT'].includes(target.tagName))return;
+      if(target&&['INPUT','TEXTAREA','SELECT'].includes(target.tagName)) return;
       e.preventDefault();
-      if(e.key==='ArrowLeft')aimX=clampAim(aimX-W*.033);
-      else if(e.key==='ArrowRight')aimX=clampAim(aimX+W*.033);
-      else if(!e.repeat)drop();
+      if(e.key==='ArrowLeft') aimX=clampAim(aimX-W*.033);
+      else if(e.key==='ArrowRight') aimX=clampAim(aimX+W*.033);
+      else if(!e.repeat) drop();
     }
   });
-
   $('playAgain').addEventListener('click',reset);
-  // R restarts a run without adding a visible toolbar.
-  document.addEventListener('keydown',e=>{if(e.key==='r'||e.key==='R'){if(!e.ctrlKey&&!e.metaKey&&!e.altKey)reset();}});
+  document.addEventListener('keydown',e=>{ if((e.key==='r'||e.key==='R')&&!e.ctrlKey&&!e.metaKey&&!e.altKey) reset(); });
   window.addEventListener('resize',resize);
-  resize();reset();requestAnimationFrame(frame);
+  resize(); reset(); requestAnimationFrame(frame);
 })();
 </script>
 </body>
