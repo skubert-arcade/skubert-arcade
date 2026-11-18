@@ -17,7 +17,7 @@ const LEVEL_COLORS=[
   '#fca571', // Kingdom (orange)
   '#fa9796'  // Domain (salmon)
 ];
-const TEXTURE_PATHS={1:'textures/01-genus.png',2:'textures/02-family.png',3:'textures/03-order.png',4:'textures/04-class.png'};
+const TEXTURE_PATHS={1:'textures/01-genus.png',2:'textures/02-family.png',3:'textures/03-order.png',4:'textures/04-class.png',5:'textures/05-phylum.png'};
 
 const bridge={ready:false,render,disable};
 window.SkubertSphere3D=bridge;
