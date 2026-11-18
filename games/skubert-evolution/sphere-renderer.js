@@ -1,6 +1,6 @@
 /**
  * Skubert Evolution - Phase 2 pilot: GPU sphere rendering with texture maps
- * for Genus, Family, Order, and Class. Original physics, timer, clipping and effects remain
+ * for Genus through Kingdom, with higher-saturation colors. Original physics, timer, clipping and effects remain
  * owned by index.html.
  */
 import * as THREE from 'three';
@@ -8,16 +8,16 @@ import * as THREE from 'three';
 const canvas=document.getElementById('sphere-layer');
 const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,v));
 const LEVEL_COLORS=[
-  '#eaaeea', // Species (pink)
-  '#b2adf6', // Genus (purple)
-  '#97cbfc', // Family (blue)
-  '#a0fbf7', // Order (aqua)
-  '#b5fa9d', // Class (green)
-  '#fdde89', // Phylum (yellow)
-  '#fca571', // Kingdom (orange)
-  '#fa9796'  // Domain (salmon)
+  '#ea7dea', // Species (pink)
+  '#7d75f6', // Genus (purple)
+  '#50a8fc', // Family (blue)
+  '#5efbf4', // Order (aqua)
+  '#83fa5a', // Class (green)
+  '#fdc93a', // Phylum (yellow)
+  '#fc6c16', // Kingdom (orange)
+  '#fa514f'  // Domain (salmon)
 ];
-const TEXTURE_PATHS={1:'textures/01-genus.png',2:'textures/02-family.png',3:'textures/03-order.png',4:'textures/04-class.png',5:'textures/05-phylum.png'};
+const TEXTURE_PATHS={1:'textures/01-genus.png',2:'textures/02-family.png',3:'textures/03-order.png',4:'textures/04-class.png',5:'textures/05-phylum.png',6:'textures/06-kingdom.png'};
 
 const bridge={ready:false,render,disable};
 window.SkubertSphere3D=bridge;
