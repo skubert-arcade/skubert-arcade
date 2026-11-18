@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#fafafa">
   <title>Skubert Evolution | Skubert Arcade</title>
+  <!-- Pin Three.js so Phase 1 doesn't inherit future changes to the library. -->
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}
+  </script>
   <style>
 :root { font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif; color-scheme:light; }
 * { box-sizing:border-box; }
@@ -15,7 +19,14 @@ button { cursor:pointer; }
 a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #ca7914; outline-offset:3px; }
 .scene { position:relative; width:min(100vw,100svh); max-width:100%; aspect-ratio:1; flex:none; }
 .scene > img { width:100%; height:100%; display:block; object-fit:contain; opacity:1; }
-#game { position:absolute; inset:0; z-index:1; display:block; width:100%; height:100%; background:transparent; touch-action:none; cursor:crosshair; }
+/* The GPU sphere layer is transparent and cannot intercept input. */
+#sphere-layer {
+  position:absolute; inset:0; z-index:1; display:block; width:100%; height:100%;
+  background:transparent; pointer-events:none;
+  clip-path:polygon(1.2% 15%,90.1% 15%,45.7% 94.1%);
+}
+/* Transparent 2D canvas stays on top for the countdown, effects and outlines. */
+#game { position:absolute; inset:0; z-index:2; display:block; width:100%; height:100%; background:transparent; touch-action:none; cursor:crosshair; }
 .arcade-link {
   position:fixed; top:max(12px,env(safe-area-inset-top)); left:max(12px,env(safe-area-inset-left)); z-index:5;
   padding:9px 14px; background:#fff; border:1px solid #bcbcbc; border-radius:999px;
@@ -49,6 +60,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
 <div class="score-display" aria-label="Current score">Score <span id="score">0</span></div>
 <main class="scene" aria-label="Skubert Evolution game over the taxonomy pyramid">
   <img src="taxonomy-ranking-system.png" width="1254" height="1254" alt="Taxonomic Ranking System inverted pyramid, from Domain Eukarya at the top to Species Mascotus Skubertus at the bottom." decoding="async">
+  <canvas id="sphere-layer" aria-hidden="true"></canvas>
   <canvas id="game" tabindex="0" aria-label="Skubert Evolution. Move the pointer or use left and right arrow keys to aim, then click, tap or press Space to drop a sphere. Matching spheres merge into the next taxonomic rank."></canvas>
   <div id="overlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
     <div class="modal">
@@ -60,6 +72,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   </div>
 </main>
 <div id="message" class="visually-hidden" role="status" aria-live="polite"></div>
+<script type="module" src="sphere-renderer.js"></script>
 <script>
 (() => {
   'use strict';
@@ -82,7 +95,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   const fmt=new Intl.NumberFormat('en-US');
   const MAX_LEVEL=LEVELS.length-1;
   const MAX_DROP_LEVEL=MAX_LEVEL-1;
-  const storageKey='skubertEvolutionPrototypeBestV10';
+  const storageKey='skubertEvolutionPrototypeBestV11';
   let best=0;
   try { best=Number(localStorage.getItem(storageKey))||0; } catch (_) {}
 
@@ -394,11 +407,15 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     ctx.save(); ctx.beginPath(); ctx.arc(0,0,r-1,0,Math.PI*2); ctx.clip();
     const icon=silhouettes[level];
     if(icon && icon.complete && icon.naturalWidth>0){
-      // Print the silhouette onto the curved surface; its orientation follows
-      // this sphere's rotation and squash/stretch transforms.
-      const iconSize=r*1.65;
-      ctx.globalAlpha=ghost ? .78 : .92;
-      ctx.drawImage(icon,-iconSize/2,-iconSize/2,iconSize,iconSize);
+      // Print the full pyramid-band silhouette strip onto the curved sphere.
+      // Preserve the strip's aspect ratio so levels with many silhouettes keep them all.
+      const maxW=r*1.76;
+      const maxH=r*1.12;
+      const scale=Math.min(maxW/icon.naturalWidth, maxH/icon.naturalHeight);
+      const drawW=icon.naturalWidth*scale;
+      const drawH=icon.naturalHeight*scale;
+      ctx.globalAlpha=ghost ? .78 : .95;
+      ctx.drawImage(icon,-drawW/2,-drawH/2,drawW,drawH);
       ctx.globalAlpha=ghost ? .85 : 1;
     }
     ctx.beginPath(); ctx.ellipse(-r*.31,-r*.47,r*.38,Math.max(2,r*.13),-.45,0,Math.PI*2);
@@ -413,7 +430,22 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     ctx.beginPath();
     ctx.moveTo(topLeft,topY); ctx.lineTo(topRight,topY); ctx.lineTo(apexX,apexY); ctx.closePath();
     ctx.clip();
-    for(const b of balls) drawSphere(b.x,b.y,b.r,b.level,false,b.pulse,b.angle,b.squish,b.squishAxis);
+    // One render request per gameplay frame; the Three.js module never runs
+    // an independent animation loop. Until it becomes ready, use v12 sprites.
+    const preview=!ended ? {
+      x:clampAim(aimX), y:topY+radius(current)+8,
+      r:radius(current),level:current,angle:0,squish:0,squishAxis:0,pulse:0
+    } : null;
+    let using3D=false;
+    try {
+      using3D=window.SkubertSphere3D?.render({balls,preview,width:W,height:H})===true;
+    } catch(error) {
+      console.warn('3D sphere layer unavailable; using 2D fallback.',error);
+      window.SkubertSphere3D?.disable?.();
+    }
+    if(!using3D){
+      for(const b of balls) drawSphere(b.x,b.y,b.r,b.level,false,b.pulse,b.angle,b.squish,b.squishAxis);
+    }
     for(const w of shockwaves){
       ctx.globalAlpha=(w.life/w.maxLife)*.55;
       ctx.beginPath(); ctx.arc(w.x,w.y,w.r,0,Math.PI*2);
@@ -438,7 +470,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       const r=radius(current), x=clampAim(aimX), previewY=topY+r+8;
       ctx.save(); ctx.beginPath(); ctx.setLineDash([3,5]); ctx.strokeStyle='#45454590'; ctx.lineWidth=1.5;
       ctx.moveTo(x,previewY); ctx.lineTo(x,overflowY); ctx.stroke(); ctx.restore();
-      drawSphere(x,previewY,r,current,true);
+      if(!using3D) drawSphere(x,previewY,r,current,true);
       // Unobtrusive three-second auto-drop indicator follows the queued ball.
       const remaining=clamp((dropDeadline-performance.now())/AUTO_DROP_MS,0,1);
       ctx.save(); ctx.beginPath();
