@@ -1,14 +1,14 @@
 {
-  "version": 1,
+  "version": 2,
   "coordinateSystem": "row-percent",
-  "notes": "scene is 1–9. xPercent/yPercent are relative to that scene. sizePercent is percent of displayed tapestry height. rotationDeg is yaw; pitchDeg is tilt around the horizontal X axis (negative = up, positive = down).",
+  "notes": "scene is 1–9. xPercent/yPercent are relative to each tapestry row; optional motion sets static, left, vertical or wave-left movement. Leftward speed is in viewport pixels/sec; vertical amplitude is percent of viewport height. Omitting motion preserves static behavior.",
   "heads": [
     {
       "id": "skubert-01",
       "scene": 1,
-      "xPercent": 8.646,
-      "yPercent": 38.564,
-      "sizePercent": 17.5,
+      "xPercent": 6.832,
+      "yPercent": 35.733,
+      "sizePercent": 27,
       "rotationDeg": -50,
       "pitchDeg": 10,
       "points": 100
@@ -16,9 +16,9 @@
     {
       "id": "skubert-02",
       "scene": 1,
-      "xPercent": 13.969,
-      "yPercent": 28.508,
-      "sizePercent": 9,
+      "xPercent": 14.363,
+      "yPercent": 22.29,
+      "sizePercent": 23.5,
       "rotationDeg": -30,
       "pitchDeg": 25,
       "points": 100
@@ -26,9 +26,9 @@
     {
       "id": "skubert-03",
       "scene": 1,
-      "xPercent": 42.802,
-      "yPercent": 38.011,
-      "sizePercent": 9,
+      "xPercent": 43.134,
+      "yPercent": 37.034,
+      "sizePercent": 21,
       "rotationDeg": -70,
       "pitchDeg": 0,
       "points": 100
@@ -36,20 +36,26 @@
     {
       "id": "skubert-04",
       "scene": 1,
-      "xPercent": 60.247,
-      "yPercent": 28.177,
-      "sizePercent": 9,
-      "rotationDeg": -60,
+      "xPercent": 64.48,
+      "yPercent": 29.483,
+      "sizePercent": 27,
+      "rotationDeg": 0,
       "pitchDeg": 25,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-05",
       "scene": 1,
-      "xPercent": 80.86,
-      "yPercent": 23.757,
+      "xPercent": 78.988,
+      "yPercent": 17.866,
       "sizePercent": 25.5,
-      "rotationDeg": 55,
+      "rotationDeg": -65,
       "pitchDeg": 35,
       "points": 100
     },
@@ -86,12 +92,18 @@
     {
       "id": "skubert-09",
       "scene": 2,
-      "xPercent": 43.983,
-      "yPercent": 49.945,
+      "xPercent": 44.016,
+      "yPercent": 50.963,
       "sizePercent": 27,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-10",
@@ -106,8 +118,8 @@
     {
       "id": "skubert-11",
       "scene": 2,
-      "xPercent": 76.329,
-      "yPercent": 15.028,
+      "xPercent": 76.919,
+      "yPercent": 23.404,
       "sizePercent": 27,
       "rotationDeg": 50,
       "pitchDeg": 20,
@@ -126,9 +138,9 @@
     {
       "id": "skubert-13",
       "scene": 2,
-      "xPercent": 95.908,
-      "yPercent": 23.646,
-      "sizePercent": 9,
+      "xPercent": 96.201,
+      "yPercent": 23.607,
+      "sizePercent": 19,
       "rotationDeg": -30,
       "pitchDeg": 10,
       "points": 100
@@ -186,9 +198,9 @@
     {
       "id": "skubert-19",
       "scene": 3,
-      "xPercent": 63.318,
-      "yPercent": 12.707,
-      "sizePercent": 20.5,
+      "xPercent": 63.281,
+      "yPercent": 14.184,
+      "sizePercent": 27,
       "rotationDeg": 55,
       "pitchDeg": 30,
       "points": 100
@@ -286,8 +298,8 @@
     {
       "id": "skubert-29",
       "scene": 5,
-      "xPercent": 40.86,
-      "yPercent": 42.431,
+      "xPercent": 41.273,
+      "yPercent": 32.928,
       "sizePercent": 10,
       "rotationDeg": 55,
       "pitchDeg": 0,
@@ -296,12 +308,18 @@
     {
       "id": "skubert-30",
       "scene": 5,
-      "xPercent": 48.581,
-      "yPercent": 44.42,
+      "xPercent": 48.524,
+      "yPercent": 44.782,
       "sizePercent": 27,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 35,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-31",
@@ -411,7 +429,13 @@
       "sizePercent": 27,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-42",
@@ -466,12 +490,18 @@
     {
       "id": "skubert-47",
       "scene": 9,
-      "xPercent": 35.536,
-      "yPercent": 25.414,
-      "sizePercent": 19.5,
+      "xPercent": 35.563,
+      "yPercent": 25.025,
+      "sizePercent": 27,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-48",
@@ -481,7 +511,13 @@
       "sizePercent": 27,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-49",
@@ -506,12 +542,18 @@
     {
       "id": "skubert-51",
       "scene": 1,
-      "xPercent": 36.917,
-      "yPercent": 68.95,
+      "xPercent": 36.895,
+      "yPercent": 69.2,
       "sizePercent": 19.5,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-52",
@@ -521,7 +563,13 @@
       "sizePercent": 19.5,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-53",
@@ -531,24 +579,20 @@
       "sizePercent": 19.5,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-54",
       "scene": 1,
-      "xPercent": 49.14,
-      "yPercent": 35.58,
-      "sizePercent": 11.5,
-      "rotationDeg": 0,
-      "pitchDeg": 0,
-      "points": 100
-    },
-    {
-      "id": "skubert-55",
-      "scene": 1,
-      "xPercent": 66.082,
-      "yPercent": 41.989,
-      "sizePercent": 9,
+      "xPercent": 49.18,
+      "yPercent": 35.765,
+      "sizePercent": 15,
       "rotationDeg": 0,
       "pitchDeg": 0,
       "points": 100
@@ -556,22 +600,34 @@
     {
       "id": "skubert-56",
       "scene": 1,
-      "xPercent": 69.165,
-      "yPercent": 30.939,
-      "sizePercent": 9,
+      "xPercent": 73.571,
+      "yPercent": 23.81,
+      "sizePercent": 27,
       "rotationDeg": -75,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-57",
       "scene": 1,
-      "xPercent": 73.458,
-      "yPercent": 21.326,
-      "sizePercent": 14,
-      "rotationDeg": 85,
+      "xPercent": 81.053,
+      "yPercent": 58.561,
+      "sizePercent": 27,
+      "rotationDeg": -20,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-58",
@@ -596,9 +652,9 @@
     {
       "id": "skubert-60",
       "scene": 2,
-      "xPercent": 53.272,
-      "yPercent": 23.204,
-      "sizePercent": 14.5,
+      "xPercent": 53.126,
+      "yPercent": 22.898,
+      "sizePercent": 27,
       "rotationDeg": 70,
       "pitchDeg": 0,
       "points": 100
@@ -606,12 +662,18 @@
     {
       "id": "skubert-61",
       "scene": 2,
-      "xPercent": 82.674,
-      "yPercent": 21.547,
-      "sizePercent": 13,
+      "xPercent": 82.745,
+      "yPercent": 22.188,
+      "sizePercent": 27,
       "rotationDeg": 60,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-62",
@@ -636,12 +698,18 @@
     {
       "id": "skubert-64",
       "scene": 3,
-      "xPercent": 21.041,
-      "yPercent": 33.481,
+      "xPercent": 21.052,
+      "yPercent": 32.928,
       "sizePercent": 9,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-65",
@@ -651,7 +719,13 @@
       "sizePercent": 9,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-66",
@@ -661,7 +735,13 @@
       "sizePercent": 9,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-67",
@@ -671,7 +751,13 @@
       "sizePercent": 9,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-68",
@@ -706,9 +792,9 @@
     {
       "id": "skubert-71",
       "scene": 3,
-      "xPercent": 77.877,
-      "yPercent": 16.575,
-      "sizePercent": 9,
+      "xPercent": 78.506,
+      "yPercent": 14.286,
+      "sizePercent": 27,
       "rotationDeg": -65,
       "pitchDeg": 0,
       "points": 100
@@ -716,12 +802,18 @@
     {
       "id": "skubert-72",
       "scene": 4,
-      "xPercent": 5.113,
-      "yPercent": 14.586,
+      "xPercent": 5.075,
+      "yPercent": 16.109,
       "sizePercent": 27,
       "rotationDeg": 0,
       "pitchDeg": 30,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 3,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-73",
@@ -856,32 +948,50 @@
     {
       "id": "skubert-86",
       "scene": 6,
-      "xPercent": 6.77,
-      "yPercent": 27.735,
+      "xPercent": 8.755,
+      "yPercent": 19.048,
       "sizePercent": 27,
       "rotationDeg": 70,
       "pitchDeg": -15,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-87",
       "scene": 6,
-      "xPercent": 14.229,
-      "yPercent": 25.967,
+      "xPercent": 15.359,
+      "yPercent": 17.73,
       "sizePercent": 27,
       "rotationDeg": 70,
       "pitchDeg": -15,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-88",
       "scene": 6,
-      "xPercent": 22.604,
-      "yPercent": 25.304,
+      "xPercent": 22.883,
+      "yPercent": 24.012,
       "sizePercent": 27,
       "rotationDeg": 70,
       "pitchDeg": -15,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-89",
@@ -891,27 +1001,45 @@
       "sizePercent": 27,
       "rotationDeg": 70,
       "pitchDeg": -15,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-90",
       "scene": 6,
-      "xPercent": 34.404,
-      "yPercent": 30.166,
+      "xPercent": 34.855,
+      "yPercent": 29.889,
       "sizePercent": 27,
       "rotationDeg": 70,
       "pitchDeg": -15,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-91",
       "scene": 6,
-      "xPercent": 37.98,
-      "yPercent": 22.32,
+      "xPercent": 37.877,
+      "yPercent": 23.404,
       "sizePercent": 27,
       "rotationDeg": 70,
       "pitchDeg": -15,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-92",
@@ -921,7 +1049,13 @@
       "sizePercent": 27,
       "rotationDeg": 70,
       "pitchDeg": -15,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-93",
@@ -931,7 +1065,13 @@
       "sizePercent": 27,
       "rotationDeg": 70,
       "pitchDeg": -15,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-94",
@@ -977,11 +1117,17 @@
       "id": "skubert-98",
       "scene": 8,
       "xPercent": 79.719,
-      "yPercent": 30.276,
+      "yPercent": 31.003,
       "sizePercent": 27,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 80,
+        "verticalAmplitudePercent": 35,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-99",
@@ -991,23 +1137,1503 @@
       "sizePercent": 27,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-100",
       "scene": 9,
-      "xPercent": 93.997,
-      "yPercent": 22.762,
+      "xPercent": 93.991,
+      "yPercent": 21.884,
       "sizePercent": 27,
       "rotationDeg": 0,
       "pitchDeg": 0,
-      "points": 100
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
     },
     {
       "id": "skubert-102",
       "scene": 9,
       "xPercent": 94.066,
       "yPercent": 50.718,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-101",
+      "scene": 1,
+      "xPercent": 19.26,
+      "yPercent": 20.669,
+      "sizePercent": 27,
+      "rotationDeg": -65,
+      "pitchDeg": 25,
+      "points": 100
+    },
+    {
+      "id": "skubert-105",
+      "scene": 1,
+      "xPercent": 55.014,
+      "yPercent": 16.912,
+      "sizePercent": 27,
+      "rotationDeg": -65,
+      "pitchDeg": 30,
+      "points": 100
+    },
+    {
+      "id": "skubert-106",
+      "scene": 1,
+      "xPercent": 98.102,
+      "yPercent": 51.266,
+      "sizePercent": 9,
+      "rotationDeg": 65,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-107",
+      "scene": 2,
+      "xPercent": 7.955,
+      "yPercent": 59.169,
+      "sizePercent": 27,
+      "rotationDeg": 5,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-108",
+      "scene": 1,
+      "xPercent": 84.597,
+      "yPercent": 23.157,
+      "sizePercent": 25.5,
+      "rotationDeg": 65,
+      "pitchDeg": 35,
+      "points": 100
+    },
+    {
+      "id": "skubert-109",
+      "scene": 1,
+      "xPercent": 95.556,
+      "yPercent": 48.227,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-110",
+      "scene": 2,
+      "xPercent": 35.574,
+      "yPercent": 49.089,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-111",
+      "scene": 1,
+      "xPercent": 25.742,
+      "yPercent": 40.02,
+      "sizePercent": 9,
+      "rotationDeg": 75,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-112",
+      "scene": 1,
+      "xPercent": 25.453,
+      "yPercent": 52.584,
+      "sizePercent": 9,
+      "rotationDeg": 75,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-113",
+      "scene": 1,
+      "xPercent": 25.828,
+      "yPercent": 65.755,
+      "sizePercent": 9,
+      "rotationDeg": 75,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-114",
+      "scene": 1,
+      "xPercent": 26.578,
+      "yPercent": 54.509,
+      "sizePercent": 9,
+      "rotationDeg": 75,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-115",
+      "scene": 1,
+      "xPercent": 26.867,
+      "yPercent": 66.363,
+      "sizePercent": 9,
+      "rotationDeg": 75,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-103",
+      "scene": 1,
+      "xPercent": 98.204,
+      "yPercent": 60.486,
+      "sizePercent": 9,
+      "rotationDeg": 70,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-116",
+      "scene": 2,
+      "xPercent": 64.089,
+      "yPercent": 63.121,
+      "sizePercent": 14,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 4,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-117",
+      "scene": 3,
+      "xPercent": 5.005,
+      "yPercent": 71.125,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 5,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-118",
+      "scene": 3,
+      "xPercent": 30.404,
+      "yPercent": 41.439,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 240,
+        "verticalAmplitudePercent": 35,
+        "periodSeconds": 8
+      }
+    },
+    {
+      "id": "skubert-119",
+      "scene": 3,
+      "xPercent": 48.295,
+      "yPercent": 37.285,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-55",
+      "scene": 2,
+      "xPercent": 6.593,
+      "yPercent": 47.112,
+      "sizePercent": 27,
+      "rotationDeg": 5,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-120",
+      "scene": 2,
+      "xPercent": 5.184,
+      "yPercent": 37.589,
+      "sizePercent": 27,
+      "rotationDeg": 5,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-121",
+      "scene": 2,
+      "xPercent": 73.033,
+      "yPercent": 46.505,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 35,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-122",
+      "scene": 2,
+      "xPercent": 71.505,
+      "yPercent": 45.491,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 35,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-123",
+      "scene": 2,
+      "xPercent": 74.553,
+      "yPercent": 46.302,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 35,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-124",
+      "scene": 3,
+      "xPercent": 58.632,
+      "yPercent": 54.306,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 360,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-125",
+      "scene": 3,
+      "xPercent": 60.189,
+      "yPercent": 54.306,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 360,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-126",
+      "scene": 3,
+      "xPercent": 57.152,
+      "yPercent": 54.813,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 360,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-127",
+      "scene": 4,
+      "xPercent": 14.216,
+      "yPercent": 40.122,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-128",
+      "scene": 4,
+      "xPercent": 70.369,
+      "yPercent": 43.465,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-129",
+      "scene": 5,
+      "xPercent": 0.288,
+      "yPercent": 30.699,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-130",
+      "scene": 4,
+      "xPercent": 99.519,
+      "yPercent": 26.241,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-131",
+      "scene": 5,
+      "xPercent": 28.842,
+      "yPercent": 57.852,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-132",
+      "scene": 5,
+      "xPercent": 28.881,
+      "yPercent": 85.917,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-133",
+      "scene": 5,
+      "xPercent": 28.834,
+      "yPercent": 70.719,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-134",
+      "scene": 5,
+      "xPercent": 42.768,
+      "yPercent": 30.091,
+      "sizePercent": 10,
+      "rotationDeg": -55,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-135",
+      "scene": 5,
+      "xPercent": 43.57,
+      "yPercent": 27.558,
+      "sizePercent": 10,
+      "rotationDeg": -55,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-136",
+      "scene": 5,
+      "xPercent": 51.242,
+      "yPercent": 46.099,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 35,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-137",
+      "scene": 5,
+      "xPercent": 53.322,
+      "yPercent": 44.985,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 35,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-138",
+      "scene": 5,
+      "xPercent": 67.684,
+      "yPercent": 19.048,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-139",
+      "scene": 5,
+      "xPercent": 68.899,
+      "yPercent": 60.081,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-140",
+      "scene": 5,
+      "xPercent": 68.245,
+      "yPercent": 24.823,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-141",
+      "scene": 5,
+      "xPercent": 68.346,
+      "yPercent": 51.368,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-142",
+      "scene": 5,
+      "xPercent": 76.12,
+      "yPercent": 55.319,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-143",
+      "scene": 5,
+      "xPercent": 76.953,
+      "yPercent": 56.13,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-144",
+      "scene": 5,
+      "xPercent": 77.763,
+      "yPercent": 56.434,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-145",
+      "scene": 6,
+      "xPercent": 85.17,
+      "yPercent": 56.231,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-146",
+      "scene": 6,
+      "xPercent": 98.497,
+      "yPercent": 34.853,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-147",
+      "scene": 7,
+      "xPercent": 53.282,
+      "yPercent": 40.932,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-148",
+      "scene": 7,
+      "xPercent": 58.582,
+      "yPercent": 30.699,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-149",
+      "scene": 7,
+      "xPercent": 61.202,
+      "yPercent": 30.902,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-150",
+      "scene": 7,
+      "xPercent": 63.998,
+      "yPercent": 31.611,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-151",
+      "scene": 7,
+      "xPercent": 67.612,
+      "yPercent": 32.32,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-152",
+      "scene": 7,
+      "xPercent": 71.271,
+      "yPercent": 34.347,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-153",
+      "scene": 7,
+      "xPercent": 74.669,
+      "yPercent": 35.056,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-154",
+      "scene": 7,
+      "xPercent": 78.398,
+      "yPercent": 39.818,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-155",
+      "scene": 7,
+      "xPercent": 86.441,
+      "yPercent": 45.998,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-156",
+      "scene": 7,
+      "xPercent": 91.186,
+      "yPercent": 47.315,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-157",
+      "scene": 7,
+      "xPercent": 94.792,
+      "yPercent": 47.214,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-158",
+      "scene": 8,
+      "xPercent": 18.367,
+      "yPercent": 82.472,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-159",
+      "scene": 8,
+      "xPercent": 19.518,
+      "yPercent": 9.22,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-160",
+      "scene": 8,
+      "xPercent": 21.112,
+      "yPercent": 83.08,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-161",
+      "scene": 8,
+      "xPercent": 22.797,
+      "yPercent": 9.422,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-162",
+      "scene": 8,
+      "xPercent": 25.778,
+      "yPercent": 9.625,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-163",
+      "scene": 8,
+      "xPercent": 24.596,
+      "yPercent": 80.547,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-164",
+      "scene": 8,
+      "xPercent": 27.592,
+      "yPercent": 80.142,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-165",
+      "scene": 8,
+      "xPercent": 29.071,
+      "yPercent": 8.713,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-166",
+      "scene": 8,
+      "xPercent": 32.457,
+      "yPercent": 9.017,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-167",
+      "scene": 8,
+      "xPercent": 30.162,
+      "yPercent": 81.662,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-168",
+      "scene": 8,
+      "xPercent": 33.303,
+      "yPercent": 82.168,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-169",
+      "scene": 8,
+      "xPercent": 35.14,
+      "yPercent": 9.321,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-170",
+      "scene": 8,
+      "xPercent": 36.383,
+      "yPercent": 83.181,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-171",
+      "scene": 8,
+      "xPercent": 78.362,
+      "yPercent": 26.14,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 80,
+        "verticalAmplitudePercent": 35,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-172",
+      "scene": 8,
+      "xPercent": 81.119,
+      "yPercent": 35.003,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 80,
+        "verticalAmplitudePercent": 35,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-173",
+      "scene": 8,
+      "xPercent": 82.571,
+      "yPercent": 39.108,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 80,
+        "verticalAmplitudePercent": 35,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-174",
+      "scene": 9,
+      "xPercent": 16.428,
+      "yPercent": 29.281,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-175",
+      "scene": 9,
+      "xPercent": 35.584,
+      "yPercent": 72.543,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-176",
+      "scene": 9,
+      "xPercent": 35.584,
+      "yPercent": 57.143,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-177",
+      "scene": 9,
+      "xPercent": 35.528,
+      "yPercent": 40.122,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-178",
+      "scene": 9,
+      "xPercent": 72.732,
+      "yPercent": 11.651,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 40,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-179",
+      "scene": 9,
+      "xPercent": 73.432,
+      "yPercent": 13.651,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 40,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-180",
+      "scene": 9,
+      "xPercent": 74.132,
+      "yPercent": 15.651,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 40,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-181",
+      "scene": 9,
+      "xPercent": 74.83200000000001,
+      "yPercent": 17.651,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 40,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-182",
+      "scene": 9,
+      "xPercent": 75.53200000000001,
+      "yPercent": 19.651,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 40,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-183",
+      "scene": 9,
+      "xPercent": 76.23200000000001,
+      "yPercent": 21.651,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 40,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-184",
+      "scene": 9,
+      "xPercent": 86.692,
+      "yPercent": 42.958,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-185",
+      "scene": 9,
+      "xPercent": 86.713,
+      "yPercent": 59.271,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-186",
+      "scene": 2,
+      "xPercent": 93.066,
+      "yPercent": 51.672,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-187",
+      "scene": 2,
+      "xPercent": 60.638,
+      "yPercent": 80.243,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-188",
+      "scene": 2,
+      "xPercent": 26.373,
+      "yPercent": 37.69,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-104",
+      "scene": 1,
+      "xPercent": 32.232,
+      "yPercent": 72.442,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "vertical",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-189",
+      "scene": 1,
+      "xPercent": 62.238,
+      "yPercent": 29.686,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 25,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-190",
+      "scene": 1,
+      "xPercent": 63.418,
+      "yPercent": 30.496,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 25,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-191",
+      "scene": 1,
+      "xPercent": 72.555,
+      "yPercent": 39.412,
+      "sizePercent": 27,
+      "rotationDeg": -75,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-192",
+      "scene": 1,
+      "xPercent": 72.993,
+      "yPercent": 32.32,
+      "sizePercent": 27,
+      "rotationDeg": -75,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-193",
+      "scene": 2,
+      "xPercent": 82.785,
+      "yPercent": 37.487,
+      "sizePercent": 27,
+      "rotationDeg": 60,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "wave-left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-194",
+      "scene": 4,
+      "xPercent": 59.863,
+      "yPercent": 31.915,
+      "sizePercent": 12,
+      "rotationDeg": -25,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-195",
+      "scene": 6,
+      "xPercent": 66.189,
+      "yPercent": 19.25,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-196",
+      "scene": 6,
+      "xPercent": 66.228,
+      "yPercent": 28.065,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-197",
+      "scene": 6,
+      "xPercent": 66.228,
+      "yPercent": 33.637,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-198",
+      "scene": 6,
+      "xPercent": 66.181,
+      "yPercent": 23.506,
+      "sizePercent": 9,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100,
+      "motion": {
+        "type": "left",
+        "speedPxPerSecond": 180,
+        "verticalAmplitudePercent": 8,
+        "periodSeconds": 3
+      }
+    },
+    {
+      "id": "skubert-199",
+      "scene": 8,
+      "xPercent": 49.184,
+      "yPercent": 35.664,
+      "sizePercent": 27,
+      "rotationDeg": 0,
+      "pitchDeg": 0,
+      "points": 100
+    },
+    {
+      "id": "skubert-200",
+      "scene": 8,
+      "xPercent": 52.89,
+      "yPercent": 36.981,
       "sizePercent": 27,
       "rotationDeg": 0,
       "pitchDeg": 0,
