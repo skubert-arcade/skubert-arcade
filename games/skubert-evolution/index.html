@@ -95,6 +95,12 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   let time=0,lastMergeTime=-100,combo=0,lastFrame=0,accumulator=0,down=false,ballId=0;
   const step=1/60;
   const factor=1.23;
+  // Rotation is radians/second; strong damping avoids spin that persists in a settled pile.
+  const MAX_ANGULAR_SPEED=8;
+  const ANGULAR_DRAG=1.8;
+  const SPIN_STOP_THRESHOLD=.045;
+  const SPIN_IMPACT_MIN=55;
+  const SPIN_CONTACT_COOLDOWN=.12;
   const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
   const radius=level=>radius0*Math.pow(factor,level);
   // Only classifications previously produced by an actual merge can enter the drop queue.
@@ -125,7 +131,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       if(b.vx<0){
         impact(b,1,0,-b.vx);
         b.vx=b.vx<-65?-b.vx*.52:0;
-        b.omega=clamp(b.omega+b.vx*.004,-15,15);
+        // Head-on wall bounces do not add rotational energy.
       }
     }
     if(side==='right' && b.x+b.r>right){
@@ -133,7 +139,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       if(b.vx>0){
         impact(b,-1,0,b.vx);
         b.vx=b.vx>65?-b.vx*.52:0;
-        b.omega=clamp(b.omega+b.vx*.004,-15,15);
+        // Head-on wall bounces do not add rotational energy.
       }
     }
   }
@@ -164,7 +170,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   }
   function createBall(level,x,y,vx=0,vy=0){
     const r=radius(level);
-    return {id:++ballId,level,r,x:clamp(x,left+r,right-r),y,vx,vy,angle:0,omega:0,
+    return {id:++ballId,level,r,x:clamp(x,left+r,right-r),y,vx,vy,angle:0,omega:0,lastSpin:-10,
       squish:0,squishV:0,squishAxis:0,lastImpact:-10,born:time,pulse:0};
   }
   function drop(){
@@ -200,7 +206,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     balls.splice(j,1);balls.splice(i,1);
     const merged=createBall(newLevel,cx,Math.min(cy,floor-radius(newLevel)),vx,vy);
     merged.angle=(a.angle+b.angle)/2;
-    merged.omega=clamp((a.omega+b.omega)*.38+(Math.random()-.5)*2.8,-12,12);
+    // Inherit just a little spin, plus a short celebratory wobble.
+    merged.omega=clamp((a.omega+b.omega)*.22+(Math.random()-.5)*1.25,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
     merged.squish=.25; merged.squishV=-2.2; merged.squishAxis=Math.PI/2;
     // Newly merged bodies receive a short overflow grace period while the pile reacts.
     merged.born=time;merged.pulse=.26;balls.push(merged);
@@ -224,7 +231,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       other.squish=clamp(other.squish+reach*.095,-.18,.24);
       other.squishV+=reach*.45;
       // Off-center pressure spins nearby medallions, including their printed labels.
-      other.omega=clamp(other.omega+(dx/Math.max(1,dist))*(dy>0?-1:1)*reach*2.5,-15,15);
+      other.omega=clamp(other.omega+(dx/Math.max(1,dist))*(dy>0?-1:1)*reach*.9,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
     }
     shockwaves.push({x:cx,y:cy,r:merged.r*.35,maxR:range*.55,life:.35,maxLife:.35,color:LEVELS[newLevel].color});
     combo=(time-lastMergeTime)<1.35?Math.min(combo+1,8):1;
@@ -264,9 +271,17 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       const tangentImpulse=clamp(-tangentSpeed/sum,-impulse*.21,impulse*.21);
       a.vx-=tangentImpulse*tx*invA;a.vy-=tangentImpulse*ty*invA;
       b.vx+=tangentImpulse*tx*invB;b.vy+=tangentImpulse*ty*invB;
-      // Tangential collision impulse produces angular velocity.
-      a.omega=clamp(a.omega+tangentSpeed*.008*(24/Math.max(12,a.r)),-15,15);
-      b.omega=clamp(b.omega+tangentSpeed*.008*(24/Math.max(12,b.r)),-15,15);
+      // Spin only on genuinely strong, glancing impacts. The cooldown stops
+      // multi-pass contact solving from injecting torque repeatedly.
+      if(impactSpeed>SPIN_IMPACT_MIN && Math.abs(tangentSpeed)>35 &&
+         time-a.lastSpin>SPIN_CONTACT_COOLDOWN &&
+         time-b.lastSpin>SPIN_CONTACT_COOLDOWN){
+        a.omega=clamp(a.omega+clamp(tangentSpeed*.0024*(24/Math.max(12,a.r)),-2,2),
+                      -MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
+        b.omega=clamp(b.omega+clamp(tangentSpeed*.0024*(24/Math.max(12,b.r)),-2,2),
+                      -MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
+        a.lastSpin=time;b.lastSpin=time;
+      }
     }
     return true;
   }
@@ -278,7 +293,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       b.pulse=Math.max(0,b.pulse-dt);
       b.vx=clamp(b.vx,-1100,1100);b.vy=clamp(b.vy,-1150,1150);
       b.x+=b.vx*dt;b.y+=b.vy*dt;
-      b.omega*=.997;
+      b.omega*=Math.exp(-ANGULAR_DRAG*dt);
+      if(Math.abs(b.omega)<SPIN_STOP_THRESHOLD)b.omega=0;
       b.angle+=b.omega*dt;
       // Damped spring produces a short, elastic wobble after impact.
       b.squishV+=(-150*b.squish-17*b.squishV)*dt;
@@ -296,8 +312,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
             b.vy=b.vy>70?-b.vy*.44:0;
           }
           b.vx*=.955;
-          // Rolling contact: horizontal movement drives rotation until the ball rests.
-          b.omega+=(b.vx/Math.max(1,b.r)-b.omega)*.10;
+          // Rolling torque is applied once per frame after the contact passes.
         }
       }
       let didMerge=false;
@@ -312,6 +327,20 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       }
       if(ended)break;
       if(didMerge){pass=-1;continue;}
+    }
+    // Couple rolling to movement only when grounded; brake stationary spheres.
+    for(const b of balls){
+      const grounded=b.y+b.r>=floor-.8;
+      const slowLinear=Math.abs(b.vx)<8 && Math.abs(b.vy)<15;
+      if(grounded && slowLinear){
+        if(Math.abs(b.vx)<2)b.vx=0;
+        b.omega*=Math.exp(-9*dt);
+      } else if(grounded && Math.abs(b.vx)>=8){
+        const target=clamp(b.vx/Math.max(1,b.r),-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
+        b.omega+=clamp(target-b.omega,-3,3)*Math.min(1,dt*7);
+      }
+      b.omega=clamp(b.omega,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
+      if(Math.abs(b.omega)<SPIN_STOP_THRESHOLD && slowLinear)b.omega=0;
     }
     const isOverflow=balls.some(b=>time-b.born>1.65 && b.y-b.r<overflowY && b.y+b.r>boxTop && Math.abs(b.vy)<100);
     overflowAge=clamp(overflowAge+(isOverflow?dt:-dt*2),0,3);
