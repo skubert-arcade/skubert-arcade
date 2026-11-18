@@ -3,261 +3,103 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#17143a">
+  <meta name="theme-color" content="#fafafa">
   <title>Skubert Evolution | Skubert Arcade</title>
   <style>
-  :root {
-    color-scheme: light;
-    font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
-    --panel: rgba(255,255,255,.78);
-    --panel-strong: rgba(255,255,255,.9);
-    --ink: #161616;
-    --muted: #4b4b4b;
-    --accent: #1b63da;
-    --accent-2: #1453bc;
-  }
-  * { box-sizing: border-box; }
-  html, body { min-height: 100%; }
-  body {
-    margin: 0;
-    color: var(--ink);
-    background: #ececec url('./taxonomy-ranking-system.png') center center / cover no-repeat fixed;
-  }
-  body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background: linear-gradient(rgba(255,255,255,.38), rgba(255,255,255,.46));
-    pointer-events: none;
-  }
-  a { color: inherit; text-decoration: none; }
-  button { font: inherit; cursor: pointer; }
-  button:focus-visible, a:focus-visible, canvas:focus-visible {
-    outline: 3px solid #ffb100;
-    outline-offset: 3px;
-  }
-  .page {
-    position: relative;
-    z-index: 1;
-    width: min(100%, 520px);
-    margin: 0 auto;
-    padding: 16px 12px 24px;
-  }
-  .topbar {
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 10px;
-    align-items: center;
-    margin-bottom: 12px;
-  }
-  .title-block {
-    text-align: center;
-    background: var(--panel);
-    border: 1px solid rgba(0,0,0,.08);
-    border-radius: 16px;
-    padding: 10px 12px;
-    backdrop-filter: blur(8px);
-    box-shadow: 0 10px 24px rgba(0,0,0,.08);
-  }
-  .title-block h1 {
-    margin: 0;
-    font-size: clamp(26px, 6vw, 36px);
-    line-height: 1;
-    letter-spacing: -.04em;
-  }
-  .title-block p {
-    margin: 6px 0 0;
-    font-size: 12px;
-    color: var(--muted);
-  }
-  .btn {
-    appearance: none;
-    border: 1px solid rgba(0,0,0,.08);
-    border-radius: 14px;
-    background: var(--panel-strong);
-    color: var(--ink);
-    padding: 10px 12px;
-    font-weight: 800;
-    backdrop-filter: blur(8px);
-    box-shadow: 0 8px 18px rgba(0,0,0,.08);
-  }
-  .btn:hover { background: rgba(255,255,255,.96); }
-  .btn.primary {
-    background: #0f5fe0;
-    color: #fff;
-    border-color: rgba(0,0,0,.05);
-  }
-  .btn.primary:hover { background: #0d58cf; }
-  .board-card {
-    background: var(--panel);
-    border: 1px solid rgba(0,0,0,.08);
-    border-radius: 22px;
-    overflow: hidden;
-    backdrop-filter: blur(10px);
-    box-shadow: 0 18px 36px rgba(0,0,0,.14);
-  }
-  .hud {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    padding: 12px;
-    background: rgba(255,255,255,.32);
-    border-bottom: 1px solid rgba(0,0,0,.08);
-  }
-  .stat {
-    min-width: 0;
-    background: rgba(255,255,255,.62);
-    border: 1px solid rgba(0,0,0,.06);
-    border-radius: 14px;
-    padding: 8px 10px;
-  }
-  .stat .key {
-    display: block;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: .08em;
-    font-weight: 800;
-    color: var(--muted);
-  }
-  .stat .value {
-    display: block;
-    margin-top: 2px;
-    font-size: clamp(17px, 4vw, 23px);
-    font-weight: 900;
-    font-variant-numeric: tabular-nums;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .next-row { display: flex; align-items: center; gap: 7px; margin-top: 4px; }
-  .next-orb {
-    display: inline-block;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    border: 1px solid rgba(255,255,255,.8);
-    background: radial-gradient(circle at 30% 27%, #fff8d6, #b8a65e 65%, #5b4431);
-    box-shadow: inset -3px -3px 5px rgba(0,0,0,.15);
-    flex: none;
-  }
-  .next-name {
-    font-size: 12px;
-    font-weight: 800;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .arena {
-    position: relative;
-    background: rgba(255,255,255,.12);
-  }
-  canvas {
-    display: block;
-    width: 100%;
-    height: clamp(430px, 68vh, 610px);
-    touch-action: none;
-    cursor: crosshair;
-  }
-  .mini-status {
-    display: grid;
-    gap: 4px;
-    padding: 10px 12px;
-    font-size: 12px;
-    line-height: 1.35;
-    color: #2f2f2f;
-    background: rgba(255,255,255,.48);
-    border-top: 1px solid rgba(0,0,0,.08);
-  }
-  .mini-status span { overflow-wrap: anywhere; }
-  .controls {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 8px;
-    padding: 12px;
-    background: rgba(255,255,255,.32);
-    border-top: 1px solid rgba(0,0,0,.08);
-  }
-  .overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 18px;
-    background: rgba(255,255,255,.5);
-    backdrop-filter: blur(3px);
-    z-index: 3;
-  }
-  .overlay[hidden] { display: none; }
-  .modal {
-    width: min(100%, 320px);
-    padding: 22px 18px;
-    text-align: center;
-    background: rgba(255,255,255,.94);
-    border: 1px solid rgba(0,0,0,.08);
-    border-radius: 20px;
-    box-shadow: 0 16px 32px rgba(0,0,0,.16);
-  }
-  .modal h2 { margin: 0 0 8px; font-size: 30px; line-height: 1; }
-  .modal p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
-  .modal .final-score { font-size: 30px; font-weight: 900; margin: 10px 0 6px; }
-  .modal .btn { margin-top: 10px; min-width: 150px; }
-  #ladder { display: none; }
-  @media (max-width: 520px) {
-    .page { padding: 10px 8px 18px; }
-    .topbar { grid-template-columns: 1fr 1fr; }
-    .title-block { grid-column: 1 / -1; order: -1; }
-    .hud { gap: 6px; padding: 8px; }
-    .stat { padding: 7px 8px; }
-    .controls { padding: 10px; }
-    canvas { height: clamp(420px, 66vh, 560px); }
-  }
+:root { color-scheme:light; font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif; color:#181818; }
+* { box-sizing:border-box; }
+html,body { margin:0; min-height:100%; background:#fafafa; }
+a { color:#26384a; text-decoration:none; }
+button { font:inherit; cursor:pointer; }
+button:focus-visible,a:focus-visible,canvas:focus-visible { outline:3px solid #e89313; outline-offset:3px; }
+.page { width:min(100%,1180px); margin:auto; padding:16px 16px 22px; }
+.scene { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,416px); align-items:center; gap:clamp(12px,2vw,28px); min-height:calc(100svh - 38px); }
+/* The original 1254×1254 PNG is always shown whole, unaltered, and fully opaque. */
+.taxonomy-art { width:100%; display:flex; justify-content:center; align-items:center; overflow:visible; }
+.taxonomy-art img { width:100%; height:auto; max-height:calc(100svh - 44px); object-fit:contain; display:block; opacity:1; }
+.game-column { width:100%; max-width:416px; justify-self:center; }
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:9px; }
+.title { margin:0; font-size:clamp(16px,2vw,19px); font-weight:850; letter-spacing:-.035em; text-align:center; }
+.btn { min-width:0; border:1px solid #d5d9dc; border-radius:10px; padding:9px 10px; color:#20262c; background:#fff; font-weight:750; }
+.btn:hover { background:#f0f3f5; }
+.btn.primary { background:#315e94; color:#fff; border-color:#315e94; }
+.btn.primary:hover { background:#204e85; }
+.board-card { background:#fff; border:1px solid #d5d5d5; border-radius:16px; overflow:hidden; box-shadow:0 10px 30px #2222; }
+.hud { display:grid; grid-template-columns:1fr 1fr 1.35fr; gap:5px; padding:7px; border-bottom:1px solid #dedede; }
+.stat { min-width:0; padding:4px 7px; border-radius:7px; background:#f4f5f6; }
+.stat .key { display:block; color:#61656a; font-size:10px; text-transform:uppercase; letter-spacing:.045em; font-weight:800; }
+.stat .value { display:block; margin-top:2px; font-variant-numeric:tabular-nums; font-size:20px; font-weight:900; }
+.next-row { display:flex; align-items:center; gap:6px; padding-top:4px; }
+.next-orb { display:block; flex:none; width:20px; height:20px; border:1px solid #fff9; border-radius:50%; background:#8db45e; }
+.next-name { font-size:11px; font-weight:750; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.arena { position:relative; background:#d0a575; }
+canvas { width:100%; height:clamp(415px,63svh,565px); display:block; cursor:crosshair; touch-action:none; }
+.status { display:flex; flex-direction:column; gap:2px; font-size:11px; padding:7px 10px; line-height:1.25; color:#505050; background:#fff; border-top:1px solid #ececec; }
+.status #dropPool { font-size:10px; color:#666; overflow-wrap:anywhere; }
+.status #progress { color:#333; font-weight:750; }
+.controls { display:grid; grid-template-columns:1fr 1.45fr 1fr; gap:7px; padding:7px; border-top:1px solid #eee; }
+.controls .btn { padding:9px; }
+.overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:15px; background:#161616a0; z-index:3; }
+.overlay[hidden] { display:none; }
+.modal { background:#fff; color:#222; border-radius:16px; text-align:center; padding:22px 18px; width:min(100%,330px); box-shadow:0 16px 32px #0005; }
+.modal h2 { margin:0 0 6px; font-size:26px; }
+.modal p { margin:3px 0; line-height:1.4; font-size:13px; }
+.final-score { font-size:28px; font-weight:900; margin:10px 0 5px; }
+#ladder { display:none; }
+@media (max-width:760px) {
+ .page { padding:8px 9px 18px; }
+ .scene { grid-template-columns:1fr; min-height:0; gap:8px; }
+ .taxonomy-art img { width:auto; max-width:100%; height:min(21svh,175px); max-height:none; }
+ .game-column { width:min(100%,416px); }
+ canvas { height:clamp(390px,53svh,545px); }
+ .stat .value { font-size:18px; }
+}
+@media (prefers-reduced-motion:reduce) { .btn { transition:none; } }
 </style>
 </head>
 <body>
 <div class="page">
-  <header class="topbar">
-    <a href="../../index.html" class="btn" aria-label="Back to Skubert Arcade">← Arcade</a>
-    <div class="title-block">
-      <h1>Skubert Evolution</h1>
-      <p>Merge matching ranks until you reach Skubert.</p>
+  <div class="scene">
+    <div class="taxonomy-art">
+      <img src="taxonomy-ranking-system.png" alt="Taxonomic ranking system pyramid, from Eukarya through more specific biological classifications" width="1254" height="1254" decoding="async">
     </div>
-    <button id="restartTop" class="btn" type="button">↻ New game</button>
-  </header>
-
-  <main class="board-card" aria-label="Skubert Evolution game">
-    <div class="hud">
-      <div class="stat"><span class="key">Score</span><span id="score" class="value">0</span></div>
-      <div class="stat"><span class="key">Best</span><span id="best" class="value">0</span></div>
-      <div class="stat"><span class="key">Next</span><span class="next-row"><span class="next-orb" id="nextOrb"></span><span id="nextName" class="next-name">Animalia</span></span></div>
-    </div>
-
-    <div class="arena">
-      <canvas id="game" aria-label="Drop spheres into the cardboard box. Matching classifications merge into the next classification." tabindex="0"></canvas>
-      <div id="overlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
-        <div class="modal">
-          <h2 id="endTitle">Game Over</h2>
-          <p id="endMessage">The box overflowed.</p>
-          <div id="endScore" class="final-score">0</div>
-          <button id="playAgain" class="btn primary" type="button">Play again</button>
+    <div class="game-column">
+      <header class="topbar">
+        <a href="../../index.html" class="btn" aria-label="Back to Skubert Arcade">← Arcade</a>
+        <h1 class="title">Skubert Evolution</h1>
+        <button id="restartTop" class="btn" type="button" aria-label="Start a new game">↻ Restart</button>
+      </header>
+      <main class="board-card" aria-label="Skubert Evolution game">
+        <div class="hud">
+          <div class="stat"><span class="key">Score</span><span id="score" class="value">0</span></div>
+          <div class="stat"><span class="key">Best</span><span id="best" class="value">0</span></div>
+          <div class="stat"><span class="key">Next drop</span><span class="next-row"><span class="next-orb" id="nextOrb"></span><span id="nextName" class="next-name">Eukarya</span></span></div>
         </div>
-      </div>
+        <div class="arena">
+          <canvas id="game" tabindex="0" aria-label="Drop the spheres. Identical classifications merge into the next, larger classification."></canvas>
+          <div id="overlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
+            <div class="modal">
+              <h2 id="endTitle">Game Over</h2>
+              <p id="endMessage">The box overflowed.</p>
+              <div id="endScore" class="final-score">0</div>
+              <button id="playAgain" class="btn primary" type="button">Play again</button>
+            </div>
+          </div>
+        </div>
+        <div class="status">
+          <span id="message" aria-live="polite">Aim with mouse or arrows. Click, tap, or press Space to drop.</span>
+          <span id="progress">Highest: Eukarya</span>
+          <span id="dropPool">Available drops: Eukarya</span>
+        </div>
+        <div class="controls">
+          <button id="leftButton" type="button" class="btn" aria-label="Aim left">◀</button>
+          <button id="dropButton" type="button" class="btn primary">Drop ↓</button>
+          <button id="rightButton" type="button" class="btn" aria-label="Aim right">▶</button>
+        </div>
+      </main>
+      <div id="ladder" hidden></div>
     </div>
-
-    <div class="mini-status">
-      <span id="message" aria-live="polite">Move your cursor to aim. Click to drop.</span>
-      <span id="progress">Highest: Eukarya</span>
-      <span id="dropPool">Available drops: Eukarya</span>
-    </div>
-
-    <div class="controls">
-      <button type="button" id="leftButton" class="btn" aria-label="Aim left">◀</button>
-      <button type="button" id="dropButton" class="btn primary">Drop</button>
-      <button type="button" id="rightButton" class="btn" aria-label="Aim right">▶</button>
-    </div>
-  </main>
-
-  <div id="ladder" hidden></div>
+  </div>
 </div>
 <script>
 (() => {
@@ -281,7 +123,7 @@
   const scoreEl=$('score'), bestEl=$('best'), nextNameEl=$('nextName'), nextOrbEl=$('nextOrb');
   const overlay=$('overlay'), endTitle=$('endTitle'), endMessage=$('endMessage'), endScore=$('endScore');
   const fmt=new Intl.NumberFormat('en-US');
-  const storageKey='skubertEvolutionPrototypeBestV2Simplified';
+  const storageKey='skubertEvolutionPrototypeBestV1';
   let best=0;
   try { best=Number(localStorage.getItem(storageKey))||0; } catch (_) {}
   bestEl.textContent=fmt.format(best);
@@ -352,7 +194,8 @@
   }
   function createBall(level,x,y,vx=0,vy=0){
     const r=radius(level);
-    return {id:++ballId,level,r,x:clamp(x,left+r,right-r),y,vx,vy,angle:0,born:time,pulse:0};
+    return {id:++ballId,level,r,x:clamp(x,left+r,right-r),y,vx,vy,angle:0,omega:0,
+      squish:0,squishV:0,squishAxis:0,lastImpact:-10,born:time,pulse:0};
   }
   function drop(){
     if(ended||dropWait>0)return;
@@ -361,6 +204,15 @@
     current=next;next=choice();updateNext();dropWait=.28;
     aimX=clamp(aimX,left+radius(current),right-radius(current));
     setMessage(`Dropped ${LEVELS[balls[balls.length-1].level].name}. Match two to evolve!`);
+  }
+  // Visual soft-body response: spring-driven deformation layered over stable circle colliders.
+  // This creates squash/stretch without making the collision solver unpredictable.
+  function impact(ball, normalX, normalY, speed){
+    if(speed<65 || time-ball.lastImpact<.055)return;
+    ball.lastImpact=time;
+    ball.squishAxis=Math.atan2(normalY,normalX);
+    ball.squish=clamp(ball.squish + Math.min(.24, speed*.00048), -.20, .29);
+    ball.squishV=Math.max(ball.squishV, Math.min(2.6,speed*.004));
   }
   function makeParticles(x,y,color,n=14){
     for(let i=0;i<n;i++){
@@ -377,6 +229,9 @@
     // Delete higher index first so the lower index stays valid.
     balls.splice(j,1);balls.splice(i,1);
     const merged=createBall(newLevel,cx,Math.min(cy,floor-radius(newLevel)),vx,vy);
+    merged.angle=(a.angle+b.angle)/2;
+    merged.omega=clamp((a.omega+b.omega)*.38+(Math.random()-.5)*2.8,-12,12);
+    merged.squish=.25; merged.squishV=-2.2; merged.squishAxis=Math.PI/2;
     // Newly merged bodies receive a short overflow grace period while the pile reacts.
     merged.born=time;merged.pulse=.26;balls.push(merged);
     // An outward shockwave turns each merge into a visible, physical event.
@@ -395,6 +250,11 @@
       other.vx+=(dx/norm)*kick;
       other.vy+=(dy/norm)*kick-kick*.30;
       other.pulse=Math.max(other.pulse,.095);
+      other.squishAxis=Math.atan2(dy,dx);
+      other.squish=clamp(other.squish+reach*.095,-.18,.24);
+      other.squishV+=reach*.45;
+      // Off-center pressure spins nearby medallions, including their printed labels.
+      other.omega=clamp(other.omega+(dx/Math.max(1,dist))*(dy>0?-1:1)*reach*2.5,-15,15);
     }
     shockwaves.push({x:cx,y:cy,r:merged.r*.35,maxR:range*.55,life:.35,maxLife:.35,color:LEVELS[newLevel].color});
     combo=(time-lastMergeTime)<1.35?Math.min(combo+1,8):1;
@@ -422,7 +282,10 @@
     const rvx=b.vx-a.vx,rvy=b.vy-a.vy,normalSpeed=rvx*nx+rvy*ny;
     if(normalSpeed<0){
       // Lively impacts, but low restitution for near-rest contacts prevents endless jitter.
-      const restitution=normalSpeed < -75 ? .49 : .04;
+      const impactSpeed=-normalSpeed;
+      const restitution=normalSpeed < -75 ? .55 : .04;
+      impact(a,-nx,-ny,impactSpeed);
+      impact(b,nx,ny,impactSpeed);
       const impulse=-(1+restitution)*normalSpeed/sum;
       a.vx-=impulse*nx*invA;a.vy-=impulse*ny*invA;
       b.vx+=impulse*nx*invB;b.vy+=impulse*ny*invB;
@@ -431,6 +294,9 @@
       const tangentImpulse=clamp(-tangentSpeed/sum,-impulse*.21,impulse*.21);
       a.vx-=tangentImpulse*tx*invA;a.vy-=tangentImpulse*ty*invA;
       b.vx+=tangentImpulse*tx*invB;b.vy+=tangentImpulse*ty*invB;
+      // Tangential collision impulse produces angular velocity.
+      a.omega=clamp(a.omega+tangentSpeed*.008*(24/Math.max(12,a.r)),-15,15);
+      b.omega=clamp(b.omega+tangentSpeed*.008*(24/Math.max(12,b.r)),-15,15);
     }
     return true;
   }
@@ -442,14 +308,27 @@
       b.pulse=Math.max(0,b.pulse-dt);
       b.vx=clamp(b.vx,-1100,1100);b.vy=clamp(b.vy,-1150,1150);
       b.x+=b.vx*dt;b.y+=b.vy*dt;
-      b.angle+=b.vx*dt/Math.max(1,b.r);
+      b.omega*=.997;
+      b.angle+=b.omega*dt;
+      // Damped spring produces a short, elastic wobble after impact.
+      b.squishV+=(-150*b.squish-17*b.squishV)*dt;
+      b.squish=clamp(b.squish+b.squishV*dt,-.24,.3);
     }
     let merges=0;
     for(let pass=0;pass<4;pass++){
       for(const b of balls){
-        if(b.x-b.r<left){b.x=left+b.r;if(b.vx<0)b.vx*=-.46;}
-        if(b.x+b.r>right){b.x=right-b.r;if(b.vx>0)b.vx*=-.46;}
-        if(b.y+b.r>floor){b.y=floor-b.r;if(b.vy>0)b.vy=b.vy>70?-b.vy*.39:0;b.vx*=.955;}
+        if(b.x-b.r<left){b.x=left+b.r;if(b.vx<0){impact(b,1,0,-b.vx);b.vx*=-.48;b.omega=clamp(b.omega+b.vy*.001,-15,15);}}
+        if(b.x+b.r>right){b.x=right-b.r;if(b.vx>0){impact(b,-1,0,b.vx);b.vx*=-.48;b.omega=clamp(b.omega-b.vy*.001,-15,15);}}
+        if(b.y+b.r>floor){
+          b.y=floor-b.r;
+          if(b.vy>0){
+            impact(b,0,-1,b.vy);
+            b.vy=b.vy>70?-b.vy*.44:0;
+          }
+          b.vx*=.955;
+          // Rolling contact: horizontal movement drives rotation until the ball rests.
+          b.omega+=(b.vx/Math.max(1,b.r)-b.omega)*.10;
+        }
       }
       let didMerge=false;
       outer:for(let i=0;i<balls.length;i++){
@@ -481,30 +360,45 @@
   }
   function hexRGB(hex){const c=hex.replace('#','');return [parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16)];}
   function tint(hex,t){const rgb=hexRGB(hex);return `rgb(${rgb.map(n=>Math.round(n+(t>=0?(255-n):n)*t)).join(',')})`;}
-  function drawSphere(x,y,r,level,ghost=false,pulse=0){
+  function drawSphere(x,y,r,level,ghost=false,pulse=0,angle=0,squish=0,squishAxis=0){
     const color=LEVELS[level].color;
-    ctx.save();ctx.globalAlpha=ghost?.85:1;
-    if(pulse>0){const t=pulse/.26;ctx.translate(x,y);ctx.scale(1+.11*t,1+.11*t);ctx.translate(-x,-y);}
-    ctx.shadowColor='#23133777';ctx.shadowBlur=8;ctx.shadowOffsetY=4;
-    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
-    const gradient=ctx.createRadialGradient(x-r*.4,y-r*.5,r*.08,x+r*.25,y+r*.3,r*1.4);
-    gradient.addColorStop(0,tint(color,.5));gradient.addColorStop(.45,color);gradient.addColorStop(1,tint(color,-.53));
-    ctx.fillStyle=gradient;ctx.fill();ctx.shadowBlur=0;ctx.shadowOffsetY=0;
-    ctx.strokeStyle=tint(color,-.6);ctx.lineWidth=Math.max(1.3,r*.055);ctx.stroke();
-    ctx.save();ctx.beginPath();ctx.arc(x,y,r-1,0,Math.PI*2);ctx.clip();
-    // A curved reflective highlight gives each flat physics circle a spherical appearance.
-    ctx.beginPath();ctx.ellipse(x-r*.28,y-r*.47,r*.4,Math.max(2,r*.13),-.45,0,Math.PI*2);
-    ctx.fillStyle='#fff8';ctx.fill();
-    ctx.beginPath();ctx.arc(x+r*.29,y+r*.28,r*.62,0,Math.PI*2);
+    ctx.save();
+    ctx.globalAlpha=ghost?.85:1;
+    ctx.translate(x,y);
+    const puff=pulse>0?(1+.10*pulse/.26):1;
+    ctx.scale(puff,puff);
+    // Keep the body physically circular while rendering an elastic soft sphere.
+    // The deformation axis follows the impact normal, independently of surface rotation.
+    ctx.rotate(squishAxis);
+    ctx.scale(1-clamp(squish,-.24,.3),1+clamp(squish,-.24,.3)*.7);
+    ctx.rotate(-squishAxis);
+    // Everything painted onto the surface (including the text) rotates with the sphere.
+    ctx.rotate(angle);
+    ctx.shadowColor='#20170d75';ctx.shadowBlur=8;ctx.shadowOffsetY=4;
+    ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);
+    const gradient=ctx.createRadialGradient(-r*.42,-r*.54,r*.08,r*.22,r*.27,r*1.35);
+    gradient.addColorStop(0,tint(color,.52));gradient.addColorStop(.47,color);gradient.addColorStop(1,tint(color,-.51));
+    ctx.fillStyle=gradient;ctx.fill();
+    ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+    ctx.strokeStyle=tint(color,-.57);ctx.lineWidth=Math.max(1.3,r*.055);ctx.stroke();
+    ctx.save();ctx.beginPath();ctx.arc(0,0,r-1,0,Math.PI*2);ctx.clip();
+    ctx.beginPath();ctx.ellipse(-r*.31,-r*.47,r*.38,Math.max(2,r*.13),-.45,0,Math.PI*2);
+    ctx.fillStyle='#fff9';ctx.fill();
+    ctx.beginPath();ctx.arc(r*.29,r*.28,r*.62,0,Math.PI*2);
     ctx.strokeStyle='#fff2';ctx.lineWidth=Math.max(2,r*.12);ctx.stroke();
-    const text=LEVELS[level].name;
-    const fontSize=clamp(r*.55,9,level===9?30:22);
-    ctx.font=`900 ${fontSize}px system-ui, Arial, sans-serif`;
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.lineJoin='round';ctx.lineWidth=clamp(fontSize*.30,2,5);
-    ctx.strokeStyle='#23133fc9';
-    ctx.strokeText(text,x,y+1,r*1.82);
-    ctx.fillStyle='#fff';ctx.fillText(text,x,y+1,r*1.82);
+    // Printed lettering is part of the ball texture: it is not screen-aligned.
+    const label=LEVELS[level].name;
+    let fontSize=clamp(r*.56,9,level===9?29:22);
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
+    ctx.font=`900 ${fontSize}px system-ui,Arial,sans-serif`;
+    const maxWidth=r*1.76;
+    if(ctx.measureText(label).width>maxWidth){
+      fontSize=Math.max(8,fontSize*maxWidth/ctx.measureText(label).width);
+      ctx.font=`900 ${fontSize}px system-ui,Arial,sans-serif`;
+    }
+    ctx.lineWidth=clamp(fontSize*.27,2,5);
+    ctx.strokeStyle='#1d1735da';ctx.strokeText(label,0,1);
+    ctx.fillStyle='#fff';ctx.fillText(label,0,1);
     ctx.restore();ctx.restore();
   }
   function render(){
@@ -529,7 +423,7 @@
     ctx.beginPath();ctx.moveTo(left+5,overflowY);ctx.lineTo(right-5,overflowY);ctx.stroke();ctx.setLineDash([]);
     ctx.fillStyle='#743e3b';ctx.font='bold 12px system-ui,Arial';ctx.textAlign='center';ctx.fillText('OVERFLOW LINE',W/2,overflowY-10);
     if(overflowAge>0){ctx.fillStyle='#f5515766';ctx.fillRect(left,overflowY-4,(right-left)*overflowAge/3,5);}
-    for(const b of balls)drawSphere(b.x,b.y,b.r,b.level,false,b.pulse);
+    for(const b of balls)drawSphere(b.x,b.y,b.r,b.level,false,b.pulse,b.angle,b.squish,b.squishAxis);
     for(const w of shockwaves){
       ctx.globalAlpha=(w.life/w.maxLife)*.55;
       ctx.beginPath();ctx.arc(w.x,w.y,w.r,0,Math.PI*2);
