@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#17143a">
+  <title>Skubert Evolution | Skubert Arcade</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; color:#fff; background: radial-gradient(ellipse at 45% -15%, #6657c6 0, #342568 36%, #17143a 80%); }
+    body::before { content:""; position:fixed; inset:0; pointer-events:none; background:radial-gradient(circle at 8% 12%,#f9c66b15 0 4px,transparent 6px),radial-gradient(circle at 83% 21%,#f9c66b15 0 3px,transparent 5px); background-size:150px 170px,215px 185px; opacity:.7; }
+    a { color:#e6d5ff; }
+    button { font:inherit; cursor:pointer; }
+    button:focus-visible, a:focus-visible { outline:3px solid #ffcd6c; outline-offset:3px; }
+    .page { width:min(100%,1060px); margin:auto; padding:20px 18px 38px; position:relative; }
+    .topbar { display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:15px; }
+    .brand h1 { font-size:clamp(27px,4vw,40px); margin:0; letter-spacing:-1.2px; line-height:1.1; text-shadow:0 3px 0 #1b1645; }
+    .brand h1 span { color:#ffd86c; }
+    .tagline { margin:6px 0 0; color:#d9d0fb; font-size:14px; }
+    .toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .btn { border:1px solid #7964c3; border-radius:12px; padding:10px 15px; background:#332962; color:#fff; font-weight:750; transition:background .15s, transform .15s; }
+    .btn:hover { background:#4e3b8d; }
+    .btn:active { transform:translateY(1px); }
+    .btn.primary { background:#f2bb56; color:#261c42; border-color:#ffe2a2; }
+    .btn.primary:hover { background:#ffce70; }
+    .layout { display:grid; grid-template-columns:minmax(0,625px) minmax(230px,1fr); gap:16px; align-items:start; }
+    .board-card, .sidebar { background:#251d52; border:1px solid #7663bd; border-radius:20px; box-shadow:0 15px 40px #09051e65; overflow:hidden; }
+    .hud { display:grid; grid-template-columns:1fr 1fr 1.12fr; gap:8px; padding:13px 15px; background:linear-gradient(145deg,#40317f,#2a205a); border-bottom:1px solid #6c59ad; }
+    .stat { background:#1e1741ab; border:1px solid #6656a3; border-radius:12px; padding:7px 10px; min-width:0; }
+    .stat .key { display:block; color:#d5cafa; font-size:11px; letter-spacing:.06em; text-transform:uppercase; font-weight:700; }
+    .stat .value { display:block; font-size:clamp(18px,2.6vw,26px); font-weight:850; font-variant-numeric:tabular-nums; margin-top:2px; }
+    .next-row { display:flex; align-items:center; gap:7px; margin-top:4px; }
+    .next-orb { display:inline-block; width:25px; height:25px; flex:none; border-radius:50%; border:1px solid #ffffff77; background:radial-gradient(circle at 30% 27%,#fff8d6,#b8a65e 65%,#5b4431); box-shadow:inset -3px -3px 5px #0003; }
+    .next-name { font-size:12px; font-weight:750; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .arena { position:relative; background:#674692; }
+    canvas { display:block; width:100%; height:clamp(430px,66vh,605px); touch-action:none; cursor:crosshair; }
+    .status { padding:9px 14px 10px; background:#302563; font-size:12px; color:#e0d7ff; display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; }
+    .status strong { color:#ffdda0; }
+    .controls { display:flex; gap:9px; padding:12px 14px 15px; align-items:center; justify-content:center; background:#292157; }
+    .controls .btn { flex:1; max-width:180px; }
+    .sidebar { padding:15px 14px; }
+    .sidebar h2 { margin:0; font-size:18px; }
+    .sidebar .sub { color:#c7b8ed; font-size:12px; margin:4px 0 13px; line-height:1.5; }
+    .ladder { display:grid; grid-template-columns:1fr; gap:6px; }
+    .level { border:1px solid #67549a; display:flex; gap:10px; align-items:center; border-radius:10px; padding:6px 9px; background:#302565; min-height:36px; }
+    .level.goal { border-color:#6bb7ff; background:#244b8c; }
+    .dot { flex:none; display:block; width:22px; height:22px; border-radius:50%; background:var(--orb); box-shadow:inset -4px -4px 6px #0003, inset 3px 3px 6px #fff6; border:1px solid #fffa; }
+    .level .rank { font-size:10px; color:#c2b7e5; width:15px; text-align:center; }
+    .level .name { font-size:12px; font-weight:700; overflow-wrap:anywhere; }
+    .sidebar .hint { padding:12px; border:1px solid #58478b; background:#1d173f; border-radius:12px; color:#d6c8f3; font-size:12px; line-height:1.6; margin-top:14px; }
+    .sidebar .hint b { color:#ffdf9a; }
+    .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#140d35d9; z-index:3; padding:18px; text-align:center; }
+    .overlay[hidden] { display:none; }
+    .modal { background:linear-gradient(155deg,#4a388a,#241a52); border:2px solid #d0a6ff; border-radius:22px; box-shadow:0 18px 45px #0008; padding:24px; width:min(100%,350px); }
+    .modal h2 { margin:2px 0 10px; color:#ffda77; font-size:31px; }
+    .modal p { color:#eee5ff; font-size:14px; line-height:1.5; }
+    .modal .final-score { font-size:32px; font-weight:900; margin:7px 0; }
+    .modal .btn { margin-top:8px; min-width:160px; }
+    footer { margin-top:17px; text-align:center; font-size:12px; color:#c5b9e9; }
+    @media (max-width:760px) { .layout { grid-template-columns:1fr; } .ladder { grid-template-columns:repeat(2,minmax(0,1fr)); } .page { padding:12px 9px 30px; } .sidebar { padding:12px; } .sidebar .hint { margin-top:10px; } .topbar { padding:0 5px; } .hud { padding:9px; } canvas { height:clamp(420px,65vh,560px); } }
+    @media (max-width:370px) { .tagline { font-size:12px; } .level .name { font-size:11px; } .hud { gap:4px; } .stat { padding:6px; } }
+    @media (prefers-reduced-motion:reduce) { .btn { transition:none; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <header class="topbar">
+    <div class="brand">
+      <h1>Skubert <span>Evolution</span></h1>
+      <p class="tagline">Merge two matching spheres to climb the taxonomy.</p>
+    </div>
+    <div class="toolbar">
+      <a href="../../index.html" class="btn" aria-label="Back to Skubert Arcade">← Arcade</a>
+      <button id="restartTop" class="btn" type="button">↻ New game</button>
+    </div>
+  </header>
+  <main class="layout">
+    <section class="board-card" aria-label="Skubert Evolution game">
+      <div class="hud">
+        <div class="stat"><span class="key">Score</span><span id="score" class="value">0</span></div>
+        <div class="stat"><span class="key">Best (this browser)</span><span id="best" class="value">0</span></div>
+        <div class="stat"><span class="key">Next drop</span><span class="next-row"><span class="next-orb" id="nextOrb"></span><span id="nextName" class="next-name">Animalia</span></span></div>
+      </div>
+      <div class="arena">
+        <canvas id="game" aria-label="Drop spheres into the cardboard box. Matching classifications merge into the next classification." tabindex="0"></canvas>
+        <div id="overlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
+          <div class="modal">
+            <h2 id="endTitle">Game Over</h2>
+            <p id="endMessage">The box overflowed.</p>
+            <div id="endScore" class="final-score">0</div>
+            <button id="playAgain" class="btn primary" type="button">Play again</button>
+          </div>
+        </div>
+      </div>
+      <div class="status"><span id="message" aria-live="polite">Move your cursor to aim. Click to drop.</span><span id="progress">Highest: Eukarya</span></div>
+      <div class="controls">
+        <button type="button" id="leftButton" class="btn" aria-label="Aim left">◀ Left</button>
+        <button type="button" id="dropButton" class="btn primary">Drop ↓</button>
+        <button type="button" id="rightButton" class="btn" aria-label="Aim right">Right ▶</button>
+      </div>
+    </section>
+    <aside class="sidebar" aria-label="Evolution chain">
+      <h2>Evolution chain</h2>
+      <p class="sub">Two of the same sphere become one of the next classification.</p>
+      <div class="ladder" id="ladder"></div>
+      <div class="hint"><b>How to play</b>: Move the cursor or use ← → to aim. Click, tap, or press Space to drop. Matching spheres merge automatically. Keep the pile below the dashed overflow line. Reach <b>Skubert</b> to win!<br><br><b>Prototype:</b> Local high score only. No account, leaderboard API, or external dependencies.</div>
+    </aside>
+  </main>
+  <footer>Skubert Arcade · Standalone prototype · Works on GitHub Pages</footer>
+</div>
+<script>
+(() => {
+  'use strict';
+  const LEVELS = [
+    { name:'Eukarya', color:'#8db45e' },
+    { name:'Animalia', color:'#efb92d' },
+    { name:'Chordata', color:'#25b9b9' },
+    { name:'Vertebrata', color:'#48a7f3' },
+    { name:'Mammalia', color:'#b18be7' },
+    { name:'Primates', color:'#f36d78' },
+    { name:'Hominidae', color:'#ad315d' },
+    { name:'Ponginae', color:'#f18a35' },
+    { name:'Gigantopithecus', color:'#7840c6' },
+    { name:'Skubert', color:'#1677e5' }
+  ];
+  const canvas=document.getElementById('game');
+  const ctx=canvas.getContext('2d');
+  if(!ctx) { document.getElementById('message').textContent='Your browser does not support Canvas 2D.'; return; }
+  const $=id=>document.getElementById(id);
+  const scoreEl=$('score'), bestEl=$('best'), nextNameEl=$('nextName'), nextOrbEl=$('nextOrb');
+  const overlay=$('overlay'), endTitle=$('endTitle'), endMessage=$('endMessage'), endScore=$('endScore');
+  const fmt=new Intl.NumberFormat('en-US');
+  const storageKey='skubertEvolutionPrototypeBestV1';
+  let best=0;
+  try { best=Number(localStorage.getItem(storageKey))||0; } catch (_) {}
+  bestEl.textContent=fmt.format(best);
+  const ladder=$('ladder');
+  LEVELS.forEach((level,i)=>{
+    const row=document.createElement('div'); row.className='level'+(i===9?' goal':'');
+    const rank=document.createElement('span'); rank.className='rank'; rank.textContent=String(i+1);
+    const dot=document.createElement('span'); dot.className='dot'; dot.style.setProperty('--orb',level.color);
+    const name=document.createElement('span'); name.className='name'; name.textContent=level.name;
+    row.append(rank,dot,name); ladder.append(row);
+  });
+  let W=400,H=560, left=24,right=376,floor=536,boxTop=82,overflowY=169;
+  let radius0=18,balls=[],particles=[],floating=[],score=0,highest=0;
+  let aimX=200,current=0,next=1,ended=false,win=false,overflowAge=0,dropWait=0;
+  let time=0,lastMergeTime=-100,combo=0,lastFrame=0,accumulator=0,down=false,ballId=0;
+  const step=1/60;
+  const factor=1.23;
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  const radius=level=>radius0*Math.pow(factor,level);
+  const choice=()=>{ const r=Math.random(); return r<.28?0:r<.57?1:r<.82?2:3; };
+  function setMessage(value){$('message').textContent=value;}
+  function updateNext(){nextNameEl.textContent=LEVELS[next].name;nextOrbEl.style.background=`radial-gradient(circle at 30% 25%,#fff9,${LEVELS[next].color} 65%,#262137)`;}
+  function updateScore(){scoreEl.textContent=fmt.format(score);if(score>best){best=score;bestEl.textContent=fmt.format(best);try{localStorage.setItem(storageKey,String(best));}catch(_){}}}
+  function resize(){
+    const rect=canvas.getBoundingClientRect();
+    const newW=Math.max(250,rect.width),newH=Math.max(360,rect.height);
+    const oldW=W,oldH=H,oldR=radius0;
+    W=newW;H=newH;left=20;right=W-20;floor=H-19;boxTop=84;overflowY=boxTop+87;
+    radius0=clamp(W*.039,15.5,20.5);
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    if(balls.length){
+      const sx=(right-left)/Math.max(1,oldW-40),sy=(floor-boxTop)/Math.max(1,oldH-103);
+      for(const b of balls){b.x=left+(b.x-20)*sx;b.y=boxTop+(b.y-84)*sy;b.r=radius(b.level);b.x=clamp(b.x,left+b.r,right-b.r);b.y=Math.min(b.y,floor-b.r);}
+    }
+    aimX=clamp(aimX*W/Math.max(1,oldW),left+radius(current),right-radius(current));
+  }
+  function reset(){
+    balls=[];particles=[];floating=[];score=0;highest=0;aimX=W/2;current=choice();next=choice();
+    ended=false;win=false;overflowAge=0;dropWait=0;combo=0;lastMergeTime=-100;time=0;ballId=0;
+    overlay.hidden=true;updateScore();updateNext();$('progress').textContent='Highest: Eukarya';
+    setMessage('Aim with mouse, touch, or arrows. Click / Space to drop.');
+    canvas.focus({preventScroll:true});
+  }
+  function createBall(level,x,y,vx=0,vy=0){
+    const r=radius(level);
+    return {id:++ballId,level,r,x:clamp(x,left+r,right-r),y,vx,vy,angle:0,born:time};
+  }
+  function drop(){
+    if(ended||dropWait>0)return;
+    const r=radius(current),x=clamp(aimX,left+r,right-r);
+    balls.push(createBall(current,x,boxTop-r-10,0,10));
+    current=next;next=choice();updateNext();dropWait=.32;
+    aimX=clamp(aimX,left+radius(current),right-radius(current));
+    setMessage(`Dropped ${LEVELS[balls[balls.length-1].level].name}. Match two to evolve!`);
+  }
+  function makeParticles(x,y,color,n=14){
+    for(let i=0;i<n;i++){
+      const a=Math.random()*Math.PI*2,s=45+Math.random()*175;
+      particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-42,life:.55+Math.random()*.3,max:.85,color,r:2+Math.random()*3});
+    }
+    if(particles.length>140)particles.splice(0,particles.length-140);
+  }
+  function mergeAt(i,j){
+    const a=balls[i],b=balls[j];
+    const newLevel=a.level+1;
+    const cx=(a.x+b.x)/2,cy=(a.y+b.y)/2;
+    const vx=(a.vx+b.vx)*.22,vy=Math.min(-120,(a.vy+b.vy)*.22-90);
+    // Delete higher index first so the lower index stays valid.
+    balls.splice(j,1);balls.splice(i,1);
+    const merged=createBall(newLevel,cx,Math.min(cy,floor-radius(newLevel)),vx,vy);
+    merged.born=time-2;balls.push(merged);
+    combo=(time-lastMergeTime)<1.35?Math.min(combo+1,8):1;
+    lastMergeTime=time;
+    const awarded=20*Math.pow(2,newLevel-1)*combo;
+    score+=awarded;updateScore();
+    makeParticles(cx,cy,LEVELS[newLevel].color,newLevel>=6?22:13);
+    floating.push({x:cx,y:cy,life:1.05,label:`+${fmt.format(awarded)}  ${LEVELS[newLevel].name}`,color:LEVELS[newLevel].color});
+    if(floating.length>8)floating.shift();
+    if(newLevel>highest){highest=newLevel;$('progress').textContent='Highest: '+LEVELS[newLevel].name;}
+    setMessage(`${LEVELS[a.level].name} + ${LEVELS[b.level].name} → ${LEVELS[newLevel].name}${combo>1?' · '+combo+'× combo!':''}`);
+    if(newLevel===9)endGame(true);
+  }
+  function collide(a,b){
+    let dx=b.x-a.x,dy=b.y-a.y,dist2=dx*dx+dy*dy;
+    const min=a.r+b.r;
+    if(dist2>=min*min)return false;
+    if(dist2<.00001){dx=.01;dy=-.01;dist2=dx*dx+dy*dy;}
+    const dist=Math.sqrt(dist2),nx=dx/dist,ny=dy/dist;
+    const invA=1/(a.r*a.r),invB=1/(b.r*b.r),sum=invA+invB;
+    const correction=(min-dist)*.87/sum;
+    a.x-=nx*correction*invA;a.y-=ny*correction*invA;
+    b.x+=nx*correction*invB;b.y+=ny*correction*invB;
+    const rvx=b.vx-a.vx,rvy=b.vy-a.vy,normalSpeed=rvx*nx+rvy*ny;
+    if(normalSpeed<0){
+      const impulse=-(1+.11)*normalSpeed/sum;
+      a.vx-=impulse*nx*invA;a.vy-=impulse*ny*invA;
+      b.vx+=impulse*nx*invB;b.vy+=impulse*ny*invB;
+      const tx=-ny,ty=nx;
+      const tangentSpeed=rvx*tx+rvy*ty;
+      const tangentImpulse=clamp(-tangentSpeed/sum,-impulse*.13,impulse*.13);
+      a.vx-=tangentImpulse*tx*invA;a.vy-=tangentImpulse*ty*invA;
+      b.vx+=tangentImpulse*tx*invB;b.vy+=tangentImpulse*ty*invB;
+    }
+    return true;
+  }
+  function physics(dt){
+    time+=dt;dropWait=Math.max(0,dropWait-dt);
+    if(ended)return;
+    for(const b of balls){
+      b.vy+=1350*dt;b.vx*=.996;b.vy*=.999;
+      b.x+=b.vx*dt;b.y+=b.vy*dt;
+      b.angle+=b.vx*dt/Math.max(1,b.r);
+    }
+    let merges=0;
+    for(let pass=0;pass<4;pass++){
+      for(const b of balls){
+        if(b.x-b.r<left){b.x=left+b.r;if(b.vx<0)b.vx*=-.15;}
+        if(b.x+b.r>right){b.x=right-b.r;if(b.vx>0)b.vx*=-.15;}
+        if(b.y+b.r>floor){b.y=floor-b.r;if(b.vy>0)b.vy*=-.09;b.vx*=.982;if(Math.abs(b.vy)<8)b.vy=0;}
+      }
+      let didMerge=false;
+      outer:for(let i=0;i<balls.length;i++){
+        for(let j=i+1;j<balls.length;j++){
+          const a=balls[i],b=balls[j];
+          const dx=b.x-a.x,dy=b.y-a.y,s=a.r+b.r;
+          if(dx*dx+dy*dy>=s*s)continue;
+          if(a.level===b.level&&a.level<9&&merges<7){mergeAt(i,j);merges++;didMerge=true;break outer;}
+          collide(a,b);
+        }
+      }
+      if(ended)break;
+      if(didMerge){pass=-1;continue;}
+    }
+    const isOverflow=balls.some(b=>time-b.born>1.65 && b.y-b.r<overflowY && b.y+b.r>boxTop && Math.abs(b.vy)<100);
+    overflowAge=clamp(overflowAge+(isOverflow?dt:-dt*2),0,3);
+    if(overflowAge>=3)endGame(false);
+    for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.life-=dt;p.vy+=170*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;if(p.life<=0)particles.splice(i,1);}
+    for(let i=floating.length-1;i>=0;i--){floating[i].life-=dt;floating[i].y-=25*dt;if(floating[i].life<=0)floating.splice(i,1);}
+  }
+  function endGame(won){
+    if(ended)return;
+    ended=true;win=won;endTitle.textContent=won?'You made Skubert! 🎉':'Box overflowed!';
+    endMessage.textContent=won?'You completed all ten classifications.':'Keep merging matching spheres to make room in the box.';
+    endScore.textContent=fmt.format(score)+' points';
+    overlay.hidden=false;
+    $('playAgain').focus({preventScroll:true});
+  }
+  function hexRGB(hex){const c=hex.replace('#','');return [parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16)];}
+  function tint(hex,t){const rgb=hexRGB(hex);return `rgb(${rgb.map(n=>Math.round(n+(t>=0?(255-n):n)*t)).join(',')})`;}
+  function drawSphere(x,y,r,level,ghost=false){
+    const color=LEVELS[level].color;
+    ctx.save();ctx.globalAlpha=ghost?.85:1;
+    ctx.shadowColor='#23133777';ctx.shadowBlur=8;ctx.shadowOffsetY=4;
+    ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);
+    const gradient=ctx.createRadialGradient(x-r*.4,y-r*.5,r*.08,x+r*.25,y+r*.3,r*1.4);
+    gradient.addColorStop(0,tint(color,.5));gradient.addColorStop(.45,color);gradient.addColorStop(1,tint(color,-.53));
+    ctx.fillStyle=gradient;ctx.fill();ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+    ctx.strokeStyle=tint(color,-.6);ctx.lineWidth=Math.max(1.3,r*.055);ctx.stroke();
+    ctx.save();ctx.beginPath();ctx.arc(x,y,r-1,0,Math.PI*2);ctx.clip();
+    // A curved reflective highlight gives each flat physics circle a spherical appearance.
+    ctx.beginPath();ctx.ellipse(x-r*.28,y-r*.47,r*.4,Math.max(2,r*.13),-.45,0,Math.PI*2);
+    ctx.fillStyle='#fff8';ctx.fill();
+    ctx.beginPath();ctx.arc(x+r*.29,y+r*.28,r*.62,0,Math.PI*2);
+    ctx.strokeStyle='#fff2';ctx.lineWidth=Math.max(2,r*.12);ctx.stroke();
+    const text=LEVELS[level].name;
+    const fontSize=clamp(r*.55,9,level===9?30:22);
+    ctx.font=`900 ${fontSize}px system-ui, Arial, sans-serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.lineJoin='round';ctx.lineWidth=clamp(fontSize*.30,2,5);
+    ctx.strokeStyle='#23133fc9';
+    ctx.strokeText(text,x,y+1,r*1.82);
+    ctx.fillStyle='#fff';ctx.fillText(text,x,y+1,r*1.82);
+    ctx.restore();ctx.restore();
+  }
+  function render(){
+    ctx.clearRect(0,0,W,H);
+    // Drop lane: separate from cardboard bin.
+    const sky=ctx.createLinearGradient(0,0,0,boxTop+40);
+    sky.addColorStop(0,'#4e3c90');sky.addColorStop(1,'#7a578c');
+    ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#d4a573';ctx.fillRect(9,boxTop-3,W-18,H-boxTop+3);
+    const cardboard=ctx.createLinearGradient(0,boxTop,0,floor);
+    cardboard.addColorStop(0,'#c9905e');cardboard.addColorStop(.5,'#d3a272');cardboard.addColorStop(1,'#aa7147');
+    ctx.fillStyle=cardboard;ctx.fillRect(left,boxTop,right-left,floor-boxTop);
+    ctx.save();ctx.beginPath();ctx.rect(left,boxTop,right-left,floor-boxTop);ctx.clip();
+    // Simple deterministic corrugation and recycled-paper fibers; no image downloads.
+    for(let y=boxTop+9;y<floor;y+=19){ctx.strokeStyle=(Math.floor(y)%2)?'#fff1':'#7a4b2315';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(right,y);ctx.stroke();}
+    for(let x=left+19;x<right;x+=42){ctx.strokeStyle='#7a4b2309';ctx.beginPath();ctx.moveTo(x,boxTop);ctx.lineTo(x+7,floor);ctx.stroke();}
+    const vignette=ctx.createLinearGradient(left,0,right,0);
+    vignette.addColorStop(0,'#6b381a55');vignette.addColorStop(.12,'transparent');vignette.addColorStop(.88,'transparent');vignette.addColorStop(1,'#6b381a55');
+    ctx.fillStyle=vignette;ctx.fillRect(left,boxTop,right-left,floor-boxTop);
+    // Overflow line inside the cardboard bin.
+    ctx.setLineDash([10,7]);ctx.strokeStyle=overflowAge>0?'#ff5555':'#f6a9a1';ctx.lineWidth=3;
+    ctx.beginPath();ctx.moveTo(left+5,overflowY);ctx.lineTo(right-5,overflowY);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#743e3b';ctx.font='bold 12px system-ui,Arial';ctx.textAlign='center';ctx.fillText('OVERFLOW LINE',W/2,overflowY-10);
+    if(overflowAge>0){ctx.fillStyle='#f5515766';ctx.fillRect(left,overflowY-4,(right-left)*overflowAge/3,5);}
+    for(const b of balls)drawSphere(b.x,b.y,b.r,b.level);
+    ctx.restore();
+    // Cardboard sidewalls and bottom, drawn in front of the spheres.
+    ctx.fillStyle='#a76b3c';ctx.fillRect(9,boxTop-5,left-9,floor-boxTop+13);
+    ctx.fillRect(right,boxTop-5,W-9-right,floor-boxTop+13);
+    ctx.fillStyle='#d4a06b';ctx.fillRect(9,boxTop-5,W-18,9);
+    ctx.fillStyle='#8c5934';ctx.fillRect(9,floor,W-18,15);
+    ctx.strokeStyle='#f0c38e';ctx.lineWidth=2;
+    ctx.strokeRect(10,boxTop-3,W-20,floor-boxTop+17);
+    // Dashed aiming line + hovering ball. Only while the game is active.
+    if(!ended){
+      const dropR=radius(current),x=clamp(aimX,left+dropR,right-dropR);
+      ctx.save();ctx.beginPath();ctx.setLineDash([5,6]);ctx.strokeStyle='#eee3ff99';ctx.lineWidth=2;
+      ctx.moveTo(x,boxTop-dropR-10);ctx.lineTo(x,overflowY-3);ctx.stroke();ctx.setLineDash([]);ctx.restore();
+      drawSphere(x,boxTop-dropR-10,dropR,current,true);
+    }
+    for(const p of particles){ctx.globalAlpha=clamp(p.life/p.max,0,1);ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();}
+    ctx.globalAlpha=1;
+    for(const f of floating){ctx.globalAlpha=Math.min(1,f.life*1.7);ctx.font='900 13px system-ui,Arial';ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#29203d';ctx.strokeText(f.label,f.x,f.y);ctx.fillStyle='#fff';ctx.fillText(f.label,f.x,f.y);}
+    ctx.globalAlpha=1;
+  }
+  function frame(ms){
+    if(!lastFrame)lastFrame=ms;
+    accumulator+=clamp((ms-lastFrame)/1000,0,.05);lastFrame=ms;
+    let loops=0;while(accumulator>=step&&loops<4){physics(step);accumulator-=step;loops++;}
+    render();requestAnimationFrame(frame);
+  }
+  function aimFromPointer(e){
+    const rect=canvas.getBoundingClientRect();
+    const local=(e.clientX-rect.left)*W/rect.width;
+    aimX=clamp(local,left+radius(current),right-radius(current));
+  }
+  canvas.addEventListener('pointerdown',e=>{if(ended)return;e.preventDefault();aimFromPointer(e);down=true;canvas.setPointerCapture(e.pointerId);});
+  canvas.addEventListener('pointermove',e=>{if(!ended)aimFromPointer(e);});
+  canvas.addEventListener('pointerup',e=>{if(!down)return;down=false;aimFromPointer(e);drop();});
+  canvas.addEventListener('pointercancel',()=>{down=false;});
+  document.addEventListener('keydown',e=>{
+    if(ended||e.altKey||e.ctrlKey||e.metaKey)return;
+    if(['ArrowLeft','ArrowRight','Space',' '].includes(e.code)||['ArrowLeft','ArrowRight',' '].includes(e.key)){
+      const target=e.target;
+      if(target&&['INPUT','TEXTAREA','SELECT'].includes(target.tagName))return;
+      e.preventDefault();
+      if(e.key==='ArrowLeft')aimX=clamp(aimX-25,left+radius(current),right-radius(current));
+      else if(e.key==='ArrowRight')aimX=clamp(aimX+25,left+radius(current),right-radius(current));
+      else if(!e.repeat)drop();
+    }
+  });
+  $('dropButton').addEventListener('click',drop);
+  $('leftButton').addEventListener('click',()=>aimX=clamp(aimX-28,left+radius(current),right-radius(current)));
+  $('rightButton').addEventListener('click',()=>aimX=clamp(aimX+28,left+radius(current),right-radius(current)));
+  $('restartTop').addEventListener('click',reset);
+  $('playAgain').addEventListener('click',reset);
+  window.addEventListener('resize',resize);
+  resize();reset();requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
