@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#fafafa">
-  <title>Skubert Evolution | Skubert Arcade</title>
+  <title>Taxonomy Drop | Skubert Arcade</title>
   <!-- Pin Three.js so Phase 1 doesn't inherit future changes to the library. -->
   <script type="importmap">
     {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}
   </script>
+  <link rel="stylesheet" href="../../shared/score-entry.css">
   <style>
 :root { font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif; color-scheme:light; }
 * { box-sizing:border-box; }
@@ -16,7 +17,7 @@ html,body { margin:0; width:100%; min-height:100%; background:#fff; }
 body { min-height:100svh; display:flex; align-items:center; justify-content:center; overflow:hidden; }
 a,button { font:inherit; }
 button { cursor:pointer; }
-a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #ca7914; outline-offset:3px; }
+a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { outline:3px solid #ca7914; outline-offset:3px; }
 .scene { position:relative; width:min(100vw,100svh); max-width:100%; aspect-ratio:1; flex:none; }
 .taxonomy-image {
   position:relative; z-index:1; width:100%; height:100%;
@@ -51,7 +52,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   box-shadow:0 2px 8px #00000018;
 }
 #score { font-variant-numeric:tabular-nums; font-weight:900; }
-.overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:18px; z-index:6; background:#ffffffb8; }
+.overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:14px; z-index:6; background:#ffffffd6; }
 .overlay[hidden] { display:none; }
 .start-prompt {
   position:absolute; inset:0; z-index:4; display:flex; justify-content:center;
@@ -65,13 +66,13 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
 }
 .start-prompt button:hover { background:#fff; transform:translateY(-1px); }
 @media(prefers-reduced-motion:reduce){ .start-prompt button:hover { transform:none; } }
-.modal { width:min(92%,310px); padding:24px 18px; border:1px solid #b5b5b5; border-radius:18px; background:#fff; box-shadow:0 16px 36px #0003; text-align:center; }
+.modal { width:min(95vw,480px); max-height:calc(100svh - 28px); overflow-y:auto; overscroll-behavior:contain; padding:20px 16px; border:1px solid #b5b5b5; border-radius:18px; background:#fff; box-shadow:0 16px 36px #0003; text-align:center; }
 .modal h2 { font-size:26px; margin:0 0 8px; }
 .modal p { font-size:14px; line-height:1.4; margin:0; }
 .final-score { font-size:27px; font-weight:900; margin:12px 0; }
-.modal button { margin-top:8px; color:#fff; background:#245ca2; padding:11px 18px; border:0; border-radius:10px; font-weight:800; }
-.modal button+button { margin-left:6px; background:#f0f4f8; color:#18385a; border:1px solid #9aacbb; }
-.modal button[hidden] { display:none; }
+.modal > button { margin-top:14px; color:#fff; background:#245ca2; padding:11px 18px; border:0; border-radius:10px; font-weight:800; }
+.modal > button+button { margin-left:6px; background:#f0f4f8; color:#18385a; border:1px solid #9aacbb; }
+.modal > button[hidden] { display:none; }
 .visually-hidden { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important; overflow:hidden!important; clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important; }
 @media (max-width:520px) {
   .start-prompt { align-items:center; padding-top:0; }
@@ -84,23 +85,26 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
 <body>
 <a class="arcade-link" href="../../index.html" aria-label="Return to Skubert Arcade">← Arcade</a>
 <div class="score-display" aria-label="Current score">Score <span id="score">0</span></div>
-<main class="scene" aria-label="Skubert Evolution game over the taxonomy pyramid">
+<main class="scene" aria-label="Taxonomy Drop game over the taxonomy pyramid">
   <img class="taxonomy-image" src="taxonomy-ranking-system.png" width="1254" height="1254" alt="Taxonomic Ranking System inverted pyramid, from Domain Eukarya at the top to Species Mascotus Skubertus at the bottom." decoding="async">
   <canvas id="discovery-layer" aria-hidden="true"></canvas>
   <canvas id="sphere-layer" aria-hidden="true"></canvas>
-  <canvas id="game" tabindex="0" aria-label="Skubert Evolution. Move the pointer or use left and right arrow keys to aim, then click, tap or press Space to drop a sphere. Matching spheres merge into the next taxonomic rank."></canvas>
+  <canvas id="game" tabindex="0" aria-label="Taxonomy Drop. Move the pointer or use left and right arrow keys to aim, then click, tap or press Space to drop a sphere. Matching spheres merge into the next taxonomic rank."></canvas>
   <div id="startPrompt" class="start-prompt"><button id="startButton" type="button">Start game</button></div>
   <div id="overlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
     <div class="modal">
       <h2 id="endTitle">Game Over</h2>
       <p id="endMessage">A ball could not settle beneath the top of Eukarya.</p>
       <div id="endScore" class="final-score">0</div>
+      <div id="taxonomyScoreMount" aria-label="Submit your Taxonomy Drop score"></div>
       <button id="playAgain" type="button">Play again</button>
     </div>
   </div>
 </main>
 <div id="message" class="visually-hidden" role="status" aria-live="polite"></div>
 <script type="module" src="sphere-renderer.js"></script>
+<script src="../../shared/leaderboard.js"></script>
+<script src="../../shared/score-entry.js"></script>
 <script>
 (() => {
   'use strict';
@@ -125,13 +129,27 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   const fmt=new Intl.NumberFormat('en-US');
   const MAX_LEVEL=LEVELS.length-1;
   const MAX_DROP_LEVEL=MAX_LEVEL-1;
-  const storageKey='skubertEvolutionPrototypeBestV19';
+  const storageKey='taxonomyDropBestV1';
   let best=0;
   try { best=Number(localStorage.getItem(storageKey))||0; } catch (_) {}
 
   const params=new URLSearchParams(location.search);
   const TEST_LEVEL_MAP={species:0,genus:1,family:2,order:3,class:4,phylum:5,kingdom:6,domain:7};
   const requestedTestLevel=TEST_LEVEL_MAP[(params.get('test')||'').toLowerCase()] ?? null;
+  // Test/debug entry points must never contribute to the shared rankings.
+  const isLeaderboardEligible=!params.has('test') && params.get('autostart')!=='1';
+  let scoreUI=null;
+  try {
+    scoreUI=window.SkubertScoreUI?.create(document.getElementById('taxonomyScoreMount'), {
+      game:'taxonomy-drop',
+      gameLabel:'Taxonomy Drop',
+      previewCount:5,
+      rankingsHref:'../../leaderboards.html',
+      scoreVersion:1
+    }) || null;
+  } catch(error) {
+    console.warn('Taxonomy Drop: shared score UI is not configured yet.',error);
+  }
 
   // All simulation coordinates live in this fixed square, independent of the
   // browser window. A resize can change only the pixels used to display it.
@@ -404,6 +422,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     displayHeight=cssH;
   }
   function reset(){
+    scoreUI?.reset();
     started=false;
     bandAlpha.fill(0);
     concealedRanks.clear();
@@ -795,6 +814,18 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
         :'Oops! Try matching faster!';
       endScore.textContent=fmt.format(score)+' points';
       $('playAgain').textContent='Play again';
+      if(scoreUI){
+        // Show the score exactly once, after the final balloon-pop animation.
+        scoreUI.show({
+          score:Math.max(0,Math.floor(score)),
+          eligible:isLeaderboardEligible,
+          ineligibleMessage:'Test and autostart runs do not qualify for the leaderboard.'
+        });
+      } else {
+        // Keep the game playable even if the shared leaderboard scripts are unavailable.
+        const mount=$('taxonomyScoreMount');
+        mount.textContent='Leaderboard entry is temporarily unavailable.';
+      }
       overlay.hidden=false;
       $('playAgain').focus({preventScroll:true});
     }
@@ -1040,7 +1071,11 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   });
   $('startButton').addEventListener('click',startGame);
   $('playAgain').addEventListener('click',reset);
-  document.addEventListener('keydown',e=>{ if((e.key==='r'||e.key==='R')&&!e.ctrlKey&&!e.metaKey&&!e.altKey) reset(); });
+  document.addEventListener('keydown',e=>{
+    // Do not restart the game while somebody enters initials in the score form.
+    if(e.target?.closest?.('input,textarea,select,[contenteditable]')) return;
+    if((e.key==='r'||e.key==='R')&&!e.ctrlKey&&!e.metaKey&&!e.altKey) reset();
+  });
   window.addEventListener('resize',resizeDisplay);
   // Covers parent layout changes that do not emit a window resize event.
   if('ResizeObserver' in window){
