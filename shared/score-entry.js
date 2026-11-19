@@ -8,7 +8,7 @@
 (function () {
   'use strict';
   const GAME_IDS = new Set(['rollup', 'typing', 'find-skubert', 'taxonomy-drop']);
-  const DEFAULT_LABELS = { rollup:'Roll Up', typing:'Typing Frenzy', 'find-skubert':'Find Skubert', 'taxonomy-drop':'Taxonomy Drop' };
+  const DEFAULT_LABELS = { rollup:'Roll Up', typing:'Typing Frenzy', 'taxonomy-drop':'Taxonomy Drop' };
 
   function create(mount, options = {}) {
     if (!(mount instanceof Element)) throw new TypeError('Score UI needs a mount element.');
