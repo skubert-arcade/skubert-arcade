@@ -146,9 +146,12 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   let aimX=200,current=0,next=1,ended=false,dropWait=0;
   // All balls (dropped or merge-created) must settle below the Eukarya top edge.
   // Each ball has its own post-creation grace period and sustained jam timer.
-  const TOP_LINE_GRACE_SECONDS=0.3;
-  const TOP_LINE_SETTLE_SECONDS=0.5;
+  const TOP_LINE_GRACE_SECONDS=1.3;
+  const TOP_LINE_SETTLE_SECONDS=1.5;
   const TOP_LINE_TOTAL_SPEED=75;
+  // Warning pulse is a visual cue only; it does not influence game physics.
+  const TOP_WARNING_PULSE_HZ=2.4;
+  const REDUCED_MOTION=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   const POP_SEQUENCE_SECONDS=1.45;
   let popping=false,popElapsed=0,popQueue=[],popNext=0,popFragments=[],popRings=[];
   let started=false;
@@ -185,8 +188,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   // 1000 x 1000 physics world (diameter = radius * 2).
   // Adjust either endpoint independently; Genus through Kingdom resize
   // smoothly between them. Eukarya remains the largest classification.
-  const SPECIES_RADIUS = 15.0;
-  const EUKARYA_RADIUS = 175.0;
+  const SPECIES_RADIUS = 10.32;
+  const EUKARYA_RADIUS = 195.36;
   const SIZE_GROWTH_FACTOR = Math.pow(EUKARYA_RADIUS / SPECIES_RADIUS, 1 / MAX_LEVEL);
 
   // Impact deformability is independent of body mass. Smaller balls are soft,
@@ -723,7 +726,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     for(const b of balls){
       b.topLineAge=isTopOverflowCandidate(b) ? b.topLineAge+dt : 0;
       if(b.topLineAge>=TOP_LINE_SETTLE_SECONDS){
-        endGame();
+        // Remember the precise offending ball so it pops first.
+        endGame(b);
         return;
       }
     }
@@ -790,17 +794,57 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       $('playAgain').focus({preventScroll:true});
     }
   }
-  function endGame(){
+  function endGame(offendingBall=null){
     if(ended)return;
     ended=true;popping=true;popElapsed=0;popNext=0;
     dropDeadline=Infinity;down=false;
-    // Sweep from uppermost to lowermost spheres with staggered sparkling pops.
-    const order=[...balls].sort((a,b)=>a.y-b.y);
-    popQueue=order.map((b,i)=>({id:b.id,
-      when:(i/Math.max(1,order.length))*POP_SEQUENCE_SECONDS+Math.random()*.09}));
+    // The ball that crossed the threshold pops first, making the cause of
+    // game over unmistakable. The remaining balls follow top to bottom.
+    const order=balls.filter(b=>b.id!==offendingBall?.id).sort((a,b)=>a.y-b.y);
+    popQueue=offendingBall ? [{id:offendingBall.id,when:0}] : [];
+    const delay=offendingBall ? .12 : 0;
+    popQueue.push(...order.map((b,i)=>({id:b.id,
+      when:delay+(i/Math.max(1,order.length))*(POP_SEQUENCE_SECONDS-delay)+Math.random()*.045})));
     popQueue.sort((a,b)=>a.when-b.when);
     overlay.hidden=true;
-    setMessage('Game over! The spheres are popping!');
+    setMessage('Game over! The overflow ball is popping first!');
+  }
+  // This overlay is painted on the transparent game canvas rather than on
+  // individual Three.js meshes. It remains visible with either renderer and
+  // is intentionally drawn AFTER the pyramid clipping region is restored.
+  function drawTopOverflowWarnings(){
+    if(ended)return;
+    for(const b of balls){
+      if(b.topLineAge<=0)continue;
+      const progress=clamp(b.topLineAge/TOP_LINE_SETTLE_SECONDS,0,1);
+      const pulse=REDUCED_MOTION?0.65:(.5+.5*Math.sin(time*Math.PI*2*TOP_WARNING_PULSE_HZ));
+      const gap=Math.max(8,Math.min(18,b.r*.12));
+      const ringRadius=b.r+gap+2*pulse;
+      ctx.save();
+      // Broad soft halo; the brighter flash becomes more urgent near game over.
+      ctx.beginPath();ctx.arc(b.x,b.y,ringRadius,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(225, 33, 43, ${(.23+.30*pulse+.24*progress).toFixed(3)})`;
+      ctx.lineWidth=12+7*pulse;
+      ctx.shadowColor='#f22534';ctx.shadowBlur=18+18*pulse;
+      ctx.stroke();
+      ctx.shadowBlur=0;
+      // White backing keeps the countdown legible against every ball color.
+      ctx.beginPath();ctx.arc(b.x,b.y,ringRadius,0,Math.PI*2);
+      ctx.lineWidth=5;ctx.strokeStyle='#fffef2';ctx.stroke();
+      // Sweeping red arc visualizes how close this ball is to triggering loss.
+      ctx.beginPath();ctx.arc(b.x,b.y,ringRadius,-Math.PI/2,
+        -Math.PI/2+2*Math.PI*Math.max(.015,progress));
+      ctx.lineCap='round';ctx.lineWidth=6+2*pulse;
+      ctx.strokeStyle='#db1729';ctx.stroke();
+      // A small, high-contrast warning marker travels with the offending ball.
+      const markerY=Math.max(24,b.y-ringRadius-22);
+      ctx.beginPath();ctx.arc(b.x,markerY,13+2*pulse,0,Math.PI*2);
+      ctx.fillStyle='#cb1224';ctx.fill();
+      ctx.font='900 21px system-ui, sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillStyle='#ffffff';ctx.fillText('!',b.x,markerY+1);
+      ctx.restore();
+    }
   }
   function hexRGB(hex){ const c=hex.replace('#',''); return [parseInt(c.slice(0,2),16), parseInt(c.slice(2,4),16), parseInt(c.slice(4,6),16)]; }
   function tint(hex,t){ const rgb=hexRGB(hex); return `rgb(${rgb.map(n=>Math.round(n+(t>=0?(255-n):n)*t)).join(',')})`; }
@@ -887,6 +931,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     for(const f of floating){ ctx.globalAlpha=Math.min(1,f.life*1.7); ctx.font='900 13px system-ui,Arial'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='#29203d'; ctx.strokeText(f.label,f.x,f.y); ctx.fillStyle='#fff'; ctx.fillText(f.label,f.x,f.y); }
     ctx.globalAlpha=1;
     ctx.restore();
+    // Keep warning halos fully visible above the top of Eukarya. The active
+    // balls themselves remain clipped to the V-shaped playfield as before.
+    drawTopOverflowWarnings();
     // Spectacular end-of-run balloon bursts render outside the pyramid clip,
     // so colorful shards can fly beyond the container instead of disappearing.
     if(popping||popFragments.length||popRings.length){
