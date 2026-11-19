@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fafafa">
+  <title>Skubert Evolution | Skubert Arcade</title>
+  <!-- Pin Three.js so Phase 1 doesn't inherit future changes to the library. -->
+  <script type="importmap">
+    {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js"}}
+  </script>
+  <style>
+:root { font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif; color-scheme:light; }
+* { box-sizing:border-box; }
+html,body { margin:0; width:100%; min-height:100%; background:#fff; }
+body { min-height:100svh; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+a,button { font:inherit; }
+button { cursor:pointer; }
+a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #ca7914; outline-offset:3px; }
+.scene { position:relative; width:min(100vw,100svh); max-width:100%; aspect-ratio:1; flex:none; }
+.taxonomy-image {
+  position:relative; z-index:1; width:100%; height:100%;
+  display:block; object-fit:contain; opacity:1;
+}
+/* Once any ball of a rank enters play, its band stays concealed until restart.
+   The source PNG stays intact underneath this transparent overlay. */
+#discovery-layer {
+  position:absolute; inset:0; z-index:1; display:block; width:100%; height:100%;
+  background:transparent; pointer-events:none;
+}
+/* The GPU sphere layer is transparent and cannot intercept input. */
+#sphere-layer {
+  position:absolute; inset:0; z-index:2; display:block; width:100%; height:100%;
+  background:transparent; pointer-events:none;
+  /* Expose the waiting sphere above Eukarya while keeping the pile clipped
+     * to the V-shaped walls. The physics constrains active balls below the rim. */
+  clip-path:polygon(1.2% 0%,90.1% 0%,90.1% 15%,45.7% 94.1%,1.2% 15%);
+}
+/* Transparent 2D canvas stays on top for the countdown, effects and outlines. */
+#game { position:absolute; inset:0; z-index:3; display:block; width:100%; height:100%; background:transparent; touch-action:none; cursor:crosshair; }
+.arcade-link {
+  position:fixed; top:max(12px,env(safe-area-inset-top)); left:max(12px,env(safe-area-inset-left)); z-index:5;
+  padding:9px 14px; background:#fff; border:1px solid #bcbcbc; border-radius:999px;
+  color:#171717; text-decoration:none; font-size:14px; font-weight:800;
+  box-shadow:0 2px 8px #00000018;
+}
+.score-display {
+  position:fixed; top:max(12px,env(safe-area-inset-top)); right:max(12px,env(safe-area-inset-right)); z-index:5;
+  display:flex; align-items:center; gap:8px; color:#121212; font-size:16px; font-weight:800;
+  padding:9px 14px; border:1px solid #bcbcbc; border-radius:999px; background:#fff;
+  box-shadow:0 2px 8px #00000018;
+}
+#score { font-variant-numeric:tabular-nums; font-weight:900; }
+.overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:18px; z-index:6; background:#ffffffb8; }
+.overlay[hidden] { display:none; }
+.start-prompt {
+  position:absolute; inset:0; z-index:4; display:flex; justify-content:center;
+  align-items:flex-start; padding-top:10.8%; pointer-events:none;
+}
+.start-prompt[hidden] { display:none; }
+.start-prompt button {
+  pointer-events:auto; border:1px solid #304d68; border-radius:999px;
+  background:#fffffff2; color:#162b48; padding:13px 24px;
+  font-weight:900; font-size:16px; box-shadow:0 5px 18px #101b2a40;
+}
+.start-prompt button:hover { background:#fff; transform:translateY(-1px); }
+@media(prefers-reduced-motion:reduce){ .start-prompt button:hover { transform:none; } }
+.modal { width:min(92%,310px); padding:24px 18px; border:1px solid #b5b5b5; border-radius:18px; background:#fff; box-shadow:0 16px 36px #0003; text-align:center; }
+.modal h2 { font-size:26px; margin:0 0 8px; }
+.modal p { font-size:14px; line-height:1.4; margin:0; }
+.final-score { font-size:27px; font-weight:900; margin:12px 0; }
+.modal button { margin-top:8px; color:#fff; background:#245ca2; padding:11px 18px; border:0; border-radius:10px; font-weight:800; }
+.modal button+button { margin-left:6px; background:#f0f4f8; color:#18385a; border:1px solid #9aacbb; }
+.modal button[hidden] { display:none; }
+.visually-hidden { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important; overflow:hidden!important; clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important; }
+@media (max-width:520px) {
+  .start-prompt { align-items:center; padding-top:0; }
+  .arcade-link, .score-display { top:max(7px,env(safe-area-inset-top)); font-size:12px; padding:7px 10px; }
+  .arcade-link { left:max(7px,env(safe-area-inset-left)); }
+  .score-display { right:max(7px,env(safe-area-inset-right)); }
+}
+  </style>
+</head>
+<body>
+<a class="arcade-link" href="../../index.html" aria-label="Return to Skubert Arcade">← Arcade</a>
+<div class="score-display" aria-label="Current score">Score <span id="score">0</span></div>
+<main class="scene" aria-label="Skubert Evolution game over the taxonomy pyramid">
+  <img class="taxonomy-image" src="taxonomy-ranking-system.png" width="1254" height="1254" alt="Taxonomic Ranking System inverted pyramid, from Domain Eukarya at the top to Species Mascotus Skubertus at the bottom." decoding="async">
+  <canvas id="discovery-layer" aria-hidden="true"></canvas>
+  <canvas id="sphere-layer" aria-hidden="true"></canvas>
+  <canvas id="game" tabindex="0" aria-label="Skubert Evolution. Move the pointer or use left and right arrow keys to aim, then click, tap or press Space to drop a sphere. Matching spheres merge into the next taxonomic rank."></canvas>
+  <div id="startPrompt" class="start-prompt"><button id="startButton" type="button">Start game</button></div>
+  <div id="overlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
+    <div class="modal">
+      <h2 id="endTitle">Game Over</h2>
+      <p id="endMessage">A ball could not settle beneath the top of Eukarya.</p>
+      <div id="endScore" class="final-score">0</div>
+      <button id="playAgain" type="button">Play again</button>
+    </div>
+  </div>
+</main>
+<div id="message" class="visually-hidden" role="status" aria-live="polite"></div>
+<script type="module" src="sphere-renderer.js"></script>
+<script>
+(() => {
+  'use strict';
+  const LEVELS = [
+    { name:'Species', color:'#ea7dea' },
+    { name:'Genus', color:'#7d75f6' },
+    { name:'Family', color:'#50a8fc' },
+    { name:'Order', color:'#5efbf4' },
+    { name:'Class', color:'#83fa5a' },
+    { name:'Phylum', color:'#fdc93a' },
+    { name:'Kingdom', color:'#fc6c16' },
+    { name:'Domain', color:'#fa514f' }
+  ];
+  const canvas=document.getElementById('game');
+  const ctx=canvas.getContext('2d');
+  const discoveryCanvas=document.getElementById('discovery-layer');
+  const discoveryCtx=discoveryCanvas.getContext('2d');
+  if(!ctx || !discoveryCtx) { document.getElementById('message').textContent='Canvas 2D is required.'; return; }
+  const $=id=>document.getElementById(id);
+  const scoreEl=$('score');
+  const overlay=$('overlay'), endTitle=$('endTitle'), endMessage=$('endMessage'), endScore=$('endScore');
+  const fmt=new Intl.NumberFormat('en-US');
+  const MAX_LEVEL=LEVELS.length-1;
+  const MAX_DROP_LEVEL=MAX_LEVEL-1;
+  const storageKey='skubertEvolutionPrototypeBestV19';
+  let best=0;
+  try { best=Number(localStorage.getItem(storageKey))||0; } catch (_) {}
+
+  const params=new URLSearchParams(location.search);
+  const TEST_LEVEL_MAP={species:0,genus:1,family:2,order:3,class:4,phylum:5,kingdom:6,domain:7};
+  const requestedTestLevel=TEST_LEVEL_MAP[(params.get('test')||'').toLowerCase()] ?? null;
+
+  // All simulation coordinates live in this fixed square, independent of the
+  // browser window. A resize can change only the pixels used to display it.
+  const WORLD_WIDTH=1000;
+  const WORLD_HEIGHT=1000;
+  const W=WORLD_WIDTH,H=WORLD_HEIGHT;
+  const topY=H*.150,apexY=H*.941,apexX=W*.457;
+  const topLeft=W*.012,topRight=W*.901;
+  let displayWidth=0,displayHeight=0;
+  let balls=[],particles=[],floating=[],shockwaves=[],score=0,highest=0;
+  let unlocked=new Set([0]);
+  let aimX=200,current=0,next=1,ended=false,dropWait=0;
+  // v26: Every ball must clear Eukarya's upper rim, including merge-created balls.
+  // Do not cancel the overflow countdown just because the jammed pile is moving,
+  // wobbling, or briefly loses support: its TOP EDGE is what matters.
+  // A short post-creation grace protects new drops and merge animations; a ball
+  // must then remain above the rim throughout the warning countdown.
+  const TOP_LINE_GRACE_SECONDS=0.35;
+  const TOP_LINE_SETTLE_SECONDS=0.65;
+  // Once the countdown has started, allow a tiny clearance margin so numeric
+  // jitter across the rim cannot continuously reset an obvious overflow.
+  const TOP_LINE_CLEARANCE=4;
+  // Warning pulse is a visual cue only; it does not influence game physics.
+  const TOP_WARNING_PULSE_HZ=2.4;
+  const REDUCED_MOTION=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  const POP_SEQUENCE_SECONDS=1.45;
+  let popping=false,popElapsed=0,popQueue=[],popNext=0,popFragments=[],popRings=[];
+  let started=false;
+  // Each level is concealed once, at the moment its first ball enters play.
+  // This set persists throughout a run; a merge never uncovers an earlier rank.
+  const concealedRanks=new Set();
+  const bandAlpha=new Array(8).fill(0);
+  let domainCreated=false;
+  const collisionDeflections=new Map();
+  let lastDroppedLevel=null;
+  const startPrompt=document.getElementById('startPrompt');
+  // Colors match the original pyramid, while sphere textures use a more saturated palette.
+  const BAND_COLORS=['#eea5e9','#b8aaf8','#9bc8fb','#a8fcfc','#b5fb9a','#fee083','#fda46f','#fe9390'];
+  const BAND_Y=[186,310,434,558,682,805,930,1055,1178];
+  const ART_SIZE=1254;
+  const ART_TOP_LEFT={x:13,y:186}, ART_TOP_RIGHT={x:1127,y:186}, ART_APEX={x:571,y:1178};
+  const AUTO_DROP_MS=3000;
+  const DROP_ACCELERATION_START_SECONDS=60;
+  const DROP_DURATION_MULTIPLIER=0.99;
+  let dropDeadline=0, dropDurationMs=AUTO_DROP_MS;
+  // "time" advances only during active gameplay, not while on the start/end screen.
+  let time=0,lastMergeTime=-100,combo=0,lastFrame=0,accumulator=0,down=false,ballId=0;
+  function placementDurationMs(){
+    // At 60s: 3,000 ms; at 61s: 2,970 ms; then compound by 1% each second.
+    const acceleratedSeconds=Math.max(0,Math.floor(time-DROP_ACCELERATION_START_SECONDS));
+    return AUTO_DROP_MS*Math.pow(DROP_DURATION_MULTIPLIER,acceleratedSeconds);
+  }
+  function resetDropTimer(){
+    dropDurationMs=placementDurationMs();
+    dropDeadline=performance.now()+dropDurationMs;
+  }
+  const step=1/60;
+  // v24: The only two ball-size settings. Radii are in the fixed
+  // 1000 x 1000 physics world (diameter = radius * 2).
+  // Adjust either endpoint independently; Genus through Kingdom resize
+  // smoothly between them. Eukarya remains the largest classification.
+  const SPECIES_RADIUS = 14.32;
+  const EUKARYA_RADIUS = 195.36;
+  const SIZE_GROWTH_FACTOR = Math.pow(EUKARYA_RADIUS / SPECIES_RADIUS, 1 / MAX_LEVEL);
+
+  // Impact deformability is independent of body mass. Smaller balls are soft,
+  // while the final Eukarya sphere stays entirely rigid.
+  const SOFTNESS=[1.60,1.35,1.10,.40,.22,.10,.03,0];
+  const SQUASH_LIMITS=[.40,.35,.30,.11,.065,.03,.008,0];
+  const SQUASH_STIFFNESS=[95,105,115,150,150,150,150,150];
+  const SQUASH_DAMPING=[23,24,25,27,27,27,27,27];
+  function softness(level){return SOFTNESS[level]??0;}
+  function squashLimit(level){return SQUASH_LIMITS[level]??0;}
+
+  // Extra inertia beyond the geometric increase in cross-sectional area.
+  // Mass governs mutual collision response, stack deflections and merge blasts.
+  // Slight gravity bonuses convey weight without allowing excessive fall speed.
+  const MASS_MULTIPLIERS=[1,1,1,1,1,3,6,10];
+  const GRAVITY_MULTIPLIERS=[1,1,1,1,1,1.12,1.20,1.28];
+  function massMultiplier(level){return MASS_MULTIPLIERS[level]??1;}
+  function effectiveMass(ball){return ball.r*ball.r*massMultiplier(ball.level);}
+  function previewY(level=current){
+    const r=radius(level);
+    const padding=Math.max(5,H*.005);
+    // The lowest possible preview remains tangent to (above) Eukarya's rim.
+    // Large balls may not fit into the narrow gap between the title and rim;
+    // keep their ENTIRE circle visible rather than abruptly placing them one
+    // whole radius below the rim as v17 did.
+    const preferred=topY-r-padding;
+    const fullyVisible=r+padding;
+    return Math.max(preferred,fullyVisible);
+  }
+  function spawnY(level){return previewY(level);}
+  // Ray cast vertically to the first actual visible surface at the aim position.
+  function landingGuideY(x,level=current){
+    const r=radius(level);
+    let boundaryY=apexY;
+    if(x<apexX){
+      boundaryY=topY+(x-topLeft)*(apexY-topY)/(apexX-topLeft);
+    } else if(x>apexX){
+      boundaryY=topY+(x-topRight)*(apexY-topY)/(apexX-topRight);
+    }
+    let y=Math.min(apexY,boundaryY);
+    const from=previewY(level)+r+3;
+    for(const ball of balls){
+      const dx=x-ball.x;
+      if(Math.abs(dx)>=ball.r)continue;
+      const intersection=ball.y-Math.sqrt(Math.max(0,ball.r*ball.r-dx*dx));
+      if(intersection>from && intersection<y)y=intersection;
+    }
+    return Math.max(from+1,y);
+  }
+  const SETTLE_AFTER=.22;
+  const SUPPORT_STOP_HORIZONTAL=12;
+  const SUPPORT_STOP_VERTICAL=48;
+  const MAX_ANGULAR_SPEED=7;
+  const ANGULAR_DRAG=3.8;
+  const SPIN_STOP_THRESHOLD=.075;
+  const SPIN_IMPACT_MIN=55;
+  const SPIN_CONTACT_COOLDOWN=.12;
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  // Each transparent icon was extracted from the corresponding band of the
+  // supplied taxonomy infographic. Icons rotate and deform with the sphere.
+  const silhouettePaths=[
+    'silhouettes/00-species.png',
+    'silhouettes/01-genus.png',
+    'silhouettes/02-family.png',
+    'silhouettes/03-order.png',
+    'silhouettes/04-class.png',
+    'silhouettes/05-phylum.png',
+    'silhouettes/06-kingdom.png',
+    'silhouettes/07-domain.png'
+  ];
+  const silhouettes=silhouettePaths.map(path=>{
+    const image=new Image();
+    image.decoding='async';
+    image.src=path;
+    return image;
+  });
+  function artLeft(y){
+    return ART_TOP_LEFT.x+(ART_APEX.x-ART_TOP_LEFT.x)*(y-ART_TOP_LEFT.y)/(ART_APEX.y-ART_TOP_LEFT.y);
+  }
+  function artRight(y){
+    return ART_TOP_RIGHT.x+(ART_APEX.x-ART_TOP_RIGHT.x)*(y-ART_TOP_RIGHT.y)/(ART_APEX.y-ART_TOP_RIGHT.y);
+  }
+  function drawBandOverlay(dt=1/60){
+    discoveryCtx.clearRect(0,0,W,H);
+    if(!started) return;
+    discoveryCtx.save();
+    discoveryCtx.scale(W/ART_SIZE,H/ART_SIZE);
+    let anyCovered=false;
+    for(let band=0;band<8;band++){
+      const level=7-band;
+      const target=concealedRanks.has(level)?1:0;
+      // Only fade in: discovered ranks never revert to showing silhouettes.
+      const speed=8;
+      bandAlpha[level]+=(target-bandAlpha[level])*Math.min(1,dt*speed);
+      if(Math.abs(target-bandAlpha[level])<.008)bandAlpha[level]=target;
+      if(bandAlpha[level]<=.001)continue;
+      anyCovered=true;
+      discoveryCtx.globalAlpha=bandAlpha[level];
+      discoveryCtx.fillStyle=BAND_COLORS[level];
+      const y0=BAND_Y[band]-3,y1=BAND_Y[band+1]+3;
+      const inset=1.6;
+      discoveryCtx.beginPath();
+      discoveryCtx.moveTo(artLeft(y0)+inset,y0);
+      discoveryCtx.lineTo(artRight(y0)-inset,y0);
+      discoveryCtx.lineTo(artRight(y1)-inset,y1);
+      discoveryCtx.lineTo(artLeft(y1)+inset,y1);
+      discoveryCtx.closePath();
+      discoveryCtx.fill();
+    }
+    if(anyCovered){
+      discoveryCtx.globalAlpha=1;
+      discoveryCtx.beginPath();
+      for(let band=1;band<8;band++){
+        const y=BAND_Y[band];
+        discoveryCtx.moveTo(artLeft(y),y);
+        discoveryCtx.lineTo(artRight(y),y);
+      }
+      discoveryCtx.lineWidth=1;
+      discoveryCtx.strokeStyle='#403b3a';
+      discoveryCtx.stroke();
+    }
+    discoveryCtx.restore();
+  }
+  function startGame(){
+    if(started||ended)return;
+    started=true;
+    startPrompt.hidden=true;
+    resetDropTimer();
+    setMessage('Drop within three seconds. Once a rank enters play, its pyramid band stays concealed until the run ends.');
+  }
+  function radius(level){ return SPECIES_RADIUS*Math.pow(SIZE_GROWTH_FACTOR,level); }
+  function choice(excludeLevel=null){
+    const available=Array.from(unlocked)
+      .filter(level=>level<=MAX_DROP_LEVEL && radius(level)*2<(topRight-topLeft)*.7)
+      .sort((a,b)=>a-b);
+    if(available.length===0)return 0;
+    // Hard no-repeat when at least two classifications are possible.
+    const candidates=available.length>1 && available.includes(excludeLevel)
+      ?available.filter(level=>level!==excludeLevel):available;
+    if(candidates.length===1)return candidates[0];
+    const highestAvailable=available[available.length-1];
+    const counts=new Array(LEVELS.length).fill(0);
+    for(const ball of balls)counts[ball.level]++;
+    const weights=candidates.map(level=>{
+      // Favor useful mid-tier spheres, but avoid excessive board duplicates.
+      let weight=Math.pow(1.4,level)/Math.pow(1+counts[level]*.75,1.15);
+      // Highest unlocked droppable tier: ~3% of its normal selection weight.
+      if(level===highestAvailable && candidates.length>1)weight*=.03;
+      return weight;
+    });
+    let roll=Math.random()*weights.reduce((sum,w)=>sum+w,0);
+    for(let i=0;i<candidates.length;i++)if((roll-=weights[i])<=0)return candidates[i];
+    return candidates[candidates.length-1];
+  }
+  function updateUnlocks(){
+    // A merge may unlock variety while Species is already queued twice.
+    // Reroll the preview without changing the sphere already on deck.
+    if(requestedTestLevel===null && unlocked.size>1 && next===current){
+      next=choice(current);
+    }
+  }
+  function setMessage(value){ $('message').textContent=value; }
+  function updateNext(){}
+  function updateScore(){ scoreEl.textContent=fmt.format(score); if(score>best){ best=score; try{ localStorage.setItem(storageKey,String(best)); }catch(_){}} }
+  function xOnLeft(y){ return topLeft + (apexX-topLeft) * ((y-topY)/Math.max(1,apexY-topY)); }
+  function xOnRight(y){ return topRight + (apexX-topRight) * ((y-topY)/Math.max(1,apexY-topY)); }
+  function aimRange(level=current){
+    const r=radius(level);
+    // Aim is calculated at the rim, rather than shifting with preview height;
+    // all levels share a stable horizontal drop target.
+    const y=topY+r+8;
+    return [xOnLeft(y)+r+4,xOnRight(y)-r-4];
+  }
+  function clampAim(x,level=current){ const [lo,hi]=aimRange(level); return clamp(x,lo,hi); }
+  function enforceSlope(b,ax,ay,bx,by,isLeft){
+    const dx=bx-ax, dy=by-ay, length=Math.hypot(dx,dy);
+    const nx=isLeft ? dy/length : -dy/length;
+    const ny=isLeft ? -dx/length : dx/length;
+    const distance=(b.x-ax)*nx+(b.y-ay)*ny;
+    const overlap=b.r-distance;
+    if(overlap<=0 || b.y+b.r<topY) return;
+    b.supported=true; b.contactCount++;
+    b.x+=nx*overlap; b.y+=ny*overlap;
+    const speed=b.vx*nx+b.vy*ny;
+    if(speed<0){
+      impact(b,nx,ny,-speed);
+      const bounce=(-speed>125)? .34 : .01;
+      b.vx-=(1+bounce)*speed*nx;
+      b.vy-=(1+bounce)*speed*ny;
+    }
+  }
+  // Size the DISPLAY canvases only. The world coordinates, ball positions,
+  // radii, gravity, aim, walls and overflow checks are immutable on resize.
+  function resizeDisplay(){
+    const rect=canvas.getBoundingClientRect();
+    const cssW=Math.max(1,rect.width),cssH=Math.max(1,rect.height);
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    const pixelW=Math.max(1,Math.round(cssW*dpr));
+    const pixelH=Math.max(1,Math.round(cssH*dpr));
+    for(const [surface,context] of [[canvas,ctx],[discoveryCanvas,discoveryCtx]]){
+      if(surface.width!==pixelW)surface.width=pixelW;
+      if(surface.height!==pixelH)surface.height=pixelH;
+      // Drawing functions still use the original world-space coordinates.
+      context.setTransform(pixelW/W,0,0,pixelH/H,0,0);
+    }
+    displayWidth=cssW;
+    displayHeight=cssH;
+  }
+  function reset(){
+    started=false;
+    bandAlpha.fill(0);
+    concealedRanks.clear();
+    domainCreated=false;
+    collisionDeflections.clear(); lastDroppedLevel=null;
+    startPrompt.hidden=false;
+    balls=[];particles=[];floating=[];shockwaves=[];score=0;highest=0;
+    if(requestedTestLevel!==null){
+      unlocked=new Set(Array.from({length:requestedTestLevel+1},(_,i)=>i));
+      current=requestedTestLevel;
+      next=requestedTestLevel;
+    } else {
+      unlocked=new Set([0]);
+      current=0;
+      next=choice(current);
+    }
+    aimX=(topLeft+topRight)/2; updateUnlocks();
+    ended=false; dropWait=0; combo=0; lastMergeTime=-100; time=0; ballId=0;
+    popping=false; popElapsed=0; popQueue=[]; popNext=0; popFragments=[]; popRings=[];
+    $('playAgain').textContent='Play again';
+    overlay.hidden=true; updateScore(); updateNext();
+    dropDurationMs=AUTO_DROP_MS;
+    dropDeadline=Infinity;
+    setMessage(requestedTestLevel!==null ? `Test mode: dropping ${LEVELS[current].name}. Click / Space to drop.` : 'Aim with mouse, touch, or arrows. Click / Space to drop.');
+  }
+  function createBall(level,x,y,vx=0,vy=0){
+    const r=radius(level);
+    // Above the rim, use the horizontal drop interval. Inside the pyramid,
+    // keep centers at least one radius away from both sloping walls.
+    const wallY=Math.max(y,topY+r+5);
+    const minX=xOnLeft(wallY)+r, maxX=xOnRight(wallY)-r;
+    const safeX=minX<=maxX?clamp(x,minX,maxX):apexX;
+    return {id:++ballId,level,r,x:safeX,y,vx,vy,angle:0,omega:0,lastSpin:-10,
+      squish:0,squishV:0,squishAxis:0,lastImpact:-10,born:time,pulse:0,
+      supported:false,contactCount:0,settleAge:0,topLineAge:0};
+  }
+  function drop(automatic=false){
+    if(!started||ended||dropWait>0) return;
+    const x=clampAim(aimX), y=spawnY(current);
+    const droppedLevel=current;
+    const dropped=createBall(droppedLevel,x,y,0,15);
+    balls.push(dropped);
+    concealedRanks.add(droppedLevel);
+    lastDroppedLevel=droppedLevel;
+    current=next;
+    next=requestedTestLevel!==null ? requestedTestLevel : choice(current);
+    updateNext(); dropWait=.28; aimX=clampAim(aimX);
+    resetDropTimer();
+    setMessage(`${automatic?'Auto-dropped':'Dropped'} ${LEVELS[balls[balls.length-1].level].name}. Match two to evolve!`);
+  }
+  function impact(ball, normalX, normalY, speed){
+    if(speed<65 || time-ball.lastImpact<.055) return;
+    ball.lastImpact=time;
+    ball.squishAxis=Math.atan2(normalY,normalX);
+    const softnessFactor=softness(ball.level);
+    if(!softnessFactor){ball.squish=0;ball.squishV=0;return;}
+    const limit=squashLimit(ball.level);
+    ball.squish=clamp(ball.squish+Math.min(.22,speed*.00044)*softnessFactor,-limit*.81,limit);
+    ball.squishV=Math.max(ball.squishV,Math.min(2.2,speed*.0036)*softnessFactor);
+  }
+  function makeParticles(x,y,color,n=14){
+    for(let i=0;i<n;i++){
+      const a=Math.random()*Math.PI*2, s=45+Math.random()*175;
+      particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-42,life:.55+Math.random()*.3,max:.85,color,r:2+Math.random()*3});
+    }
+    if(particles.length>140) particles.splice(0,particles.length-140);
+  }
+  function mergeAt(i,j){
+    const a=balls[i], b=balls[j];
+    const newLevel=a.level+1;
+    const cx=(a.x+b.x)/2, cy=(a.y+b.y)/2;
+    // Heavy merged bodies retain less of the upward celebration impulse.
+    const vx=(a.vx+b.vx)*.35;
+    const vy=-Math.min(480,205+newLevel*26+combo*12) / Math.sqrt(massMultiplier(newLevel));
+    balls.splice(j,1); balls.splice(i,1);
+    const merged=createBall(newLevel,cx,cy,vx,vy);
+    merged.angle=(a.angle+b.angle)/2;
+    merged.omega=clamp((a.omega+b.omega)*.18+(Math.random()-.5)*1.0,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
+    merged.squish=Math.min(squashLimit(newLevel),.16*softness(newLevel));
+    merged.squishV=-1.5*softness(newLevel); merged.squishAxis=Math.PI/2;
+    merged.born=time; merged.pulse=.24; balls.push(merged);
+    concealedRanks.add(newLevel);
+    const range=merged.r*3.1+70;
+    for(const other of balls){
+      if(other===merged) continue;
+      let dx=other.x-cx, dy=other.y-cy;
+      const dist=Math.hypot(dx,dy)||1;
+      const reach=Math.max(0,1-dist/range);
+      if(reach===0) continue;
+      if(dist<1){ dx=(Math.random()-.5)*2; dy=-1; }
+      // A heavy target barely moves, even during nearby merge explosions.
+      const massResponse=clamp(
+        Math.pow(merged.r/other.r,.7)*
+        Math.sqrt(massMultiplier(newLevel)/massMultiplier(other.level)),.12,2.2);
+      const kick=(118+newLevel*18)*reach*massResponse;
+      const norm=Math.hypot(dx,dy)||1;
+      other.vx+=(dx/norm)*kick;
+      other.vy+=(dy/norm)*kick-kick*.27;
+      other.pulse=Math.max(other.pulse,.09);
+      other.squishAxis=Math.atan2(dy,dx);
+      const limit=squashLimit(other.level);
+      other.squish=clamp(other.squish+reach*.085*softness(other.level),-limit*.81,limit);
+      other.squishV+=reach*.40*softness(other.level);
+      other.omega=clamp(other.omega+(dx/Math.max(1,dist))*(dy>0?-1:1)*reach*.8,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
+    }
+    shockwaves.push({x:cx,y:cy,r:merged.r*.35,maxR:range*.55,life:.35,maxLife:.35,color:LEVELS[newLevel].color});
+    combo=(time-lastMergeTime)<1.35?Math.min(combo+1,8):1;
+    lastMergeTime=time;
+    const awarded=20*Math.pow(2,newLevel-1)*combo;
+    score+=awarded; updateScore();
+    makeParticles(cx,cy,LEVELS[newLevel].color,newLevel>=4?20:12);
+    floating.push({x:cx,y:cy,life:1.0,label:`+${fmt.format(awarded)}`,color:LEVELS[newLevel].color});
+    if(floating.length>8) floating.shift();
+    if(!unlocked.has(newLevel)){ unlocked.add(newLevel); updateUnlocks(); }
+    if(newLevel>highest) highest=newLevel;
+    setMessage(`${LEVELS[a.level].name} + ${LEVELS[b.level].name} → ${LEVELS[newLevel].name}${combo>1?' · '+combo+'× combo!':''}`);
+    if(newLevel===MAX_LEVEL){
+      domainCreated=true;
+      setMessage('Domain achieved! Continue playing until the pyramid overflows.');
+    }
+  }
+  // Two top-tier Eukarya balls are a special match: BOTH pop, and the
+  // taxonomy fans back out into exactly one ball of every lower rank.
+  function burstEukarya(i,j){
+    const a=balls[i],b=balls[j];
+    const cx=(a.x+b.x)/2,cy=(a.y+b.y)/2;
+    const inheritedVx=(a.vx+b.vx)*.16;
+    balls.splice(j,1);balls.splice(i,1);
+    popBall(a);popBall(b);
+    makeParticles(cx,cy,LEVELS[MAX_LEVEL].color,25);
+    const pattern=[
+      {level:6,dx:-.18,dy:.22,vx:-195,vy:-250},
+      {level:5,dx: .06,dy:.30,vx: 105,vy:-280},
+      {level:4,dx: .23,dy:.52,vx: 205,vy:-190},
+      {level:3,dx:-.24,dy:1.00,vx:-155,vy:-120},
+      {level:2,dx: .14,dy:1.20,vx: 170,vy:-130},
+      {level:1,dx:-.09,dy:1.67,vx: -80,vy: -65},
+      {level:0,dx: .08,dy:1.80,vx:  80,vy: -95}
+    ];
+    const spread=topRight-topLeft;
+    const verticalScale=Math.max(.6,W/850);
+    for(const p of pattern){
+      const r=radius(p.level);
+      const spawnMaxY=apexY-r*(1+(2*(apexY-topY)/(topRight-topLeft)));
+      const spawnY=clamp(cy+p.dy*80*verticalScale,topY+r+12,Math.max(topY+r+12,spawnMaxY-12));
+      const x=cx+p.dx*spread;
+      const spawned=createBall(p.level,x,spawnY,inheritedVx+p.vx*verticalScale,p.vy*verticalScale);
+      spawned.born=time;
+      spawned.pulse=.26;
+      spawned.squish=.08*softness(p.level);
+      spawned.squishV=-1.4*softness(p.level);
+      // New burst balls receive their own creation-time grace period.
+      // Once settled, all balls participate in the overflow check.
+      balls.push(spawned);
+      concealedRanks.add(p.level);
+      unlocked.add(p.level);
+    }
+    shockwaves.push({x:cx,y:cy,r:radius(6)*.5,maxR:radius(7)*2.2,
+      life:.55,maxLife:.55,color:'#ffffff'});
+    combo=(time-lastMergeTime)<1.35?Math.min(combo+1,8):1;
+    lastMergeTime=time;
+    const awarded=20*Math.pow(2,MAX_LEVEL)*combo;
+    score+=awarded;updateScore();
+    floating.push({x:cx,y:cy,life:1.5,label:`+${fmt.format(awarded)}`,color:'#ffffff'});
+    if(floating.length>8)floating.shift();
+    setMessage(`Eukarya + Eukarya burst! Seven lower classifications returned. +${fmt.format(awarded)} points.`);
+  }
+  function deflectVerticalStack(a,b,nx,ny,impactSpeed){
+    // Head-on contacts between different tiers form unnatural towers.
+    // Apply one lateral nudge per substantial contact, not every solver pass,
+    // so the pile still settles instead of endlessly jittering.
+    if(a.level===b.level || Math.abs(nx)>.24 || Math.abs(ny)<.9 || impactSpeed<65)return;
+    const key=a.id<b.id?`${a.id}:${b.id}`:`${b.id}:${a.id}`;
+    if(time-(collisionDeflections.get(key)??-100)<1.0)return;
+    collisionDeflections.set(key,time);
+    const upper=a.y<b.y?a:b;
+    const lower=upper===a?b:a;
+    const leftSpace=upper.x-xOnLeft(upper.y)-upper.r;
+    const rightSpace=xOnRight(upper.y)-upper.x-upper.r;
+    let direction=leftSpace>rightSpace ? -1 : 1;
+    if(Math.abs(leftSpace-rightSpace)<upper.r*.25){
+      direction=((upper.id+lower.id)%2===0)?-1:1;
+    }
+    const impulse=clamp(impactSpeed*.32,55,135);
+    // The nudge is largely absorbed by the lighter body; an enormous ball
+    // should not recoil like a Species ball simply because of vertical contact.
+    const relativeMass=effectiveMass(lower)/effectiveMass(upper);
+    upper.vx+=direction*impulse*clamp(Math.sqrt(relativeMass),.12,1.3);
+    lower.vx-=direction*impulse*.25*clamp(1/Math.sqrt(relativeMass),.04,1.3);
+    upper.x+=direction*Math.min(upper.r*.035,1.4);
+  }
+  function collide(a,b){
+    let dx=b.x-a.x, dy=b.y-a.y, dist2=dx*dx+dy*dy;
+    const min=a.r+b.r;
+    if(dist2>=min*min) return false;
+    if(dist2<.00001){ dx=.01; dy=-.01; dist2=dx*dx+dy*dy; }
+    const dist=Math.sqrt(dist2), nx=dx/dist, ny=dy/dist;
+    a.contactCount++; b.contactCount++;
+    if(ny>.42) a.supported=true; else if(ny<-.42) b.supported=true;
+    // Inverse effective masses: Phylum 3x, Kingdom 6x, Eukarya 10x
+    // heavier than their radius-only counterparts.
+    const invA=1/effectiveMass(a), invB=1/effectiveMass(b), sum=invA+invB;
+    const correction=(min-dist)*.90/sum;
+    a.x-=nx*correction*invA; a.y-=ny*correction*invA;
+    b.x+=nx*correction*invB; b.y+=ny*correction*invB;
+    const rvx=b.vx-a.vx, rvy=b.vy-a.vy, normalSpeed=rvx*nx+rvy*ny;
+    if(normalSpeed<0){
+      const impactSpeed=-normalSpeed;
+      deflectVerticalStack(a,b,nx,ny,impactSpeed);
+      const restitution=normalSpeed < -125 ? .38 : .01;
+      impact(a,-nx,-ny,impactSpeed);
+      impact(b,nx,ny,impactSpeed);
+      const impulse=-(1+restitution)*normalSpeed/sum;
+      a.vx-=impulse*nx*invA; a.vy-=impulse*ny*invA;
+      b.vx+=impulse*nx*invB; b.vy+=impulse*ny*invB;
+      const tx=-ny, ty=nx;
+      const tangentSpeed=rvx*tx+rvy*ty;
+      const tangentImpulse=clamp(-tangentSpeed/sum,-impulse*.28,impulse*.28);
+      a.vx-=tangentImpulse*tx*invA; a.vy-=tangentImpulse*ty*invA;
+      b.vx+=tangentImpulse*tx*invB; b.vy+=tangentImpulse*ty*invB;
+      if(impactSpeed>SPIN_IMPACT_MIN && Math.abs(tangentSpeed)>35 &&
+         time-a.lastSpin>SPIN_CONTACT_COOLDOWN && time-b.lastSpin>SPIN_CONTACT_COOLDOWN){
+        a.omega=clamp(a.omega+clamp(tangentSpeed*.0023*(24/Math.max(12,a.r)),-2,2),-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
+        b.omega=clamp(b.omega+clamp(tangentSpeed*.0023*(24/Math.max(12,b.r)),-2,2),-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
+        a.lastSpin=time; b.lastSpin=time;
+      }
+    }
+    return true;
+  }
+  function physics(dt){
+    if(!started)return;
+    if(ended){updatePopSequence(dt);return;}
+    time+=dt; dropWait=Math.max(0,dropWait-dt);
+    updateBurstEffects(dt);
+    for(const b of balls){
+      b.supported=false; b.contactCount=0;
+      b.vy+=clamp(H*4.1,1300,2600)*GRAVITY_MULTIPLIERS[b.level]*dt;
+      b.vx*=Math.exp(-.75*dt); b.vy*=Math.exp(-.14*dt);
+      b.pulse=Math.max(0,b.pulse-dt);
+      b.vx=clamp(b.vx,-1100,1100); b.vy=clamp(b.vy,-1150,1150);
+      b.x+=b.vx*dt; b.y+=b.vy*dt;
+      b.omega*=Math.exp(-ANGULAR_DRAG*dt);
+      if(Math.abs(b.omega)<SPIN_STOP_THRESHOLD) b.omega=0;
+      b.angle+=b.omega*dt;
+      if(b.level===MAX_LEVEL){
+        b.squish=0;b.squishV=0;
+      }else{
+        b.squishV+=(-SQUASH_STIFFNESS[b.level]*b.squish-
+          SQUASH_DAMPING[b.level]*b.squishV)*dt;
+        const limit=squashLimit(b.level);
+        b.squish=clamp(b.squish+b.squishV*dt,-limit*.81,limit);
+      }
+    }
+    let merges=0;
+    for(let pass=0; pass<4; pass++){
+      for(const b of balls){
+        enforceSlope(b,topLeft,topY,apexX,apexY,true);
+        enforceSlope(b,topRight,topY,apexX,apexY,false);
+      }
+      let didMerge=false;
+      outer: for(let i=0;i<balls.length;i++){
+        for(let j=i+1;j<balls.length;j++){
+          const a=balls[i], b=balls[j];
+          const dx=b.x-a.x, dy=b.y-a.y, s=a.r+b.r;
+          if(dx*dx+dy*dy>=s*s) continue;
+          if(a.level===b.level && merges<7){
+            if(a.level===MAX_LEVEL)burstEukarya(i,j);
+            else mergeAt(i,j);
+            merges++;didMerge=true;break outer;
+          }
+          collide(a,b);
+        }
+      }
+      if(ended) break;
+      if(didMerge){ pass=-1; continue; }
+    }
+    // Contact memory is bounded even on a long-running session.
+    if(collisionDeflections.size>512){
+      for(const [key,last] of collisionDeflections){
+        if(time-last>2)collisionDeflections.delete(key);
+      }
+    }
+    for(const b of balls){
+      const leftDist = (b.x-xOnLeft(b.y));
+      const rightDist = (xOnRight(b.y)-b.x);
+      const onSlope = leftDist <= b.r+1.5 || rightDist <= b.r+1.5 || b.supported;
+      const slowLinear=Math.abs(b.vx)<8 && Math.abs(b.vy)<15;
+      if(onSlope && slowLinear){
+        if(Math.abs(b.vx)<2) b.vx=0;
+        b.omega*=Math.exp(-15*dt);
+      } else if(onSlope && Math.abs(b.vx)>=8){
+        const target=clamp(b.vx/Math.max(1,b.r),-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
+        b.omega+=clamp(target-b.omega,-3,3)*Math.min(1,dt*7);
+      }
+      b.omega=clamp(b.omega,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
+      if(Math.abs(b.omega)<SPIN_STOP_THRESHOLD && slowLinear) b.omega=0;
+      const nearlyStill=Math.abs(b.vx)<SUPPORT_STOP_HORIZONTAL && Math.abs(b.vy)<SUPPORT_STOP_VERTICAL && time-b.lastImpact>.16;
+      if(onSlope && nearlyStill){
+        b.settleAge+=dt;
+        if(b.settleAge>=SETTLE_AFTER){
+          b.vx*=Math.exp(-18*dt); b.vy*=Math.exp(-24*dt); b.omega*=Math.exp(-22*dt);
+          if(Math.abs(b.vx)<2) b.vx=0;
+          if(Math.abs(b.vy)<5) b.vy=0;
+          if(Math.abs(b.omega)<.12) b.omega=0;
+          if(Math.abs(b.squish)<.003 && Math.abs(b.squishV)<.04){ b.squish=0; b.squishV=0; }
+        }
+      } else { b.settleAge=0; }
+    }
+    checkTopOverflow(dt);
+    for(let i=shockwaves.length-1;i>=0;i--){ const w=shockwaves[i]; w.life-=dt; w.r+=(w.maxR-w.r)*Math.min(1,dt*11); if(w.life<=0) shockwaves.splice(i,1); }
+    for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life-=dt; p.vy+=170*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.life<=0) particles.splice(i,1); }
+    for(let i=floating.length-1;i>=0;i--){ floating[i].life-=dt; floating[i].y-=25*dt; if(floating[i].life<=0) floating.splice(i,1); }
+  }
+  // An overflow is a ball persistently occupying space above the top rim.
+  // Velocity and collision support are intentionally NOT requirements: those
+  // checks allowed crowded, jostling piles to evade game over indefinitely.
+  // The four-unit exit margin applies only after a warning has begun.
+  function isTopOverflowCandidate(b){
+    if(time-b.born<TOP_LINE_GRACE_SECONDS)return false;
+    const topOfBall=b.y-b.r;
+    return topOfBall<topY ||
+      (b.topLineAge>0 && topOfBall<topY+TOP_LINE_CLEARANCE);
+  }
+  function checkTopOverflow(dt){
+    for(const b of balls){
+      b.topLineAge=isTopOverflowCandidate(b) ? b.topLineAge+dt : 0;
+      if(b.topLineAge>=TOP_LINE_SETTLE_SECONDS){
+        // Remember the precise offending ball so it pops first.
+        endGame(b);
+        return;
+      }
+    }
+  }
+  function popBall(ball){
+    const color=LEVELS[ball.level].color;
+    const count=Math.min(34,Math.max(17,Math.round(12+ball.r*.28)));
+    // Ball skin bursts into colorful curved scraps, confetti and white sparks.
+    for(let i=0;i<count;i++){
+      const angle=Math.PI*2*(i/count)+(Math.random()-.5)*.3;
+      const speed=(130+Math.random()*290)*(0.7+Math.min(1,ball.r/90));
+      popFragments.push({
+        x:ball.x+Math.cos(angle)*ball.r*.18,
+        y:ball.y+Math.sin(angle)*ball.r*.18,
+        vx:Math.cos(angle)*speed+(Math.random()-.5)*55,
+        vy:Math.sin(angle)*speed+(Math.random()-.5)*55,
+        color:i%7===0?'#ffffff':i%9===0?'#ffe86b':color,
+        size:Math.max(2,Math.min(11,ball.r*.14))*(.55+Math.random()),
+        life:.7+Math.random()*.65,maxLife:1.35,
+        rotation:Math.random()*Math.PI*2,spin:(Math.random()-.5)*15,
+        star:i%5===0
+      });
+    }
+    if(popFragments.length>950)popFragments.splice(0,popFragments.length-950);
+    popRings.push({x:ball.x,y:ball.y,r:ball.r*.24,maxR:ball.r*2.65,
+      color,life:.54,maxLife:.54});
+    makeParticles(ball.x,ball.y,color,10);
+  }
+  function updateBurstEffects(dt){
+    for(let i=popFragments.length-1;i>=0;i--){
+      const p=popFragments[i];p.life-=dt;
+      p.vy+=290*dt;p.vx*=Math.exp(-.35*dt);
+      p.x+=p.vx*dt;p.y+=p.vy*dt;p.rotation+=p.spin*dt;
+      if(p.life<=0)popFragments.splice(i,1);
+    }
+    for(let i=popRings.length-1;i>=0;i--){
+      const ring=popRings[i];ring.life-=dt;
+      ring.r+=(ring.maxR-ring.r)*Math.min(1,dt*12);
+      if(ring.life<=0)popRings.splice(i,1);
+    }
+  }
+  function updatePopSequence(dt){
+    if(!popping)return;
+    popElapsed+=dt;
+    while(popNext<popQueue.length && popQueue[popNext].when<=popElapsed){
+      const {id}=popQueue[popNext++];
+      const index=balls.findIndex(b=>b.id===id);
+      if(index>=0)popBall(balls.splice(index,1)[0]);
+    }
+    updateBurstEffects(dt);
+    for(let i=particles.length-1;i>=0;i--){
+      const p=particles[i];p.life-=dt;p.vy+=170*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;
+      if(p.life<=0)particles.splice(i,1);
+    }
+    if(popNext===popQueue.length && popElapsed>=POP_SEQUENCE_SECONDS+1.05){
+      popping=false;
+      endTitle.textContent='Game Over';
+      endMessage.textContent=domainCreated
+        ?'Great job! You helped Skubert trace his roots back to Eukarya! Indeed, Skubert does have a distinct cell nucleus, membrane-bound organelles, and organization supported by a cytoskeleton. Always good to check though.'
+        :'Oops! Try matching faster!';
+      endScore.textContent=fmt.format(score)+' points';
+      $('playAgain').textContent='Play again';
+      overlay.hidden=false;
+      $('playAgain').focus({preventScroll:true});
+    }
+  }
+  function endGame(offendingBall=null){
+    if(ended)return;
+    ended=true;popping=true;popElapsed=0;popNext=0;
+    dropDeadline=Infinity;down=false;
+    // The ball that crossed the threshold pops first, making the cause of
+    // game over unmistakable. The remaining balls follow top to bottom.
+    const order=balls.filter(b=>b.id!==offendingBall?.id).sort((a,b)=>a.y-b.y);
+    popQueue=offendingBall ? [{id:offendingBall.id,when:0}] : [];
+    const delay=offendingBall ? .12 : 0;
+    popQueue.push(...order.map((b,i)=>({id:b.id,
+      when:delay+(i/Math.max(1,order.length))*(POP_SEQUENCE_SECONDS-delay)+Math.random()*.045})));
+    popQueue.sort((a,b)=>a.when-b.when);
+    overlay.hidden=true;
+    setMessage('Game over! The overflow ball is popping first!');
+  }
+  // This overlay is painted on the transparent game canvas rather than on
+  // individual Three.js meshes. It remains visible with either renderer and
+  // is intentionally drawn AFTER the pyramid clipping region is restored.
+  function drawTopOverflowWarnings(){
+    if(ended)return;
+    for(const b of balls){
+      if(b.topLineAge<=0)continue;
+      const progress=clamp(b.topLineAge/TOP_LINE_SETTLE_SECONDS,0,1);
+      const pulse=REDUCED_MOTION?0.65:(.5+.5*Math.sin(time*Math.PI*2*TOP_WARNING_PULSE_HZ));
+      const gap=Math.max(8,Math.min(18,b.r*.12));
+      const ringRadius=b.r+gap+2*pulse;
+      ctx.save();
+      // Broad soft halo; the brighter flash becomes more urgent near game over.
+      ctx.beginPath();ctx.arc(b.x,b.y,ringRadius,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(225, 33, 43, ${(.23+.30*pulse+.24*progress).toFixed(3)})`;
+      ctx.lineWidth=12+7*pulse;
+      ctx.shadowColor='#f22534';ctx.shadowBlur=18+18*pulse;
+      ctx.stroke();
+      ctx.shadowBlur=0;
+      // White backing keeps the countdown legible against every ball color.
+      ctx.beginPath();ctx.arc(b.x,b.y,ringRadius,0,Math.PI*2);
+      ctx.lineWidth=5;ctx.strokeStyle='#fffef2';ctx.stroke();
+      // Sweeping red arc visualizes how close this ball is to triggering loss.
+      ctx.beginPath();ctx.arc(b.x,b.y,ringRadius,-Math.PI/2,
+        -Math.PI/2+2*Math.PI*Math.max(.015,progress));
+      ctx.lineCap='round';ctx.lineWidth=6+2*pulse;
+      ctx.strokeStyle='#db1729';ctx.stroke();
+      // A small, high-contrast warning marker travels with the offending ball.
+      const markerY=Math.max(24,b.y-ringRadius-22);
+      ctx.beginPath();ctx.arc(b.x,markerY,13+2*pulse,0,Math.PI*2);
+      ctx.fillStyle='#cb1224';ctx.fill();
+      ctx.font='900 21px system-ui, sans-serif';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillStyle='#ffffff';ctx.fillText('!',b.x,markerY+1);
+      ctx.restore();
+    }
+  }
+  function hexRGB(hex){ const c=hex.replace('#',''); return [parseInt(c.slice(0,2),16), parseInt(c.slice(2,4),16), parseInt(c.slice(4,6),16)]; }
+  function tint(hex,t){ const rgb=hexRGB(hex); return `rgb(${rgb.map(n=>Math.round(n+(t>=0?(255-n):n)*t)).join(',')})`; }
+  function drawSphere(x,y,r,level,ghost=false,pulse=0,angle=0,squish=0,squishAxis=0){
+    const color=LEVELS[level].color;
+    ctx.save();
+    ctx.globalAlpha=ghost?.85:1;
+    ctx.translate(x,y);
+    const puff=pulse>0?(1+.10*pulse/.26):1;
+    ctx.scale(puff,puff);
+    ctx.rotate(squishAxis);
+    const squash=clamp(squish,-.34,.40);
+    ctx.scale(1-squash,1+squash*.7);
+    ctx.rotate(-squishAxis);
+    ctx.rotate(angle);
+    ctx.shadowColor='#20170d75'; ctx.shadowBlur=8; ctx.shadowOffsetY=4;
+    ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2);
+    const gradient=ctx.createRadialGradient(-r*.42,-r*.54,r*.08,r*.22,r*.27,r*1.35);
+    gradient.addColorStop(0,tint(color,.52)); gradient.addColorStop(.47,color); gradient.addColorStop(1,tint(color,-.51));
+    ctx.fillStyle=gradient; ctx.fill();
+    ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+    ctx.strokeStyle=tint(color,-.57); ctx.lineWidth=Math.max(1.3,r*.055); ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.arc(0,0,r-1,0,Math.PI*2); ctx.clip();
+    const icon=silhouettes[level];
+    if(icon && icon.complete && icon.naturalWidth>0){
+      // Print the full pyramid-band silhouette strip onto the curved sphere.
+      // Preserve the strip's aspect ratio so levels with many silhouettes keep them all.
+      const maxW=r*1.76;
+      const maxH=r*1.12;
+      const scale=Math.min(maxW/icon.naturalWidth, maxH/icon.naturalHeight);
+      const drawW=icon.naturalWidth*scale;
+      const drawH=icon.naturalHeight*scale;
+      ctx.globalAlpha=ghost ? .78 : .95;
+      ctx.drawImage(icon,-drawW/2,-drawH/2,drawW,drawH);
+      ctx.globalAlpha=ghost ? .85 : 1;
+    }
+    ctx.beginPath(); ctx.ellipse(-r*.31,-r*.47,r*.38,Math.max(2,r*.13),-.45,0,Math.PI*2);
+    ctx.fillStyle='#fff9'; ctx.fill();
+    ctx.beginPath(); ctx.arc(r*.29,r*.28,r*.62,0,Math.PI*2);
+    ctx.strokeStyle='#fff2'; ctx.lineWidth=Math.max(2,r*.12); ctx.stroke();
+    ctx.restore(); ctx.restore();
+  }
+  let lastBandFrame=0;
+  function render(){
+    drawBandOverlay(Math.min(1/20,(performance.now()-(lastBandFrame||performance.now()))/1000));
+    lastBandFrame=performance.now();
+    ctx.clearRect(0,0,W,H);
+    if(!started){
+      // Clear any meshes remaining from the previous game and show the full
+      // original infographic without outlines, preview sphere or countdown.
+      window.SkubertSphere3D?.render({balls:[],preview:null,
+        width:W,height:H,displayWidth,displayHeight});
+      return;
+    }
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(topLeft,topY); ctx.lineTo(topRight,topY); ctx.lineTo(apexX,apexY); ctx.closePath();
+    ctx.clip();
+    // One render request per gameplay frame; the Three.js module never runs
+    // an independent animation loop. Until it becomes ready, use v12 sprites.
+    const preview=!ended ? {
+      x:clampAim(aimX), y:previewY(current),
+      r:radius(current),level:current,angle:0,squish:0,squishAxis:0,pulse:0
+    } : null;
+    let using3D=false;
+    try {
+      using3D=window.SkubertSphere3D?.render({balls,preview,
+        width:W,height:H,displayWidth,displayHeight})===true;
+    } catch(error) {
+      console.warn('3D sphere layer unavailable; using 2D fallback.',error);
+      window.SkubertSphere3D?.disable?.();
+    }
+    if(!using3D){
+      for(const b of balls) drawSphere(b.x,b.y,b.r,b.level,false,b.pulse,b.angle,b.squish,b.squishAxis);
+    }
+    for(const w of shockwaves){
+      ctx.globalAlpha=(w.life/w.maxLife)*.55;
+      ctx.beginPath(); ctx.arc(w.x,w.y,w.r,0,Math.PI*2);
+      ctx.strokeStyle=w.color; ctx.lineWidth=5*(w.life/w.maxLife)+1; ctx.stroke();
+    }
+    ctx.globalAlpha=1;
+    for(const p of particles){ ctx.globalAlpha=clamp(p.life/p.max,0,1); ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill(); }
+    ctx.globalAlpha=1;
+    for(const f of floating){ ctx.globalAlpha=Math.min(1,f.life*1.7); ctx.font='900 13px system-ui,Arial'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='#29203d'; ctx.strokeText(f.label,f.x,f.y); ctx.fillStyle='#fff'; ctx.fillText(f.label,f.x,f.y); }
+    ctx.globalAlpha=1;
+    ctx.restore();
+    // Keep warning halos fully visible above the top of Eukarya. The active
+    // balls themselves remain clipped to the V-shaped playfield as before.
+    drawTopOverflowWarnings();
+    // Spectacular end-of-run balloon bursts render outside the pyramid clip,
+    // so colorful shards can fly beyond the container instead of disappearing.
+    if(popping||popFragments.length||popRings.length){
+      ctx.save();
+      for(const ring of popRings){
+        const alpha=Math.max(0,ring.life/ring.maxLife);
+        ctx.globalAlpha=alpha;
+        ctx.beginPath();ctx.arc(ring.x,ring.y,ring.r,0,Math.PI*2);
+        ctx.lineWidth=5*alpha+1;ctx.strokeStyle='#fff';ctx.stroke();
+        ctx.beginPath();ctx.arc(ring.x,ring.y,ring.r+4,0,Math.PI*2);
+        ctx.lineWidth=3*alpha+1;ctx.strokeStyle=ring.color;ctx.stroke();
+      }
+      for(const bit of popFragments){
+        ctx.save();ctx.globalAlpha=Math.max(0,bit.life/bit.maxLife);
+        ctx.translate(bit.x,bit.y);ctx.rotate(bit.rotation);
+        ctx.fillStyle=bit.color;ctx.shadowColor=bit.color;ctx.shadowBlur=9;
+        if(bit.star){
+          ctx.beginPath();
+          ctx.moveTo(0,-bit.size*1.7);ctx.lineTo(bit.size*.32,-bit.size*.3);
+          ctx.lineTo(bit.size*1.7,0);ctx.lineTo(bit.size*.32,bit.size*.3);
+          ctx.lineTo(0,bit.size*1.7);ctx.lineTo(-bit.size*.32,bit.size*.3);
+          ctx.lineTo(-bit.size*1.7,0);ctx.lineTo(-bit.size*.32,-bit.size*.3);
+          ctx.closePath();ctx.fill();
+        }else{ctx.fillRect(-bit.size/2,-bit.size*.95,bit.size,bit.size*1.9);}
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.lineJoin='round'; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(topLeft,topY); ctx.lineTo(apexX,apexY); ctx.lineTo(topRight,topY);
+    ctx.strokeStyle='#ffffffc8'; ctx.lineWidth=4; ctx.stroke();
+    ctx.strokeStyle='#23201da8'; ctx.lineWidth=1.6; ctx.stroke();
+    ctx.restore();
+    if(!ended){
+      const r=radius(current), x=clampAim(aimX), py=previewY(current);
+      const from=py+r+4, to=landingGuideY(x,current);
+      if(to>from+1){
+        // A high-contrast dotted projection ends at the FIRST sphere or sloping wall.
+        ctx.save();ctx.lineCap='round';ctx.setLineDash([2,7]);
+        ctx.beginPath();ctx.moveTo(x,from);ctx.lineTo(x,to);
+        ctx.lineWidth=5.8;ctx.strokeStyle='#ffffffed';ctx.stroke();
+        ctx.beginPath();ctx.moveTo(x,from);ctx.lineTo(x,to);
+        ctx.lineWidth=3;ctx.strokeStyle='#171717df';ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();ctx.arc(x,to,4,0,Math.PI*2);
+        ctx.fillStyle='#fff';ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='#151515';ctx.stroke();
+        ctx.restore();
+      }
+      if(!using3D) drawSphere(x,py,r,current,true);
+      // Countdown ring automatically scales with the current placement window.
+      const remaining=clamp((dropDeadline-performance.now())/dropDurationMs,0,1);
+      ctx.save(); ctx.beginPath();
+      ctx.arc(x,py,r+5,-Math.PI/2,-Math.PI/2+Math.PI*2*remaining);
+      ctx.strokeStyle=remaining<.34?'#d73f31':'#242424ae';
+      ctx.lineWidth=2.1; ctx.lineCap='round';ctx.stroke();ctx.restore();
+    }
+  }
+  function frame(ms){
+    if(!lastFrame) lastFrame=ms;
+    accumulator+=clamp((ms-lastFrame)/1000,0,.05); lastFrame=ms;
+    let loops=0; while(accumulator>=step&&loops<4){ physics(step); accumulator-=step; loops++; }
+    // Wall-clock deadline ensures that dropping never waits for the physics
+    // simulation to accumulate a full three seconds on slower devices.
+    if(started && !ended && dropWait<=0 && performance.now()>=dropDeadline){
+      drop(true);
+    }
+    render(); requestAnimationFrame(frame);
+  }
+  function aimFromPointer(e){
+    const rect=canvas.getBoundingClientRect();
+    // Convert CSS pixels into the fixed 1000-unit simulation coordinates.
+    const local=(e.clientX-rect.left)*W/Math.max(1,rect.width);
+    aimX=clampAim(local);
+  }
+  canvas.addEventListener('pointerdown',e=>{
+    if(ended)return;
+    e.preventDefault(); aimFromPointer(e);
+    if(!started){ startGame(); down=false; return; }
+    down=true; canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove',e=>{ if(!ended) aimFromPointer(e); });
+  canvas.addEventListener('pointerup',e=>{ if(!down) return; down=false; aimFromPointer(e); drop(); });
+  canvas.addEventListener('pointercancel',()=>{ down=false; });
+  document.addEventListener('keydown',e=>{
+    if(ended||e.altKey||e.ctrlKey||e.metaKey) return;
+    if(!started){
+      if((e.code==='Space'||e.code==='Enter')&&!e.repeat){e.preventDefault();startGame();}
+      return;
+    }
+    if(['ArrowLeft','ArrowRight','Space',' '].includes(e.code)||['ArrowLeft','ArrowRight',' '].includes(e.key)){
+      const target=e.target;
+      if(target&&['INPUT','TEXTAREA','SELECT'].includes(target.tagName)) return;
+      e.preventDefault();
+      if(e.key==='ArrowLeft') aimX=clampAim(aimX-W*.033);
+      else if(e.key==='ArrowRight') aimX=clampAim(aimX+W*.033);
+      else if(!e.repeat) drop();
+    }
+  });
+  $('startButton').addEventListener('click',startGame);
+  $('playAgain').addEventListener('click',reset);
+  document.addEventListener('keydown',e=>{ if((e.key==='r'||e.key==='R')&&!e.ctrlKey&&!e.metaKey&&!e.altKey) reset(); });
+  window.addEventListener('resize',resizeDisplay);
+  // Covers parent layout changes that do not emit a window resize event.
+  if('ResizeObserver' in window){
+    new ResizeObserver(resizeDisplay).observe(document.querySelector('.scene'));
+  }
+  resizeDisplay(); reset();
+  // Test URLs retain their immediate-drop convenience; normal play deliberately
+  // opens on the unmodified full infographic until the player starts.
+  if(requestedTestLevel!==null || params.get('autostart')==='1')startGame();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
