@@ -566,6 +566,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const AVATAR_GROWTH_RATE = 8;      // Size gained per square root of mass (previously 13).
   const AVATAR_MAX_SIZE = 1920;        // Maximum desktop diameter (previously 220).
   const AVATAR_MAX_VIEWPORT = 2.0;  // Limit on narrow screens to 90% of field width.
+  const AVATAR_INERTIA_REFERENCE_SIZE = 1920;
   const COLLECT_RADIUS_FACTOR = 0.50; // Pickup radius as a fraction of avatar diameter.
   const BLOCK_LARGE_OBJECTS = true;
   const BLOCK_RADIUS_FACTOR = 0.44;
@@ -597,10 +598,9 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   // World-space diameter, not screen transform. The same result drives drawing,
   // attachments and collision distance so the pickup area always grows with Skubert.
   function avatarSize(){
-    const viewportCap=Math.max(AVATAR_START_SIZE,field.clientWidth*AVATAR_MAX_VIEWPORT);
-    return Math.min(AVATAR_MAX_SIZE,viewportCap,
-      AVATAR_START_SIZE+AVATAR_GROWTH_RATE*Math.sqrt(Math.max(0,game.mass)));
-  }
+  return AVATAR_START_SIZE +
+    AVATAR_GROWTH_RATE * Math.sqrt(Math.max(0,game.mass));
+}
   function collectRadius(){return avatarSize()*COLLECT_RADIUS_FACTOR;}
   // DOM collection engine v2. Discovers text and visible objects without requiring
   // the original webpage's .edible classes or manually assigned data-tier values.
@@ -1516,10 +1516,12 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
           }
         }
         // Size-normalized steering inertia (world units, independent of display scaling).
-        const maxDiameter=Math.min(AVATAR_MAX_SIZE,
-          Math.max(AVATAR_START_SIZE,field.clientWidth*AVATAR_MAX_VIEWPORT));
-        const sizeProgress=clamp((avatarSize()-AVATAR_START_SIZE)/
-          Math.max(1,maxDiameter-AVATAR_START_SIZE),0,1);
+        const sizeProgress = clamp(
+          (avatarSize() - AVATAR_START_SIZE) /
+          (AVATAR_INERTIA_REFERENCE_SIZE - AVATAR_START_SIZE),
+          0,
+          1
+        );
         const inertiaProgress=Math.pow(sizeProgress,CHASE_RESPONSE_CURVE_POWER);
         const currentChaseResponse=CHASE_RESPONSE_SMALL+
           (CHASE_RESPONSE_LARGE-CHASE_RESPONSE_SMALL)*inertiaProgress;
