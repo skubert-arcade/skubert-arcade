@@ -141,7 +141,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   const topY=H*.150,apexY=H*.941,apexX=W*.457;
   const topLeft=W*.012,topRight=W*.901;
   let displayWidth=0,displayHeight=0;
-  let radius0=18,balls=[],particles=[],floating=[],shockwaves=[],score=0,highest=0;
+  let balls=[],particles=[],floating=[],shockwaves=[],score=0,highest=0;
   let unlocked=new Set([0]);
   let aimX=200,current=0,next=1,ended=false,dropWait=0;
   // All balls (dropped or merge-created) must settle below the Eukarya top edge.
@@ -181,15 +181,13 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     dropDeadline=performance.now()+dropDurationMs;
   }
   const step=1/60;
-  // v22: halve the v21 Species diameter, preserve the v21 Eukarya diameter.
-  // The other six diameters follow a geometric progression between them.
-  const V21_SPECIES_SCALE=0.90;
-  const V21_EUKARYA_SCALE=1.50;
-  const SPECIES_SIZE_VS_V21=0.50;
-  const PREVIOUS_FACTOR=1.23*Math.pow(4/3,1/MAX_LEVEL);
-  const v21Factor=PREVIOUS_FACTOR*Math.pow(V21_EUKARYA_SCALE/V21_SPECIES_SCALE,1/MAX_LEVEL);
-  const factor=v21Factor*Math.pow(1/SPECIES_SIZE_VS_V21,1/MAX_LEVEL);
-  const SIZE_MULTIPLIER=(4/3)*V21_SPECIES_SCALE*SPECIES_SIZE_VS_V21;
+  // v24: The only two ball-size settings. Radii are in the fixed
+  // 1000 x 1000 physics world (diameter = radius * 2).
+  // Adjust either endpoint independently; Genus through Kingdom resize
+  // smoothly between them. Eukarya remains the largest classification.
+  const SPECIES_RADIUS = 10.32;
+  const EUKARYA_RADIUS = 195.36;
+  const SIZE_GROWTH_FACTOR = Math.pow(EUKARYA_RADIUS / SPECIES_RADIUS, 1 / MAX_LEVEL);
 
   // Impact deformability is independent of body mass. Smaller balls are soft,
   // while the final Eukarya sphere stays entirely rigid.
@@ -319,7 +317,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     resetDropTimer();
     setMessage('Drop within three seconds. Once a rank enters play, its pyramid band stays concealed until the run ends.');
   }
-  function radius(level){ return radius0*Math.pow(factor,level); }
+  function radius(level){ return SPECIES_RADIUS*Math.pow(SIZE_GROWTH_FACTOR,level); }
   function choice(excludeLevel=null){
     const available=Array.from(unlocked)
       .filter(level=>level<=MAX_DROP_LEVEL && radius(level)*2<(topRight-topLeft)*.7)
@@ -991,8 +989,6 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   $('startButton').addEventListener('click',startGame);
   $('playAgain').addEventListener('click',reset);
   document.addEventListener('keydown',e=>{ if((e.key==='r'||e.key==='R')&&!e.ctrlKey&&!e.metaKey&&!e.altKey) reset(); });
-  // Initialize physical object sizes once from the virtual world, not CSS.
-  radius0=clamp(W*.0205,8.8,17.2)*SIZE_MULTIPLIER;
   window.addEventListener('resize',resizeDisplay);
   // Covers parent layout changes that do not emit a window resize event.
   if('ResizeObserver' in window){
