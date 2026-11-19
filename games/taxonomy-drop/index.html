@@ -80,28 +80,6 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   .arcade-link { left:max(7px,env(safe-area-inset-left)); }
   .score-display { right:max(7px,env(safe-area-inset-right)); }
 }
-
-/* Taxonomy Drop self-contained score entry fallback. */
-.sk-score[hidden],.sk-score [hidden]{display:none!important}
-.sk-score{box-sizing:border-box;margin:12px auto 0;max-width:430px;padding:14px;background:#f4f7fd;border:1px solid #dbe4f1;border-radius:16px;color:#173046;text-align:center}
-.sk-score__eyebrow,.sk-score__score-caption{font-size:10px;letter-spacing:.13em;font-weight:900;color:#39539b}
-.sk-score__score-caption{margin-top:9px}
-.sk-score__points{font-size:36px;font-weight:900;color:#0032b1;font-variant-numeric:tabular-nums}
-.sk-score__form{display:flex;flex-wrap:wrap;align-items:end;justify-content:center;gap:9px;margin:13px 0 5px}
-.sk-score__label{display:block;text-align:left;font-size:12px;font-weight:800}
-.sk-score__label span{font-weight:500}
-.sk-score__initials{display:block;width:122px;min-height:45px;margin-top:6px;border:2px solid #9ab0cf;border-radius:10px;background:#fff;color:#163467;text-align:center;font-size:19px;font-weight:900;letter-spacing:.2em;text-transform:uppercase}
-.sk-score__submit{min-height:45px;padding:9px 14px;border:0;border-radius:10px;background:#0032b1;color:#fff;font-weight:850;cursor:pointer}
-.sk-score__submit:disabled{opacity:.65}
-.sk-score__status{margin:10px auto;min-height:20px;font-size:12px;line-height:1.45;color:#4a647e}
-.sk-score__status[data-tone="error"]{color:#a42332;font-weight:750}
-.sk-score__status[data-tone="success"]{color:#176644;font-weight:800}
-.sk-score__rankings{margin-top:12px;text-align:left;background:white;border:1px solid #dbe4f1;border-radius:12px;overflow:hidden}
-.sk-score__rankings-head{display:flex;align-items:center;justify-content:space-between;gap:7px;padding:10px 12px;background:#e7eefa;color:#203966;font-size:11px}
-.sk-score__refresh{background:transparent;border:0;color:#0032b1;font-size:11px;font-weight:800;padding:5px;cursor:pointer}
-.sk-score__list{min-height:36px;padding:4px 12px;color:#53697d;font-size:12px;line-height:1.6}
-.sk-score__row{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:10px;padding:5px 0;border-bottom:1px solid #edf1f5}
-.sk-score__all{display:block;padding:9px 12px;border-top:1px solid #e2e8f2;color:#0032b1;font-size:11px;font-weight:750}
   </style>
 </head>
 <body>
@@ -118,33 +96,15 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       <h2 id="endTitle">Game Over</h2>
       <p id="endMessage">A ball could not settle beneath the top of Eukarya.</p>
       <div id="endScore" class="final-score">0</div>
-      <section id="taxonomyScoreUI" class="sk-score" aria-label="Submit your Taxonomy Drop score" hidden>
-        <div class="sk-score__eyebrow">SKUBERT ARCADE · TAXONOMY DROP</div>
-        <div class="sk-score__score-caption">YOUR FINAL SCORE</div>
-        <div class="sk-score__points" id="taxonomyPoints">0</div>
-        <form id="taxonomyScoreForm" class="sk-score__form" novalidate>
-          <label class="sk-score__label" for="taxonomyInitials">Initials <span>(3 letters)</span>
-            <input id="taxonomyInitials" class="sk-score__initials" name="initials" type="text"
-              autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text"
-              minlength="3" maxlength="3" pattern="[A-Za-z]{3}" placeholder="ABC" required>
-          </label>
-          <button class="sk-score__submit" id="taxonomySubmit" type="submit">Submit score</button>
-        </form>
-        <p class="sk-score__status" id="taxonomyScoreStatus" role="status" aria-live="polite" aria-atomic="true"></p>
-        <div class="sk-score__rankings">
-          <div class="sk-score__rankings-head"><strong>🏆 Top 5 · All players</strong>
-            <button type="button" class="sk-score__refresh" id="taxonomyRefresh" aria-label="Refresh rankings">↻ Refresh</button>
-          </div>
-          <div id="taxonomyLeaders" class="sk-score__list" aria-live="polite"></div>
-          <a class="sk-score__all" href="../../leaderboards.html">View all arcade leaderboards →</a>
-        </div>
-      </section>
+      <div id="taxonomyScoreMount" aria-label="Submit your Taxonomy Drop score"></div>
       <button id="playAgain" type="button">Play again</button>
     </div>
   </div>
 </main>
 <div id="message" class="visually-hidden" role="status" aria-live="polite"></div>
 <script type="module" src="sphere-renderer.js"></script>
+<script src="../../shared/leaderboard.js"></script>
+<script src="../../shared/score-entry.js"></script>
 <script>
 (() => {
   'use strict';
@@ -178,155 +138,17 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   const requestedTestLevel=TEST_LEVEL_MAP[(params.get('test')||'').toLowerCase()] ?? null;
   // Test/debug entry points must never contribute to the shared rankings.
   const isLeaderboardEligible=!params.has('test') && params.get('autostart')!=='1';
-  // This game uses its own score-entry controller so the HTML can be deployed
-  // alone. The other games' shared JavaScript currently rejects taxonomy-drop.
-  // API validation is still enforced by the Cloudflare Worker.
-  const scoreUI=createTaxonomyScoreUI();
-
-  function createTaxonomyScoreUI(){
-    const GAME='taxonomy-drop';
-    const API='https://skubert-arcade-api.ajones14test.workers.dev';
-    const section=$('taxonomyScoreUI'), form=$('taxonomyScoreForm');
-    const input=$('taxonomyInitials'), button=$('taxonomySubmit');
-    const status=$('taxonomyScoreStatus'), list=$('taxonomyLeaders');
-    const refreshButton=$('taxonomyRefresh');
-    let score=0, active=false, eligible=false, saved=false, submitting=false;
-    let initialsSaved='', generation=0, rowsRequest=0;
-    const pending=new Map();
-
-    function setStatus(message,tone='neutral'){
-      status.textContent=message;
-      status.dataset.tone=tone;
-    }
-    async function getJSON(path,options={}){
-      const response=await fetch(API+path,{
-        ...options,
-        headers:{...(options.headers||{}),'Accept':'application/json'},
-        signal:AbortSignal.timeout(20000),
-        cache:'no-store'
-      });
-      let data;
-      try{data=await response.json();}
-      catch(_){throw new Error(`Leaderboard API returned HTTP ${response.status} without JSON.`);}
-      if(!response.ok||!data?.ok)throw new Error(data?.error||`HTTP ${response.status}`);
-      return data;
-    }
-    async function refresh(){
-      const request=++rowsRequest;
-      list.textContent='Loading rankings…';
-      refreshButton.disabled=true;
-      try{
-        const data=await getJSON(`/api/leaderboard?game=${GAME}&limit=5`);
-        if(request!==rowsRequest)return;
-        if(!Array.isArray(data.scores))throw new Error('Invalid rankings response');
-        const fragment=document.createDocumentFragment();
-        let count=0;
-        for(const item of data.scores){
-          const name=String(item?.initials||'').toUpperCase();
-          const points=Number(item?.score);
-          if(!/^[A-Z]{3}$/.test(name)||!Number.isSafeInteger(points)||points<0)continue;
-          const row=document.createElement('div');
-          row.className='sk-score__row';
-          if(saved&&initialsSaved===name&&score===points)row.classList.add('sk-score__row--mine');
-          const rank=document.createElement('span');rank.textContent=`#${++count}`;
-          const initials=document.createElement('strong');initials.textContent=name;
-          const value=document.createElement('span');value.textContent=points.toLocaleString();
-          row.append(rank,initials,value);
-          fragment.appendChild(row);
-          if(count>=5)break;
-        }
-        if(count)list.replaceChildren(fragment);
-        else list.textContent='No scores yet. Be the first!';
-      }catch(error){
-        if(request===rowsRequest){
-          console.warn('Taxonomy Drop rankings unavailable:',error);
-          list.textContent='Rankings unavailable. Score entry is still shown below.';
-        }
-      }finally{if(request===rowsRequest)refreshButton.disabled=false;}
-    }
-    async function submit(event){
-      event.preventDefault();
-      if(!active||!eligible||saved||submitting)return;
-      const initials=input.value.trim().toUpperCase();
-      if(!/^[A-Z]{3}$/.test(initials)){
-        setStatus('Enter exactly three letters (A–Z).','error');
-        input.focus();return;
-      }
-      if(!Number.isSafeInteger(score)||score<0){
-        setStatus('Invalid score.','error');return;
-      }
-      const key=JSON.stringify([GAME,initials,score,1]);
-      const submissionId=pending.get(key)||crypto.randomUUID();
-      pending.set(key,submissionId);
-      submitting=true;
-      const callGeneration=generation;
-      input.disabled=true;button.disabled=true;
-      button.textContent='Saving…';
-      setStatus('Saving and confirming your score…','neutral');
-      try{
-        let confirmed=false;
-        try{
-          const result=await getJSON('/api/score',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({game:GAME,initials,score,scoreVersion:1,submissionId})
-          });
-          confirmed=!!result.saved;
-          if(!confirmed)throw new Error('Save not confirmed');
-        }catch(error){
-          // Resolve uncertain POST results using the server receipt. Reuse
-          // the same UUID on retry to avoid duplicate leaderboard entries.
-          try{
-            const result=await getJSON(`/api/receipt?game=${GAME}&submissionId=${encodeURIComponent(submissionId)}`);
-            confirmed=!!result.saved;
-          }catch(_){/* Preserve the original error. */}
-          if(!confirmed)throw error;
-        }
-        if(callGeneration!==generation||!active)return;
-        saved=true;initialsSaved=initials;pending.delete(key);
-        form.hidden=true;
-        setStatus('✓ Score saved to the shared leaderboard!','success');
-        void refresh();
-      }catch(error){
-        if(callGeneration!==generation||!active)return;
-        console.warn('Taxonomy Drop score not confirmed:',error);
-        setStatus('Score not saved. The arcade API may not yet accept taxonomy-drop. You can retry.','error');
-        button.textContent='Try saving again';
-      }finally{
-        if(callGeneration===generation){
-          submitting=false;
-          if(!saved){input.disabled=false;button.disabled=false;}
-        }
-      }
-    }
-    function show({score:newScore,eligible:canSubmit,ineligibleMessage}={}){
-      generation++;
-      active=true;saved=false;submitting=false;initialsSaved='';
-      score=newScore;eligible=!!canSubmit;
-      section.hidden=false;
-      $('taxonomyPoints').textContent=Number.isSafeInteger(score)&&score>=0?score.toLocaleString():'—';
-      input.value='';input.disabled=!eligible;
-      button.disabled=!eligible;button.textContent='Submit score';
-      form.hidden=!eligible;
-      setStatus(eligible?'Only initials and your score are shared with the arcade.':
-        (ineligibleMessage||'This run does not qualify for leaderboard submission.'),'neutral');
-      void refresh();
-      if(eligible)requestAnimationFrame(()=>{if(active&&eligible&&!saved)input.focus({preventScroll:true});});
-    }
-    function reset(){
-      generation++;rowsRequest++;
-      active=false;eligible=false;saved=false;submitting=false;
-      section.hidden=true;form.hidden=false;
-      input.disabled=false;button.disabled=false;
-    }
-    input.addEventListener('input',()=>{
-      const next=input.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3);
-      if(input.value!==next)input.value=next;
-    });
-    form.addEventListener('submit',submit);
-    refreshButton.addEventListener('click',()=>void refresh());
-    reset();
-    return {show,reset};
+  let scoreUI=null;
+  try {
+    scoreUI=window.SkubertScoreUI?.create(document.getElementById('taxonomyScoreMount'), {
+      game:'taxonomy-drop',
+      gameLabel:'Taxonomy Drop',
+      previewCount:5,
+      rankingsHref:'../../leaderboards.html',
+      scoreVersion:1
+    }) || null;
+  } catch(error) {
+    console.warn('Taxonomy Drop: shared score UI is not configured yet.',error);
   }
 
   // All simulation coordinates live in this fixed square, independent of the
@@ -992,12 +814,18 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
         :'Oops! Try matching faster!';
       endScore.textContent=fmt.format(score)+' points';
       $('playAgain').textContent='Play again';
-      // Show the initials form after the final balloon-pop animation.
-      scoreUI.show({
-        score:Math.max(0,Math.floor(score)),
-        eligible:isLeaderboardEligible,
-        ineligibleMessage:'Test and autostart runs do not qualify for the leaderboard.'
-      });
+      if(scoreUI){
+        // Show the score exactly once, after the final balloon-pop animation.
+        scoreUI.show({
+          score:Math.max(0,Math.floor(score)),
+          eligible:isLeaderboardEligible,
+          ineligibleMessage:'Test and autostart runs do not qualify for the leaderboard.'
+        });
+      } else {
+        // Keep the game playable even if the shared leaderboard scripts are unavailable.
+        const mount=$('taxonomyScoreMount');
+        mount.textContent='Leaderboard entry is temporarily unavailable.';
+      }
       overlay.hidden=false;
       $('playAgain').focus({preventScroll:true});
     }
