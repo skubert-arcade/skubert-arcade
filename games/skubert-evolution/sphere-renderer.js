@@ -125,7 +125,8 @@ function resize(worldW,worldH,cssW,cssH){
 
 function syncMesh(mesh,ball,h){
   mesh.position.set(ball.x,h-ball.y,0);
-  const squish=clamp(ball.squish||0,-.22,.27);
+  // Match the more flexible v22 Species/Genus/Family Canvas deformation.
+  const squish=clamp(ball.squish||0,-.34,.40);
   const pulse=ball.pulse>0?1+.1*ball.pulse/.26:1;
   mesh.scale.set(ball.r*pulse*(1-squish),ball.r*pulse*(1+squish*.7),ball.r*pulse);
   mesh.rotation.set(0,0,ball.angle||0);

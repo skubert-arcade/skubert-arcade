@@ -180,17 +180,32 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     dropDeadline=performance.now()+dropDurationMs;
   }
   const step=1/60;
-  // Keep the fixed-world physics and grow the levels more distinctly.
-  // Compared with v20: Species is 10% smaller; Domain/Eukarya is 50% larger.
-  // Seven exponential steps smoothly connect the two endpoints.
-  const SPECIES_RADIUS_SCALE=0.90;
-  const EUKARYA_RADIUS_SCALE=1.50;
-  const PREVIOUS_FACTOR=1.23*Math.pow(4/3,1/7);
-  const factor=PREVIOUS_FACTOR*Math.pow(EUKARYA_RADIUS_SCALE/SPECIES_RADIUS_SCALE,1/MAX_LEVEL);
-  const SIZE_MULTIPLIER=(4/3)*SPECIES_RADIUS_SCALE;
-  // Higher classifications are progressively harder: Domain/Eukarya is rigid.
-  function softness(level){return Math.pow(Math.max(0,(MAX_LEVEL-level)/MAX_LEVEL),1.55);}
-  function squashLimit(level){return .27*softness(level);}
+  // v22: halve the v21 Species diameter, preserve the v21 Eukarya diameter.
+  // The other six diameters follow a geometric progression between them.
+  const V21_SPECIES_SCALE=0.90;
+  const V21_EUKARYA_SCALE=1.50;
+  const SPECIES_SIZE_VS_V21=0.50;
+  const PREVIOUS_FACTOR=1.23*Math.pow(4/3,1/MAX_LEVEL);
+  const v21Factor=PREVIOUS_FACTOR*Math.pow(V21_EUKARYA_SCALE/V21_SPECIES_SCALE,1/MAX_LEVEL);
+  const factor=v21Factor*Math.pow(1/SPECIES_SIZE_VS_V21,1/MAX_LEVEL);
+  const SIZE_MULTIPLIER=(4/3)*V21_SPECIES_SCALE*SPECIES_SIZE_VS_V21;
+
+  // Impact deformability is independent of body mass. Smaller balls are soft,
+  // while the final Eukarya sphere stays entirely rigid.
+  const SOFTNESS=[1.60,1.35,1.10,.40,.22,.10,.03,0];
+  const SQUASH_LIMITS=[.40,.35,.30,.11,.065,.03,.008,0];
+  const SQUASH_STIFFNESS=[95,105,115,150,150,150,150,150];
+  const SQUASH_DAMPING=[23,24,25,27,27,27,27,27];
+  function softness(level){return SOFTNESS[level]??0;}
+  function squashLimit(level){return SQUASH_LIMITS[level]??0;}
+
+  // Extra inertia beyond the geometric increase in cross-sectional area.
+  // Mass governs mutual collision response, stack deflections and merge blasts.
+  // Slight gravity bonuses convey weight without allowing excessive fall speed.
+  const MASS_MULTIPLIERS=[1,1,1,1,1,3,6,10];
+  const GRAVITY_MULTIPLIERS=[1,1,1,1,1,1.12,1.20,1.28];
+  function massMultiplier(level){return MASS_MULTIPLIERS[level]??1;}
+  function effectiveMass(ball){return ball.r*ball.r*massMultiplier(ball.level);}
   function previewY(level=current){
     const r=radius(level);
     const padding=Math.max(5,H*.005);
@@ -454,12 +469,15 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     const a=balls[i], b=balls[j];
     const newLevel=a.level+1;
     const cx=(a.x+b.x)/2, cy=(a.y+b.y)/2;
-    const vx=(a.vx+b.vx)*.35, vy=-Math.min(480,205+newLevel*26+combo*12);
+    // Heavy merged bodies retain less of the upward celebration impulse.
+    const vx=(a.vx+b.vx)*.35;
+    const vy=-Math.min(480,205+newLevel*26+combo*12) / Math.sqrt(massMultiplier(newLevel));
     balls.splice(j,1); balls.splice(i,1);
     const merged=createBall(newLevel,cx,cy,vx,vy);
     merged.angle=(a.angle+b.angle)/2;
     merged.omega=clamp((a.omega+b.omega)*.18+(Math.random()-.5)*1.0,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
-    merged.squish=.23*softness(newLevel); merged.squishV=-2.0*softness(newLevel); merged.squishAxis=Math.PI/2;
+    merged.squish=Math.min(squashLimit(newLevel),.16*softness(newLevel));
+    merged.squishV=-1.5*softness(newLevel); merged.squishAxis=Math.PI/2;
     merged.born=time; merged.pulse=.24; balls.push(merged);
     concealedRanks.add(newLevel);
     const range=merged.r*3.1+70;
@@ -470,7 +488,10 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       const reach=Math.max(0,1-dist/range);
       if(reach===0) continue;
       if(dist<1){ dx=(Math.random()-.5)*2; dy=-1; }
-      const massResponse=clamp(Math.pow(merged.r/other.r,.7),.35,2);
+      // A heavy target barely moves, even during nearby merge explosions.
+      const massResponse=clamp(
+        Math.pow(merged.r/other.r,.7)*
+        Math.sqrt(massMultiplier(newLevel)/massMultiplier(other.level)),.12,2.2);
       const kick=(118+newLevel*18)*reach*massResponse;
       const norm=Math.hypot(dx,dy)||1;
       other.vx+=(dx/norm)*kick;
@@ -562,8 +583,11 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       direction=((upper.id+lower.id)%2===0)?-1:1;
     }
     const impulse=clamp(impactSpeed*.32,55,135);
-    upper.vx+=direction*impulse;
-    lower.vx-=direction*impulse*.25;
+    // The nudge is largely absorbed by the lighter body; an enormous ball
+    // should not recoil like a Species ball simply because of vertical contact.
+    const relativeMass=effectiveMass(lower)/effectiveMass(upper);
+    upper.vx+=direction*impulse*clamp(Math.sqrt(relativeMass),.12,1.3);
+    lower.vx-=direction*impulse*.25*clamp(1/Math.sqrt(relativeMass),.04,1.3);
     upper.x+=direction*Math.min(upper.r*.035,1.4);
   }
   function collide(a,b){
@@ -574,7 +598,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     const dist=Math.sqrt(dist2), nx=dx/dist, ny=dy/dist;
     a.contactCount++; b.contactCount++;
     if(ny>.42) a.supported=true; else if(ny<-.42) b.supported=true;
-    const invA=1/(a.r*a.r), invB=1/(b.r*b.r), sum=invA+invB;
+    // Inverse effective masses: Phylum 3x, Kingdom 6x, Eukarya 10x
+    // heavier than their radius-only counterparts.
+    const invA=1/effectiveMass(a), invB=1/effectiveMass(b), sum=invA+invB;
     const correction=(min-dist)*.90/sum;
     a.x-=nx*correction*invA; a.y-=ny*correction*invA;
     b.x+=nx*correction*invB; b.y+=ny*correction*invB;
@@ -609,7 +635,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     updateBurstEffects(dt);
     for(const b of balls){
       b.supported=false; b.contactCount=0;
-      b.vy+=clamp(H*4.1,1300,2600)*dt;
+      b.vy+=clamp(H*4.1,1300,2600)*GRAVITY_MULTIPLIERS[b.level]*dt;
       b.vx*=Math.exp(-.75*dt); b.vy*=Math.exp(-.14*dt);
       b.pulse=Math.max(0,b.pulse-dt);
       b.vx=clamp(b.vx,-1100,1100); b.vy=clamp(b.vy,-1150,1150);
@@ -620,7 +646,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       if(b.level===MAX_LEVEL){
         b.squish=0;b.squishV=0;
       }else{
-        b.squishV+=(-150*b.squish-27*b.squishV)*dt;
+        b.squishV+=(-SQUASH_STIFFNESS[b.level]*b.squish-
+          SQUASH_DAMPING[b.level]*b.squishV)*dt;
         const limit=squashLimit(b.level);
         b.squish=clamp(b.squish+b.squishV*dt,-limit*.81,limit);
       }
@@ -783,7 +810,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     const puff=pulse>0?(1+.10*pulse/.26):1;
     ctx.scale(puff,puff);
     ctx.rotate(squishAxis);
-    ctx.scale(1-clamp(squish,-.22,.27),1+clamp(squish,-.22,.27)*.7);
+    const squash=clamp(squish,-.34,.40);
+    ctx.scale(1-squash,1+squash*.7);
     ctx.rotate(-squishAxis);
     ctx.rotate(angle);
     ctx.shadowColor='#20170d75'; ctx.shadowBlur=8; ctx.shadowOffsetY=4;
