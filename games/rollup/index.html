@@ -537,6 +537,9 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const AVATAR_MAX_SIZE = 1500;        // Maximum desktop diameter (previously 220).
   const AVATAR_MAX_VIEWPORT = 0.90;  // Limit on narrow screens to 90% of field width.
   const COLLECT_RADIUS_FACTOR = 0.80; // Pickup radius as a fraction of avatar diameter.
+  const BLOCK_LARGE_OBJECTS = true;
+  const BLOCK_RADIUS_FACTOR = 0.44;
+  const BLOCK_STEP_PX = 8;
   // Keep a one-element stage list for compatibility with the existing collection engine.
   const SCENES = [
     {name:'PRODUCT LIFECYCLE', url:'./levels/product-lifecycle-snapshot.html'}
@@ -1272,6 +1275,104 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       finish('cleared');
     }
   }
+  
+function circleHitsRect(x, y, radius, rect) {
+  const nearestX = clamp(x, rect.left, rect.right);
+  const nearestY = clamp(y, rect.top, rect.bottom);
+  const dx = x - nearestX;
+  const dy = y - nearestY;
+  return dx * dx + dy * dy < radius * radius;
+}
+
+function moveAroundLargeObjects(dx, dy) {
+  if (!BLOCK_LARGE_OBJECTS) {
+    return {
+      x: game.x + dx,
+      y: game.y + dy,
+      hitX: false,
+      hitY: false
+    };
+  }
+
+  const fr = field.getBoundingClientRect();
+  const scrollY = articleScrollPosition();
+  const radius = avatarSize() * BLOCK_RADIUS_FACTOR;
+
+  // Use document-space Y coordinates so automatic scrolling
+  // cannot let Skubert pass through obstacles.
+  let x = game.x;
+  let y = game.y + scrollY;
+
+  const blockers = [];
+
+  for (const c of collectibles) {
+    if (
+      c.eaten ||
+      c.type !== 'object' ||
+      c.tier <= game.level ||
+      !c.el.isConnected
+    ) continue;
+
+    // Avoid turning entire page layouts into solid walls.
+    // Explicit data-rollup-solid elements may also block.
+    if (!c.el.matches(
+      'img, video, canvas, button, [data-rollup-solid]'
+    )) continue;
+
+    const r = collectibleRect(c, scrollY);
+    if (!r.width || !r.height) continue;
+
+    blockers.push({
+      left: r.left - fr.left,
+      right: r.right - fr.left,
+      top: r.top - fr.top + scrollY,
+      bottom: r.bottom - fr.top + scrollY
+    });
+  }
+
+  // Ignore blockers the player already overlaps, allowing
+  // escape from objects revealed by a scroll or DOM update.
+  const active = blockers.filter(
+    r => !circleHitsRect(x, y, radius, r)
+  );
+
+  const steps = Math.max(
+    1,
+    Math.ceil(Math.hypot(dx, dy) / BLOCK_STEP_PX)
+  );
+
+  const sx = dx / steps;
+  const sy = dy / steps;
+  let hitX = false;
+  let hitY = false;
+
+  for (let i = 0; i < steps; i++) {
+    // Resolve axes independently to allow wall sliding.
+    if (!active.some(r =>
+      circleHitsRect(x + sx, y, radius, r)
+    )) {
+      x += sx;
+    } else {
+      hitX = true;
+    }
+
+    if (!active.some(r =>
+      circleHitsRect(x, y + sy, radius, r)
+    )) {
+      y += sy;
+    } else {
+      hitY = true;
+    }
+  }
+
+  return {
+    x,
+    y: y - scrollY,
+    hitX,
+    hitY
+  };
+}
+
   function checkCollisions(now){
     if(game.transitioning || game.status!=='playing')return;
     const fr=field.getBoundingClientRect();
@@ -1359,8 +1460,16 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
         }
         if(Math.abs(game.vx)<0.04)game.vx=0;
         if(Math.abs(game.vy)<0.04)game.vy=0;
-        const attemptedX=game.x+game.vx*dt;
-        const attemptedY=game.y+game.vy*dt;
+        const movement = moveAroundLargeObjects(
+          game.vx * dt,
+          game.vy * dt
+        );
+
+        const attemptedX = movement.x;
+        const attemptedY = movement.y;
+
+        if (movement.hitX) game.vx = 0;
+        if (movement.hitY) game.vy = 0;
         const margin=28;
         const height=field.clientHeight;
         const edgeMargin=earlyScrollMargin(height);
