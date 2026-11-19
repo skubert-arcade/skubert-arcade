@@ -29,7 +29,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
 #sphere-layer {
   position:absolute; inset:0; z-index:2; display:block; width:100%; height:100%;
   background:transparent; pointer-events:none;
-  clip-path:polygon(1.2% 15%,90.1% 15%,45.7% 94.1%);
+  /* Expose the waiting sphere above Eukarya while keeping the pile clipped
+     * to the V-shaped walls. The physics constrains active balls below the rim. */
+  clip-path:polygon(1.2% 0%,90.1% 0%,90.1% 15%,45.7% 94.1%,1.2% 15%);
 }
 /* Transparent 2D canvas stays on top for the countdown, effects and outlines. */
 #game { position:absolute; inset:0; z-index:3; display:block; width:100%; height:100%; background:transparent; touch-action:none; cursor:crosshair; }
@@ -88,7 +90,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   <div id="overlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
     <div class="modal">
       <h2 id="endTitle">Game Over</h2>
-      <p id="endMessage">The container overflowed.</p>
+      <p id="endMessage">A ball could not settle beneath the top of Eukarya.</p>
       <div id="endScore" class="final-score">0</div>
       <button id="playAgain" type="button">Play again</button>
     </div>
@@ -128,10 +130,16 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   const TEST_LEVEL_MAP={species:0,genus:1,family:2,order:3,class:4,phylum:5,kingdom:6,domain:7};
   const requestedTestLevel=TEST_LEVEL_MAP[(params.get('test')||'').toLowerCase()] ?? null;
 
-  let W=400,H=400,topY=60,topLeft=0,topRight=0,apexX=0,apexY=0,overflowY=0;
+  let W=400,H=400,topY=60,topLeft=0,topRight=0,apexX=0,apexY=0;
   let radius0=18,balls=[],particles=[],floating=[],shockwaves=[],score=0,highest=0;
   let unlocked=new Set([0]);
-  let aimX=200,current=0,next=1,ended=false,overflowAge=0,dropWait=0;
+  let aimX=200,current=0,next=1,ended=false,dropWait=0;
+  // An ordinary ball must settle completely beneath the Domain / Eukarya top edge.
+  const TOP_LINE_GRACE_SECONDS=1.3;
+  const TOP_LINE_SETTLE_SECONDS=1.5;
+  const TOP_LINE_VELOCITY=75;
+  const POP_SEQUENCE_SECONDS=1.45;
+  let popping=false,popElapsed=0,popQueue=[],popNext=0,popFragments=[],popRings=[];
   let started=false;
   // Each level is concealed once, at the moment its first ball enters play.
   // This set persists throughout a run; a merge never uncovers an earlier rank.
@@ -164,6 +172,41 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   const step=1/60;
   const factor=1.23;
   const SIZE_MULTIPLIER=4/3;
+  // Higher classifications are progressively harder: Domain/Eukarya is rigid.
+  function softness(level){return Math.pow(Math.max(0,(MAX_LEVEL-level)/MAX_LEVEL),1.55);}
+  function squashLimit(level){return .27*softness(level);}
+  function previewY(level=current){
+    const r=radius(level);
+    // Avoid covering the infographic title. When the title-to-pyramid gap is
+    // tall enough, the entire preview sits above Eukarya. Otherwise it rests
+    // just inside the top band instead of obstructing the title.
+    const titleBottom=H*.092;
+    const highestSafeCenter=topY-r-1;
+    const lowestSafeCenter=titleBottom+r+1;
+    return lowestSafeCenter<=highestSafeCenter
+      ? highestSafeCenter
+      : topY+r+4;
+  }
+  function spawnY(level){return previewY(level);}
+  // Ray cast vertically to the first actual visible surface at the aim position.
+  function landingGuideY(x,level=current){
+    const r=radius(level);
+    let boundaryY=apexY;
+    if(x<apexX){
+      boundaryY=topY+(x-topLeft)*(apexY-topY)/(apexX-topLeft);
+    } else if(x>apexX){
+      boundaryY=topY+(x-topRight)*(apexY-topY)/(apexX-topRight);
+    }
+    let y=Math.min(apexY,boundaryY);
+    const from=previewY(level)+r+3;
+    for(const ball of balls){
+      const dx=x-ball.x;
+      if(Math.abs(dx)>=ball.r)continue;
+      const intersection=ball.y-Math.sqrt(Math.max(0,ball.r*ball.r-dx*dx));
+      if(intersection>from && intersection<y)y=intersection;
+    }
+    return Math.max(from+1,y);
+  }
   const SETTLE_AFTER=.22;
   const SUPPORT_STOP_HORIZONTAL=12;
   const SUPPORT_STOP_VERTICAL=48;
@@ -283,7 +326,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   function xOnRight(y){ return topRight + (apexX-topRight) * ((y-topY)/Math.max(1,apexY-topY)); }
   function aimRange(level=current){
     const r=radius(level);
-    const y = topY + r + 8;
+    const y = topY + r + 8; // aim range is calculated at the top opening, not the elevated preview
     return [xOnLeft(y)+r+4, xOnRight(y)-r-4];
   }
   function clampAim(x,level=current){ const [lo,hi]=aimRange(level); return clamp(x,lo,hi); }
@@ -309,7 +352,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     const newW=Math.max(200,rect.width),newH=Math.max(200,rect.height);
     const oldW=W,oldH=H;
     W=newW; H=newH;
-    topY=H*.150; apexY=H*.941; apexX=W*.457; overflowY=H*.255;
+    topY=H*.150; apexY=H*.941; apexX=W*.457;
     topLeft=W*.012; topRight=W*.901;
     radius0=clamp(W*.0205,8.8,17.2)*SIZE_MULTIPLIER;
     const dpr=Math.min(window.devicePixelRatio||1,2);
@@ -340,7 +383,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       next=choice(current);
     }
     aimX=(topLeft+topRight)/2; updateUnlocks();
-    ended=false; overflowAge=0; dropWait=0; combo=0; lastMergeTime=-100; time=0; ballId=0;
+    ended=false; dropWait=0; combo=0; lastMergeTime=-100; time=0; ballId=0;
+    popping=false; popElapsed=0; popQueue=[]; popNext=0; popFragments=[]; popRings=[];
     $('playAgain').textContent='Play again';
     overlay.hidden=true; updateScore(); updateNext();
     dropDurationMs=AUTO_DROP_MS;
@@ -352,13 +396,15 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     const minX=xOnLeft(y)+r, maxX=xOnRight(y)-r;
     return {id:++ballId,level,r,x:clamp(x,minX,maxX),y,vx,vy,angle:0,omega:0,lastSpin:-10,
       squish:0,squishV:0,squishAxis:0,lastImpact:-10,born:time,pulse:0,
-      supported:false,contactCount:0,settleAge:0};
+      supported:false,contactCount:0,settleAge:0,dropped:false,topLineAge:0};
   }
   function drop(automatic=false){
     if(!started||ended||dropWait>0) return;
-    const r=radius(current), x=clampAim(aimX), y=topY+r+8;
+    const x=clampAim(aimX), y=spawnY(current);
     const droppedLevel=current;
-    balls.push(createBall(droppedLevel,x,y,0,15));
+    const dropped=createBall(droppedLevel,x,y,0,15);
+    dropped.dropped=true;
+    balls.push(dropped);
     concealedRanks.add(droppedLevel);
     lastDroppedLevel=droppedLevel;
     current=next;
@@ -371,8 +417,11 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     if(speed<65 || time-ball.lastImpact<.055) return;
     ball.lastImpact=time;
     ball.squishAxis=Math.atan2(normalY,normalX);
-    ball.squish=clamp(ball.squish + Math.min(.22, speed*.00044), -.18, .26);
-    ball.squishV=Math.max(ball.squishV, Math.min(2.2,speed*.0036));
+    const softnessFactor=softness(ball.level);
+    if(!softnessFactor){ball.squish=0;ball.squishV=0;return;}
+    const limit=squashLimit(ball.level);
+    ball.squish=clamp(ball.squish+Math.min(.22,speed*.00044)*softnessFactor,-limit*.81,limit);
+    ball.squishV=Math.max(ball.squishV,Math.min(2.2,speed*.0036)*softnessFactor);
   }
   function makeParticles(x,y,color,n=14){
     for(let i=0;i<n;i++){
@@ -390,7 +439,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     const merged=createBall(newLevel,cx,cy,vx,vy);
     merged.angle=(a.angle+b.angle)/2;
     merged.omega=clamp((a.omega+b.omega)*.18+(Math.random()-.5)*1.0,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
-    merged.squish=.23; merged.squishV=-2.0; merged.squishAxis=Math.PI/2;
+    merged.squish=.23*softness(newLevel); merged.squishV=-2.0*softness(newLevel); merged.squishAxis=Math.PI/2;
     merged.born=time; merged.pulse=.24; balls.push(merged);
     concealedRanks.add(newLevel);
     const range=merged.r*3.1+70;
@@ -408,8 +457,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       other.vy+=(dy/norm)*kick-kick*.27;
       other.pulse=Math.max(other.pulse,.09);
       other.squishAxis=Math.atan2(dy,dx);
-      other.squish=clamp(other.squish+reach*.085,-.16,.22);
-      other.squishV+=reach*.40;
+      const limit=squashLimit(other.level);
+      other.squish=clamp(other.squish+reach*.085*softness(other.level),-limit*.81,limit);
+      other.squishV+=reach*.40*softness(other.level);
       other.omega=clamp(other.omega+(dx/Math.max(1,dist))*(dy>0?-1:1)*reach*.8,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
     }
     shockwaves.push({x:cx,y:cy,r:merged.r*.35,maxR:range*.55,life:.35,maxLife:.35,color:LEVELS[newLevel].color});
@@ -486,7 +536,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     return true;
   }
   function physics(dt){
-    if(!started||ended)return;
+    if(!started)return;
+    if(ended){updatePopSequence(dt);return;}
     time+=dt; dropWait=Math.max(0,dropWait-dt);
     for(const b of balls){
       b.supported=false; b.contactCount=0;
@@ -498,8 +549,13 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       b.omega*=Math.exp(-ANGULAR_DRAG*dt);
       if(Math.abs(b.omega)<SPIN_STOP_THRESHOLD) b.omega=0;
       b.angle+=b.omega*dt;
-      b.squishV+=(-150*b.squish-27*b.squishV)*dt;
-      b.squish=clamp(b.squish+b.squishV*dt,-.22,.27);
+      if(b.level===MAX_LEVEL){
+        b.squish=0;b.squishV=0;
+      }else{
+        b.squishV+=(-150*b.squish-27*b.squishV)*dt;
+        const limit=squashLimit(b.level);
+        b.squish=clamp(b.squish+b.squishV*dt,-limit*.81,limit);
+      }
     }
     let merges=0;
     for(let pass=0; pass<4; pass++){
@@ -552,29 +608,95 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
         }
       } else { b.settleAge=0; }
     }
-    const y0=overflowY;
-    const x0=xOnLeft(y0), x1=xOnRight(y0);
-    // A newly spawned ball gets time to fall; only a genuinely congested,
-    // slow-moving ball counts. The timer resets fully if the pile clears.
-    const isOverflow=balls.some(b=>time-b.born>1.35 && b.y-b.r<y0 && b.y+b.r>topY &&
-      b.x+b.r>x0 && b.x-b.r<x1 && Math.abs(b.vy)<85);
-    overflowAge=isOverflow ? Math.min(4.5,overflowAge+dt) : 0;
-    if(!ended && overflowAge>=4.5)endGame();
+    // The fail line is invisible and coincides with the TOP of the red
+    // Eukarya band. Only a directly dropped sphere that remains stuck across
+    // the line for long enough can end a run. Falling and merge-bounce transients
+    // do not count, and the timer is independent for each sphere.
+    for(const b of balls){
+      if(!b.dropped)continue;
+      const mature=time-b.born>TOP_LINE_GRACE_SECONDS;
+      const intersectsTop=b.y-b.r<topY+2;
+      const slow=Math.abs(b.vy)<TOP_LINE_VELOCITY;
+      b.topLineAge=(mature && intersectsTop && slow) ? b.topLineAge+dt : 0;
+      if(b.topLineAge>=TOP_LINE_SETTLE_SECONDS){
+        endGame();
+        break;
+      }
+    }
     for(let i=shockwaves.length-1;i>=0;i--){ const w=shockwaves[i]; w.life-=dt; w.r+=(w.maxR-w.r)*Math.min(1,dt*11); if(w.life<=0) shockwaves.splice(i,1); }
     for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life-=dt; p.vy+=170*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.life<=0) particles.splice(i,1); }
     for(let i=floating.length-1;i>=0;i--){ floating[i].life-=dt; floating[i].y-=25*dt; if(floating[i].life<=0) floating.splice(i,1); }
   }
+  function popBall(ball){
+    const color=LEVELS[ball.level].color;
+    const count=Math.min(34,Math.max(17,Math.round(12+ball.r*.28)));
+    // Ball skin bursts into colorful curved scraps, confetti and white sparks.
+    for(let i=0;i<count;i++){
+      const angle=Math.PI*2*(i/count)+(Math.random()-.5)*.3;
+      const speed=(130+Math.random()*290)*(0.7+Math.min(1,ball.r/90));
+      popFragments.push({
+        x:ball.x+Math.cos(angle)*ball.r*.18,
+        y:ball.y+Math.sin(angle)*ball.r*.18,
+        vx:Math.cos(angle)*speed+(Math.random()-.5)*55,
+        vy:Math.sin(angle)*speed+(Math.random()-.5)*55,
+        color:i%7===0?'#ffffff':i%9===0?'#ffe86b':color,
+        size:Math.max(2,Math.min(11,ball.r*.14))*(.55+Math.random()),
+        life:.7+Math.random()*.65,maxLife:1.35,
+        rotation:Math.random()*Math.PI*2,spin:(Math.random()-.5)*15,
+        star:i%5===0
+      });
+    }
+    if(popFragments.length>950)popFragments.splice(0,popFragments.length-950);
+    popRings.push({x:ball.x,y:ball.y,r:ball.r*.24,maxR:ball.r*2.65,
+      color,life:.54,maxLife:.54});
+    makeParticles(ball.x,ball.y,color,10);
+  }
+  function updatePopSequence(dt){
+    if(!popping)return;
+    popElapsed+=dt;
+    while(popNext<popQueue.length && popQueue[popNext].when<=popElapsed){
+      const {id}=popQueue[popNext++];
+      const index=balls.findIndex(b=>b.id===id);
+      if(index>=0)popBall(balls.splice(index,1)[0]);
+    }
+    for(let i=popFragments.length-1;i>=0;i--){
+      const p=popFragments[i];p.life-=dt;
+      p.vy+=290*dt;p.vx*=Math.exp(-.35*dt);
+      p.x+=p.vx*dt;p.y+=p.vy*dt;p.rotation+=p.spin*dt;
+      if(p.life<=0)popFragments.splice(i,1);
+    }
+    for(let i=popRings.length-1;i>=0;i--){
+      const ring=popRings[i];ring.life-=dt;
+      ring.r+=(ring.maxR-ring.r)*Math.min(1,dt*12);
+      if(ring.life<=0)popRings.splice(i,1);
+    }
+    for(let i=particles.length-1;i>=0;i--){
+      const p=particles[i];p.life-=dt;p.vy+=170*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;
+      if(p.life<=0)particles.splice(i,1);
+    }
+    if(popNext===popQueue.length && popElapsed>=POP_SEQUENCE_SECONDS+1.05){
+      popping=false;
+      endTitle.textContent='Game Over';
+      endMessage.textContent=domainCreated
+        ?'You reached Eukarya! The pyramid finally filled up.'
+        :'The balls reached the top of Eukarya. Try matching faster!';
+      endScore.textContent=fmt.format(score)+' points';
+      $('playAgain').textContent='Play again';
+      overlay.hidden=false;
+      $('playAgain').focus({preventScroll:true});
+    }
+  }
   function endGame(){
     if(ended)return;
-    ended=true;
-    endTitle.textContent='Pyramid overflowed!';
-    endMessage.textContent=domainCreated
-      ?'You reached Domain! The pile remained above the overflow line for 4.5 seconds.'
-      :'The pile remained above the overflow line for 4.5 seconds. Try merging faster.';
-    endScore.textContent=fmt.format(score)+' points';
-    $('playAgain').textContent='Play again';
-    overlay.hidden=false;
-    $('playAgain').focus({preventScroll:true});
+    ended=true;popping=true;popElapsed=0;popNext=0;
+    dropDeadline=Infinity;down=false;
+    // Sweep from uppermost to lowermost spheres with staggered sparkling pops.
+    const order=[...balls].sort((a,b)=>a.y-b.y);
+    popQueue=order.map((b,i)=>({id:b.id,
+      when:(i/Math.max(1,order.length))*POP_SEQUENCE_SECONDS+Math.random()*.09}));
+    popQueue.sort((a,b)=>a.when-b.when);
+    overlay.hidden=true;
+    setMessage('Game over! The spheres are popping!');
   }
   function hexRGB(hex){ const c=hex.replace('#',''); return [parseInt(c.slice(0,2),16), parseInt(c.slice(2,4),16), parseInt(c.slice(4,6),16)]; }
   function tint(hex,t){ const rgb=hexRGB(hex); return `rgb(${rgb.map(n=>Math.round(n+(t>=0?(255-n):n)*t)).join(',')})`; }
@@ -634,7 +756,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     // One render request per gameplay frame; the Three.js module never runs
     // an independent animation loop. Until it becomes ready, use v12 sprites.
     const preview=!ended ? {
-      x:clampAim(aimX), y:topY+radius(current)+8,
+      x:clampAim(aimX), y:previewY(current),
       r:radius(current),level:current,angle:0,squish:0,squishAxis:0,pulse:0
     } : null;
     let using3D=false;
@@ -658,24 +780,60 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     for(const f of floating){ ctx.globalAlpha=Math.min(1,f.life*1.7); ctx.font='900 13px system-ui,Arial'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='#29203d'; ctx.strokeText(f.label,f.x,f.y); ctx.fillStyle='#fff'; ctx.fillText(f.label,f.x,f.y); }
     ctx.globalAlpha=1;
     ctx.restore();
+    // Spectacular end-of-run balloon bursts render outside the pyramid clip,
+    // so colorful shards can fly beyond the container instead of disappearing.
+    if(popping){
+      ctx.save();
+      for(const ring of popRings){
+        const alpha=Math.max(0,ring.life/ring.maxLife);
+        ctx.globalAlpha=alpha;
+        ctx.beginPath();ctx.arc(ring.x,ring.y,ring.r,0,Math.PI*2);
+        ctx.lineWidth=5*alpha+1;ctx.strokeStyle='#fff';ctx.stroke();
+        ctx.beginPath();ctx.arc(ring.x,ring.y,ring.r+4,0,Math.PI*2);
+        ctx.lineWidth=3*alpha+1;ctx.strokeStyle=ring.color;ctx.stroke();
+      }
+      for(const bit of popFragments){
+        ctx.save();ctx.globalAlpha=Math.max(0,bit.life/bit.maxLife);
+        ctx.translate(bit.x,bit.y);ctx.rotate(bit.rotation);
+        ctx.fillStyle=bit.color;ctx.shadowColor=bit.color;ctx.shadowBlur=9;
+        if(bit.star){
+          ctx.beginPath();
+          ctx.moveTo(0,-bit.size*1.7);ctx.lineTo(bit.size*.32,-bit.size*.3);
+          ctx.lineTo(bit.size*1.7,0);ctx.lineTo(bit.size*.32,bit.size*.3);
+          ctx.lineTo(0,bit.size*1.7);ctx.lineTo(-bit.size*.32,bit.size*.3);
+          ctx.lineTo(-bit.size*1.7,0);ctx.lineTo(-bit.size*.32,-bit.size*.3);
+          ctx.closePath();ctx.fill();
+        }else{ctx.fillRect(-bit.size/2,-bit.size*.95,bit.size,bit.size*1.9);}
+        ctx.restore();
+      }
+      ctx.restore();
+    }
     ctx.save();
     ctx.lineJoin='round'; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(topLeft,topY); ctx.lineTo(apexX,apexY); ctx.lineTo(topRight,topY);
     ctx.strokeStyle='#ffffffc8'; ctx.lineWidth=4; ctx.stroke();
     ctx.strokeStyle='#23201da8'; ctx.lineWidth=1.6; ctx.stroke();
-    const x0=xOnLeft(overflowY), x1=xOnRight(overflowY);
-    ctx.setLineDash([4,5]); ctx.beginPath(); ctx.moveTo(x0,overflowY); ctx.lineTo(x1,overflowY);
-    ctx.lineWidth=1.6; ctx.strokeStyle=overflowAge>0?'#c32428':'#c3242890'; ctx.stroke(); ctx.setLineDash([]);
     ctx.restore();
     if(!ended){
-      const r=radius(current), x=clampAim(aimX), previewY=topY+r+8;
-      ctx.save(); ctx.beginPath(); ctx.setLineDash([3,5]); ctx.strokeStyle='#45454590'; ctx.lineWidth=1.5;
-      ctx.moveTo(x,previewY); ctx.lineTo(x,overflowY); ctx.stroke(); ctx.restore();
-      if(!using3D) drawSphere(x,previewY,r,current,true);
+      const r=radius(current), x=clampAim(aimX), py=previewY(current);
+      const from=py+r+4, to=landingGuideY(x,current);
+      if(to>from+1){
+        // A high-contrast dotted projection ends at the FIRST sphere or sloping wall.
+        ctx.save();ctx.lineCap='round';ctx.setLineDash([2,7]);
+        ctx.beginPath();ctx.moveTo(x,from);ctx.lineTo(x,to);
+        ctx.lineWidth=5.8;ctx.strokeStyle='#ffffffed';ctx.stroke();
+        ctx.beginPath();ctx.moveTo(x,from);ctx.lineTo(x,to);
+        ctx.lineWidth=3;ctx.strokeStyle='#171717df';ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();ctx.arc(x,to,4,0,Math.PI*2);
+        ctx.fillStyle='#fff';ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='#151515';ctx.stroke();
+        ctx.restore();
+      }
+      if(!using3D) drawSphere(x,py,r,current,true);
       // Countdown ring automatically scales with the current placement window.
       const remaining=clamp((dropDeadline-performance.now())/dropDurationMs,0,1);
       ctx.save(); ctx.beginPath();
-      ctx.arc(x,previewY,r+5,-Math.PI/2,-Math.PI/2+Math.PI*2*remaining);
+      ctx.arc(x,py,r+5,-Math.PI/2,-Math.PI/2+Math.PI*2*remaining);
       ctx.strokeStyle=remaining<.34?'#d73f31':'#242424ae';
       ctx.lineWidth=2.1; ctx.lineCap='round';ctx.stroke();ctx.restore();
     }
