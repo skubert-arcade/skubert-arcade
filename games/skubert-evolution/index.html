@@ -18,7 +18,36 @@ a,button { font:inherit; }
 button { cursor:pointer; }
 a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #ca7914; outline-offset:3px; }
 .scene { position:relative; width:min(100vw,100svh); max-width:100%; aspect-ratio:1; flex:none; }
-.scene > img { width:100%; height:100%; display:block; object-fit:contain; opacity:1; }
+/* The wildlife animation sits behind the original taxonomy image.
+   Once the source PNG has transparent background pixels, the animation shows through. */
+.wildlife-background {
+  position:absolute; inset:0; z-index:0; overflow:hidden;
+  background:#283a36; pointer-events:none;
+}
+.wildlife-frame {
+  position:absolute; inset:0; width:100%; height:100%;
+  /* All supplied animations are square (480x480). Scale to fill the whole
+     square scene rather than show them as small 480px elements. */
+  object-fit:cover; object-position:center; opacity:0;
+  transition:opacity 900ms ease-in-out;
+}
+.wildlife-frame.is-visible { opacity:1; }
+/* Subtle wash helps text remain readable after the taxonomy background is transparent. */
+.wildlife-background::after {
+  content:""; position:absolute; inset:0; background:rgba(255,255,255,.12);
+  pointer-events:none;
+}
+.taxonomy-image {
+  position:relative; z-index:1; width:100%; height:100%;
+  display:block; object-fit:contain; opacity:1;
+}
+/* Optional visual test: ?bgPreview=1 lets you see the animations even before
+   you replace the original opaque taxonomy PNG with a transparent version. */
+html.bg-preview .taxonomy-image,
+html.bg-preview #discovery-layer { opacity:0; }
+@media (prefers-reduced-motion:reduce){
+  .wildlife-frame { transition:none; }
+}
 /* Once any ball of a rank enters play, its band stays concealed until restart.
    The source PNG stays intact underneath this transparent overlay. */
 #discovery-layer {
@@ -82,7 +111,11 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
 <a class="arcade-link" href="../../index.html" aria-label="Return to Skubert Arcade">← Arcade</a>
 <div class="score-display" aria-label="Current score">Score <span id="score">0</span></div>
 <main class="scene" aria-label="Skubert Evolution game over the taxonomy pyramid">
-  <img src="taxonomy-ranking-system.png" width="1254" height="1254" alt="Taxonomic Ranking System inverted pyramid, from Domain Eukarya at the top to Species Mascotus Skubertus at the bottom." decoding="async">
+  <div class="wildlife-background" aria-hidden="true">
+    <img class="wildlife-frame is-visible" src="backgrounds/still.jpg" alt="" draggable="false" decoding="async">
+    <img class="wildlife-frame" alt="" draggable="false" decoding="async">
+  </div>
+  <img class="taxonomy-image" src="taxonomy-ranking-system.png" width="1254" height="1254" alt="Taxonomic Ranking System inverted pyramid, from Domain Eukarya at the top to Species Mascotus Skubertus at the bottom." decoding="async">
   <canvas id="discovery-layer" aria-hidden="true"></canvas>
   <canvas id="sphere-layer" aria-hidden="true"></canvas>
   <canvas id="game" tabindex="0" aria-label="Skubert Evolution. Move the pointer or use left and right arrow keys to aim, then click, tap or press Space to drop a sphere. Matching spheres merge into the next taxonomic rank."></canvas>
@@ -97,6 +130,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   </div>
 </main>
 <div id="message" class="visually-hidden" role="status" aria-live="polite"></div>
+<script src="background-rotation.js" defer></script>
 <script type="module" src="sphere-renderer.js"></script>
 <script>
 (() => {
