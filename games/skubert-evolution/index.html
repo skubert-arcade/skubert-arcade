@@ -144,11 +144,16 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   let balls=[],particles=[],floating=[],shockwaves=[],score=0,highest=0;
   let unlocked=new Set([0]);
   let aimX=200,current=0,next=1,ended=false,dropWait=0;
-  // All balls (dropped or merge-created) must settle below the Eukarya top edge.
-  // Each ball has its own post-creation grace period and sustained jam timer.
-  const TOP_LINE_GRACE_SECONDS=1.3;
-  const TOP_LINE_SETTLE_SECONDS=1.5;
-  const TOP_LINE_TOTAL_SPEED=75;
+  // v26: Every ball must clear Eukarya's upper rim, including merge-created balls.
+  // Do not cancel the overflow countdown just because the jammed pile is moving,
+  // wobbling, or briefly loses support: its TOP EDGE is what matters.
+  // A short post-creation grace protects new drops and merge animations; a ball
+  // must then remain above the rim throughout the warning countdown.
+  const TOP_LINE_GRACE_SECONDS=0.35;
+  const TOP_LINE_SETTLE_SECONDS=0.65;
+  // Once the countdown has started, allow a tiny clearance margin so numeric
+  // jitter across the rim cannot continuously reset an obvious overflow.
+  const TOP_LINE_CLEARANCE=4;
   // Warning pulse is a visual cue only; it does not influence game physics.
   const TOP_WARNING_PULSE_HZ=2.4;
   const REDUCED_MOTION=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -188,7 +193,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   // 1000 x 1000 physics world (diameter = radius * 2).
   // Adjust either endpoint independently; Genus through Kingdom resize
   // smoothly between them. Eukarya remains the largest classification.
-  const SPECIES_RADIUS = 15.0;
+  const SPECIES_RADIUS = 10.32;
   const EUKARYA_RADIUS = 195.36;
   const SIZE_GROWTH_FACTOR = Math.pow(EUKARYA_RADIUS / SPECIES_RADIUS, 1 / MAX_LEVEL);
 
@@ -712,15 +717,15 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life-=dt; p.vy+=170*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.life<=0) particles.splice(i,1); }
     for(let i=floating.length-1;i>=0;i--){ floating[i].life-=dt; floating[i].y-=25*dt; if(floating[i].life<=0) floating.splice(i,1); }
   }
-  // A top-of-pyramid jam is unfair to ignore just because its ball was
-  // created by a merge. The age check also protects newly created merge balls
-  // while they are still flying, and checking both velocity axes prevents a
-  // rapidly sliding ball from counting as settled.
+  // An overflow is a ball persistently occupying space above the top rim.
+  // Velocity and collision support are intentionally NOT requirements: those
+  // checks allowed crowded, jostling piles to evade game over indefinitely.
+  // The four-unit exit margin applies only after a warning has begun.
   function isTopOverflowCandidate(b){
-    return time-b.born>TOP_LINE_GRACE_SECONDS &&
-      b.y-b.r<topY+2 &&
-      b.supported &&
-      Math.hypot(b.vx,b.vy)<TOP_LINE_TOTAL_SPEED;
+    if(time-b.born<TOP_LINE_GRACE_SECONDS)return false;
+    const topOfBall=b.y-b.r;
+    return topOfBall<topY ||
+      (b.topLineAge>0 && topOfBall<topY+TOP_LINE_CLEARANCE);
   }
   function checkTopOverflow(dt){
     for(const b of balls){
