@@ -448,6 +448,21 @@ body.rollup-wide-gutters .stats .stat {
   .game-shell > .screen {padding:12px;}
 }
 
+
+/* ROLLUP_PAGE_CONTINUATION_V1 — decorative snapshot overscan; gameplay stays 1920x1080. */
+.game-shell{background:#fff!important;isolation:isolate;}
+#rollupPageBleed{
+  position:absolute;left:0;top:0;width:1920px;height:1080px;
+  pointer-events:none;overflow:visible;transform-origin:0 0;z-index:0;
+}
+#rollupPageBleed .page-bleed-frame{
+  display:block;position:absolute;left:0;width:1920px;border:0;
+  pointer-events:none;background:#fff;overflow:hidden;
+}
+#rollupPageBleedTop{top:-720px;height:720px;}
+#rollupPageBleedBottom{top:1080px;height:980px;}
+#playfield{z-index:1;}
+
 </style>
 <link rel="stylesheet" href="../../shared/score-entry.css">
 </head>
@@ -474,6 +489,10 @@ body.rollup-wide-gutters .stats .stat {
     <div class="stat"><div class="stat-label">Time left</div><div class="stat-value" id="timeLabel">1:00</div></div>
   </section>
   <div class="game-shell">
+    <div id="rollupPageBleed" aria-hidden="true">
+      <iframe id="rollupPageBleedTop" class="page-bleed-frame" title="" tabindex="-1" loading="eager" sandbox="allow-same-origin"></iframe>
+      <iframe id="rollupPageBleedBottom" class="page-bleed-frame" title="" tabindex="-1" loading="eager" sandbox="allow-same-origin"></iframe>
+    </div>
     <div id="playfield" tabindex="0" aria-label="Game area. Move your mouse or arrow keys to guide Skubert over page elements.">
       <div id="siteContent"></div>
       <canvas id="attachmentBack" class="attachment-layer" aria-hidden="true"></canvas>
@@ -535,6 +554,64 @@ body.rollup-wide-gutters .stats .stat {
   // Self-contained, original game. Automatic DOM discovery; no Weball source or external libraries.
   const $ = id => document.getElementById(id);
   const field = $('playfield');
+  // ROLLUP_PAGE_CONTINUATION_V1: visual snapshot only, excluded from #siteContent.
+  const pageBleed=$('rollupPageBleed');
+  const pageBleedTop=$('rollupPageBleedTop');
+  const pageBleedBottom=$('rollupPageBleedBottom');
+  const PAGE_BLEED_TOP=720;
+  const PAGE_BLEED_BOTTOM=980;
+  let pageBleedSource=null;
+  let pageBleedPrimary=null;
+  let pageBleedDocument=null;
+  function positionPageBleed(ox,oy,scale){
+    if(pageBleed)pageBleed.style.transform='translate('+ox+'px,'+oy+'px) scale('+scale+')';
+  }
+  function syncPageBleed(){
+    const primary=snapshotIframe();
+    if(!primary || !primary.getAttribute('src')){
+      pageBleedTop.style.visibility='hidden';
+      pageBleedBottom.style.visibility='hidden';
+      return;
+    }
+    const src=primary.getAttribute('src');
+    let originalDoc,scrollY;
+    try{
+      originalDoc=primary.contentDocument;
+      if(!originalDoc || originalDoc.readyState!=='complete')return;
+      scrollY=Math.max(0,primary.contentWindow.scrollY||0);
+    }catch(_){return;}
+    if(primary!==pageBleedPrimary || originalDoc!==pageBleedDocument || src!==pageBleedSource){
+      pageBleedPrimary=primary;
+      pageBleedDocument=originalDoc;
+      pageBleedSource=src;
+      for(const iframe of [pageBleedTop,pageBleedBottom]){
+        iframe.style.visibility='hidden';
+        iframe.removeAttribute('src');
+        iframe.setAttribute('src',src);
+      }
+    }
+    const originalHeight=Math.max(originalDoc.documentElement?.scrollHeight||0,originalDoc.body?.scrollHeight||0);
+    const topVisible=Math.min(PAGE_BLEED_TOP,scrollY);
+    pageBleedTop.style.clipPath='inset('+(PAGE_BLEED_TOP-topVisible)+'px 0 0 0)';
+    const bottomVisible=Math.max(0,Math.min(PAGE_BLEED_BOTTOM,originalHeight-scrollY-WORLD_HEIGHT));
+    pageBleedBottom.style.clipPath='inset(0 0 '+(PAGE_BLEED_BOTTOM-bottomVisible)+'px 0)';
+    const targets=[[pageBleedTop,Math.max(0,scrollY-PAGE_BLEED_TOP),topVisible>0],
+                   [pageBleedBottom,scrollY+WORLD_HEIGHT,bottomVisible>0]];
+    for(const [iframe,target,enabled] of targets){
+      if(!enabled){iframe.style.visibility='hidden';continue;}
+      try{
+        const doc=iframe.contentDocument;
+        if(!doc || doc.readyState!=='complete'){iframe.style.visibility='hidden';continue;}
+        // Extra bottom padding in the decorative COPY prevents clamping at the
+        // document end. It cannot affect the real collectible snapshot.
+        if(doc.body && doc.body.style.paddingBottom!=='1100px')doc.body.style.paddingBottom='1100px';
+        if(Math.abs((iframe.contentWindow.scrollY||0)-target)>1)iframe.contentWindow.scrollTo(0,target);
+        iframe.style.visibility='visible';
+      }catch(_){iframe.style.visibility='hidden';}
+    }
+  }
+  window.setInterval(syncPageBleed,160);
+
   const WORLD_WIDTH = 1920;
   const WORLD_HEIGHT = 1080;
     // ROLLUP_GROWTH_CAMERA_V1 — visual camera only; game.x/game.y stay in world units.
@@ -593,6 +670,7 @@ body.rollup-wide-gutters .stats .stat {
     if(WORLD_HEIGHT*scale<=hostHeight)oy=(hostHeight-WORLD_HEIGHT*scale)/2;
     else oy=Math.max(hostHeight-WORLD_HEIGHT*scale,Math.min(0,oy));
     field.style.transform='translate('+ox+'px,'+oy+'px) scale('+scale+')';
+    positionPageBleed(ox,oy,scale);
   }
   // Returns the actual visible world rectangle, including clipping by the
   // fullscreen host, not the full 1920x1080 world. Used for edge scrolling.
