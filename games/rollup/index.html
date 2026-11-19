@@ -548,7 +548,10 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const DURATION = 60;
   // MOVEMENT SETTINGS — change these values to customize the ball-like feel.
   const MOVE_SPEED = 450;          // Maximum speed (pixels/second).
-  const CHASE_RESPONSE = 5.0;      // Higher = snappier; lower = heavier / more momentum.
+  // ROLLUP_SIZE_MOMENTUM_V1 — steering response depends on Skubert diameter.
+  const CHASE_RESPONSE_SMALL = 9.0;      // Fast steering when smallest.
+  const CHASE_RESPONSE_LARGE = 3.0;      // Heavy steering when largest.
+  const CHASE_RESPONSE_CURVE_POWER = 0.5; // 1 = linear; 0.5 = heavier sooner.
   const SLOWDOWN_RADIUS = 105;     // Distance (px) over which Skubert brakes near the cursor.
   const EDGE_SCROLL_PUSH = 400;    // Virtual cursor target extension near an edge.
   const EDGE_SCROLL_ZONE = 500;     // Maximum distance (px) from an edge to begin scrolling.
@@ -1436,7 +1439,15 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
             desiredVy=toY/distance*desiredSpeed;
           }
         }
-        const response=1-Math.exp(-CHASE_RESPONSE*dt);
+        // Size-normalized steering inertia (world units, independent of display scaling).
+        const maxDiameter=Math.min(AVATAR_MAX_SIZE,
+          Math.max(AVATAR_START_SIZE,field.clientWidth*AVATAR_MAX_VIEWPORT));
+        const sizeProgress=clamp((avatarSize()-AVATAR_START_SIZE)/
+          Math.max(1,maxDiameter-AVATAR_START_SIZE),0,1);
+        const inertiaProgress=Math.pow(sizeProgress,CHASE_RESPONSE_CURVE_POWER);
+        const currentChaseResponse=CHASE_RESPONSE_SMALL+
+          (CHASE_RESPONSE_LARGE-CHASE_RESPONSE_SMALL)*inertiaProgress;
+        const response=1-Math.exp(-currentChaseResponse*dt);
         game.vx+=(desiredVx-game.vx)*response;
         game.vy+=(desiredVy-game.vy)*response;
         // Do not allow diagonal movement or inertia to exceed MOVE_SPEED.
