@@ -419,8 +419,8 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
 #playfield {
   position:absolute !important;
   left:0; top:0;
-  width:1100px !important;
-  height:700px !important;
+  width:1920px !important;
+  height:1080px !important;
   transform-origin:0 0;
 }
 /* Do not allow outer-document media queries to reflow the iframe container. */
@@ -512,8 +512,8 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   // Self-contained, original game. Automatic DOM discovery; no Weball source or external libraries.
   const $ = id => document.getElementById(id);
   const field = $('playfield');
-  const WORLD_WIDTH = 1100;
-  const WORLD_HEIGHT = 700;
+  const WORLD_WIDTH = 1920;
+  const WORLD_HEIGHT = 1080;
   let displayScale = 1;
   function fitWorldToWindow(){
     const host=field.parentElement;
