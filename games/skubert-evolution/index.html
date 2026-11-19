@@ -146,8 +146,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   let aimX=200,current=0,next=1,ended=false,dropWait=0;
   // All balls (dropped or merge-created) must settle below the Eukarya top edge.
   // Each ball has its own post-creation grace period and sustained jam timer.
-  const TOP_LINE_GRACE_SECONDS=1.3;
-  const TOP_LINE_SETTLE_SECONDS=1.5;
+  const TOP_LINE_GRACE_SECONDS=0.3;
+  const TOP_LINE_SETTLE_SECONDS=0.5;
   const TOP_LINE_TOTAL_SPEED=75;
   const POP_SEQUENCE_SECONDS=1.45;
   let popping=false,popElapsed=0,popQueue=[],popNext=0,popFragments=[],popRings=[];
