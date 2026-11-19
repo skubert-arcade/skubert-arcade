@@ -413,6 +413,18 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     animation:none!important;
   }
 }
+
+/* ROLLUP_FIXED_WORLD_V2: one canonical level layout; screen resize only scales pixels. */
+.game-shell { position:relative; overflow:hidden; }
+#playfield {
+  position:absolute !important;
+  left:0; top:0;
+  width:1100px !important;
+  height:700px !important;
+  transform-origin:0 0;
+}
+/* Do not allow outer-document media queries to reflow the iframe container. */
+#playfield .site-page { padding:30px !important; gap:12px !important; }
 </style>
 <link rel="stylesheet" href="../../shared/score-entry.css">
 </head>
@@ -500,6 +512,21 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   // Self-contained, original game. Automatic DOM discovery; no Weball source or external libraries.
   const $ = id => document.getElementById(id);
   const field = $('playfield');
+  const WORLD_WIDTH = 1100;
+  const WORLD_HEIGHT = 700;
+  let displayScale = 1;
+  function fitWorldToWindow(){
+    const host=field.parentElement;
+    const scale=Math.max(0.01,Math.min(host.clientWidth/WORLD_WIDTH,host.clientHeight/WORLD_HEIGHT));
+    displayScale=scale;
+    const ox=Math.max(0,(host.clientWidth-WORLD_WIDTH*scale)/2);
+    const oy=Math.max(0,(host.clientHeight-WORLD_HEIGHT*scale)/2);
+    field.style.transform='translate('+ox+'px,'+oy+'px) scale('+scale+')';
+  }
+  function logicalFieldRect(){
+    const r=field.getBoundingClientRect();
+    return {left:r.left,top:r.top,right:r.left+WORLD_WIDTH,bottom:r.top+WORLD_HEIGHT,width:WORLD_WIDTH,height:WORLD_HEIGHT};
+  }
   const site = $('siteContent');
   const avatar = $('avatar');
   const introSkubertStage = $('introSkubertStage');
@@ -539,7 +566,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const COLLECT_RADIUS_FACTOR = 0.80; // Pickup radius as a fraction of avatar diameter.
   const BLOCK_LARGE_OBJECTS = true;
   const BLOCK_RADIUS_FACTOR = 0.44;
-  const BLOCK_STEP_PX = 8;
+  const BLOCK_STEP_PX = 4;
   // Keep a one-element stage list for compatibility with the existing collection engine.
   const SCENES = [
     {name:'PRODUCT LIFECYCLE', url:'./levels/product-lifecycle-snapshot.html'}
@@ -587,9 +614,9 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     const owner=root.ownerDocument||document;
     const walker=owner.createTreeWalker(root,NodeFilter.SHOW_TEXT);
     const nodes=[];
-    const viewport=field.getBoundingClientRect();
+    const viewport=logicalFieldRect();
     const frame=snapshotIframe();
-    const frameRect=frame?.getBoundingClientRect();
+    const frameRect=frame?screenRect(frame):null;
     let node, capacity=WORDS_PER_SCAN;
     // Search the whole DOM without altering off-screen text.  Wrap newly
     // encountered words only where they can be collected on this screen.
@@ -627,24 +654,33 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     return frame ? null : site;
   }
   function screenRect(el){
+    // Return a logical coordinate rectangle even when CSS scales the entire world.
     const r=el.getBoundingClientRect();
+    const stage=field.getBoundingClientRect();
     const frame=snapshotIframe();
     if(frame && el.ownerDocument!==document && frame.contentDocument===el.ownerDocument){
+      // An iframe child reports distances in the iframe's unscaled CSS pixels.
       const f=frame.getBoundingClientRect();
-      return {left:r.left+f.left,top:r.top+f.top,right:r.right+f.left,bottom:r.bottom+f.top,width:r.width,height:r.height};
+      const x=(f.left-stage.left)/displayScale+r.left;
+      const y=(f.top-stage.top)/displayScale+r.top;
+      return {left:stage.left+x,top:stage.top+y,right:stage.left+x+r.width,bottom:stage.top+y+r.height,width:r.width,height:r.height};
     }
-    return r;
+    // Main-document items report physical screen pixels; remove display scaling.
+    const x=(r.left-stage.left)/displayScale;
+    const y=(r.top-stage.top)/displayScale;
+    const width=r.width/displayScale,height=r.height/displayScale;
+    return {left:stage.left+x,top:stage.top+y,right:stage.left+x+width,bottom:stage.top+y+height,width,height};
   }
-  function isVisible(el){
+  function isVisible(el,margin=0){
     const style=(el.ownerDocument.defaultView||window).getComputedStyle(el);
     if(style.display==='none'||style.visibility==='hidden'||Number(style.opacity)===0)return false;
-    const box=screenRect(el),fieldBox=field.getBoundingClientRect();
-    return box.width>2&&box.height>2&&box.right>fieldBox.left&&box.left<fieldBox.right&&box.bottom>fieldBox.top&&box.top<fieldBox.bottom;
+    const box=screenRect(el),fieldBox=logicalFieldRect();
+    return box.width>2&&box.height>2&&box.right>fieldBox.left-margin&&box.left<fieldBox.right+margin&&box.bottom>fieldBox.top-margin&&box.top<fieldBox.bottom+margin;
   }
   function isVisualObject(el){
     if(el===site || el.classList.contains('site-page') || el.classList.contains('dom-word'))return false;
     if(el.matches('script,style,svg,span,i,b,strong,p,small,h1,h2,h3,h4'))return false;
-    if(!isVisible(el))return false;
+    if(!isVisible(el, 900))return false;
     const box=screenRect(el);
     if(box.width<23||box.height<17||box.width>field.clientWidth*.87)return false;
     const area=box.width*box.height;
@@ -1276,106 +1312,57 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     }
   }
   
-function circleHitsRect(x, y, radius, rect) {
-  const nearestX = clamp(x, rect.left, rect.right);
-  const nearestY = clamp(y, rect.top, rect.bottom);
-  const dx = x - nearestX;
-  const dy = y - nearestY;
-  return dx * dx + dy * dy < radius * radius;
-}
-
-function moveAroundLargeObjects(dx, dy) {
-  if (!BLOCK_LARGE_OBJECTS) {
-    return {
-      x: game.x + dx,
-      y: game.y + dy,
-      hitX: false,
-      hitY: false
-    };
+  // Solid obstacle physics: any independently collectible, visually painted
+  // large element is solid, not just IMG/BUTTON. Parent wrappers with smaller
+  // independently collectible child objects are deliberately not solid walls.
+  function collisionDepth(x,y,radius,r){
+    const nx=clamp(x,r.left,r.right),ny=clamp(y,r.top,r.bottom);
+    const d=Math.hypot(x-nx,y-ny);
+    if(d>0)return Math.max(0,radius-d);
+    // Starting inside a discovered obstacle is allowed to escape, but not to
+    // advance deeper inside it (e.g. after an asynchronous article rescan).
+    return radius+Math.max(0,Math.min(x-r.left,r.right-x,y-r.top,r.bottom-y));
   }
-
-  const fr = field.getBoundingClientRect();
-  const scrollY = articleScrollPosition();
-  const radius = avatarSize() * BLOCK_RADIUS_FACTOR;
-
-  // Use document-space Y coordinates so automatic scrolling
-  // cannot let Skubert pass through obstacles.
-  let x = game.x;
-  let y = game.y + scrollY;
-
-  const blockers = [];
-
-  for (const c of collectibles) {
-    if (
-      c.eaten ||
-      c.type !== 'object' ||
-      c.tier <= game.level ||
-      !c.el.isConnected
-    ) continue;
-
-    // Avoid turning entire page layouts into solid walls.
-    // Explicit data-rollup-solid elements may also block.
-    if (!c.el.matches(
-      'img, video, canvas, button, [data-rollup-solid]'
-    )) continue;
-
-    const r = collectibleRect(c, scrollY);
-    if (!r.width || !r.height) continue;
-
-    blockers.push({
-      left: r.left - fr.left,
-      right: r.right - fr.left,
-      top: r.top - fr.top + scrollY,
-      bottom: r.bottom - fr.top + scrollY
-    });
-  }
-
-  // Ignore blockers the player already overlaps, allowing
-  // escape from objects revealed by a scroll or DOM update.
-  const active = blockers.filter(
-    r => !circleHitsRect(x, y, radius, r)
-  );
-
-  const steps = Math.max(
-    1,
-    Math.ceil(Math.hypot(dx, dy) / BLOCK_STEP_PX)
-  );
-
-  const sx = dx / steps;
-  const sy = dy / steps;
-  let hitX = false;
-  let hitY = false;
-
-  for (let i = 0; i < steps; i++) {
-    // Resolve axes independently to allow wall sliding.
-    if (!active.some(r =>
-      circleHitsRect(x + sx, y, radius, r)
-    )) {
-      x += sx;
-    } else {
-      hitX = true;
+  function moveAroundLargeObjects(dx,dy){
+    if(!BLOCK_LARGE_OBJECTS)return {x:game.x+dx,y:game.y+dy,hitX:false,hitY:false};
+    const fr=logicalFieldRect();
+    const scrollY=articleScrollPosition();
+    const radius=avatarSize()*BLOCK_RADIUS_FACTOR;
+    let x=game.x,y=game.y+scrollY;
+    const reach=radius+Math.max(Math.abs(dx),Math.abs(dy))+12;
+    const blockers=[];
+    for(const c of collectibles){
+      if(c.eaten||c.type!=='object'||c.tier<=game.level||!c.el.isConnected)continue;
+      if(c.el.closest('.eaten'))continue;
+      const r=collectibleRect(c,scrollY);
+      if(!r.width||!r.height)continue;
+      const rect={left:r.left-fr.left,right:r.right-fr.left,
+        top:r.top-fr.top+scrollY,bottom:r.bottom-fr.top+scrollY};
+      if(rect.right<x-reach||rect.left>x+reach||rect.bottom<y-reach||rect.top>y+reach)continue;
+      // Skip broad wrappers: use their collectible child objects as obstacles.
+      // Check DOM descendants only when the rectangle is near the player.
+      if(c.el.querySelector('.dom-object:not(.eaten)'))continue;
+      blockers.push(rect);
     }
-
-    if (!active.some(r =>
-      circleHitsRect(x, y + sy, radius, r)
-    )) {
-      y += sy;
-    } else {
-      hitY = true;
+    function blocked(fromX,fromY,toX,toY){
+      return blockers.some(r=>{
+        const before=collisionDepth(fromX,fromY,radius,r);
+        const after=collisionDepth(toX,toY,radius,r);
+        return after>0 && (before<=0 || after>before+0.001);
+      });
     }
+    const steps=Math.max(1,Math.ceil(Math.hypot(dx,dy)/BLOCK_STEP_PX));
+    const sx=dx/steps,sy=dy/steps;
+    let hitX=false,hitY=false;
+    for(let i=0;i<steps;i++){
+      if(!blocked(x,y,x+sx,y))x+=sx;else hitX=true;
+      if(!blocked(x,y,x,y+sy))y+=sy;else hitY=true;
+    }
+    return {x,y:y-scrollY,hitX,hitY};
   }
-
-  return {
-    x,
-    y: y - scrollY,
-    hitX,
-    hitY
-  };
-}
-
   function checkCollisions(now){
     if(game.transitioning || game.status!=='playing')return;
-    const fr=field.getBoundingClientRect();
+    const fr=logicalFieldRect();
     const radius=collectRadius();
     const radiusSquared=radius*radius;
     const scrollY=articleScrollPosition();
@@ -1494,7 +1481,7 @@ function moveAroundLargeObjects(dx, dy) {
     attachments.render(now,game.x-previousX,game.y-previousY+frameScrollDelta);
     requestAnimationFrame(frame);
   }
-  function pointerMove(e){if(game.status!=='playing')return;const rect=field.getBoundingClientRect();game.tx=e.clientX-rect.left;game.ty=e.clientY-rect.top;game.pointer=true;}
+  function pointerMove(e){if(game.status!=='playing')return;const rect=field.getBoundingClientRect();game.tx=(e.clientX-rect.left)/displayScale;game.ty=(e.clientY-rect.top)/displayScale;game.pointer=true;}
 
   // Scroll the local article with a mouse wheel or trackpad, while the pointer
   // continues to steer Skubert within the fixed gameplay viewport.
@@ -1532,14 +1519,18 @@ function moveAroundLargeObjects(dx, dy) {
     const article=scrollTarget();
     if(!article)return 0;
     const before=article.scrollTop;
-    article.scrollTop+=pixels;
+    // Scrolling also moves the webpage relative to Skubert. Guard it with the
+    // same obstacle physics; otherwise wheel/edge-scroll can bypass walls.
+    const permitted=moveAroundLargeObjects(0,pixels).y-game.y;
+    if(Math.abs(permitted)<0.01)return 0;
+    article.scrollTop+=permitted;
     const moved=article.scrollTop-before;
     if(Math.abs(moved)>.01)rescanVisibleArticle();
     return moved;
   }
   field.addEventListener('wheel', e=>{
     // Preserve trackpad/wheel navigation independent of Skubert's position.
-    if(scrollArticleBy(e.deltaY))e.preventDefault();
+    if(scrollArticleBy(e.deltaY/displayScale))e.preventDefault();
   },{passive:false});
   window.addEventListener('keydown',e=>{
     if(game.status!=='playing')return;
@@ -1584,7 +1575,8 @@ function moveAroundLargeObjects(dx, dy) {
     updateHud();
   });
   $('soundBtn').addEventListener('click',()=>{game.sound=!game.sound;$('soundBtn').textContent=game.sound?'♫ Sound on':'♪ Sound off';$('soundBtn').setAttribute('aria-pressed',String(game.sound))});
-  window.addEventListener('resize',()=>{game.x=clamp(game.x,30,field.clientWidth-30);game.y=clamp(game.y,30,field.clientHeight-30);positionAvatar();attachments.resize()});
+  window.addEventListener('resize',()=>{fitWorldToWindow();attachments.resize()});
+  fitWorldToWindow();
   resetToIntro();
 
   // The Product Lifecycle snapshot must be uploaded alongside the game.
