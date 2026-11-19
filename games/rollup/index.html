@@ -702,17 +702,81 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   function articleScrollPosition(){
     return scrollTarget()?.scrollTop||0;
   }
-  function cacheCollectibleRect(c,scrollY){
-    c.cachedRect=screenRect(c.el);
-    c.cachedAtScroll=scrollY;
+  // ROLLUP_WORLD_GEOMETRY_CACHE_V1
+  // Cache coordinates relative to the unscaled playfield at scroll position 0.
+  // Browser repositioning or display scaling can no longer move cached geometry.
+  let collectibleLayoutVersion = 0;
+  let stopWatchingCollectibleLayout = () => {};
+  function invalidateCollectibleGeometry(reason) {
+    collectibleLayoutVersion++;
+    // Don't re-measure everything during a resize or DOM callback. Objects
+    // are measured lazily when pickup or obstacle checks next need them.
+  }
+  function cacheCollectibleRect(c,scrollY) {
+    if (!c.el.isConnected) return;
+    const rect=screenRect(c.el);
+    const origin=logicalFieldRect();
     const css=(c.el.ownerDocument.defaultView||window).getComputedStyle(c.el);
     c.dynamicPosition=(css.position==='fixed'||css.position==='sticky');
+    c.cachedWorldRect={
+      left:rect.left-origin.left,
+      right:rect.right-origin.left,
+      top:rect.top-origin.top+scrollY,
+      bottom:rect.bottom-origin.top+scrollY,
+      width:rect.width,
+      height:rect.height
+    };
+    c.cachedLayoutVersion=collectibleLayoutVersion;
   }
-  function collectibleRect(c,scrollY){
-    if(!c.cachedRect || c.dynamicPosition)return screenRect(c.el);
-    const dy=c.cachedAtScroll-scrollY;
-    const r=c.cachedRect;
-    return {left:r.left,right:r.right,top:r.top+dy,bottom:r.bottom+dy,width:r.width,height:r.height};
+  function collectibleRect(c,scrollY) {
+    // Fixed and sticky elements don't follow ordinary document scrolling.
+    if (c.dynamicPosition) return screenRect(c.el);
+    if (!c.cachedWorldRect || c.cachedLayoutVersion!==collectibleLayoutVersion) {
+      cacheCollectibleRect(c,scrollY);
+    }
+    if (c.dynamicPosition) return screenRect(c.el);
+    const r=c.cachedWorldRect;
+    if (!r) return screenRect(c.el);
+    const origin=logicalFieldRect();
+    // Adapt the world-space cache to the legacy logical-screen API used by
+    // chooseBatchRoots, checkCollisions, and moveAroundLargeObjects.
+    return {
+      left:origin.left+r.left, right:origin.left+r.right,
+      top:origin.top+r.top-scrollY, bottom:origin.top+r.bottom-scrollY,
+      width:r.width, height:r.height
+    };
+  }
+  function watchCollectibleLayout(root) {
+    stopWatchingCollectibleLayout();
+    if (!root) return;
+    const doc=root.ownerDocument;
+    const view=doc.defaultView||window;
+    let resizeObserver=null;
+    const invalidate=()=>invalidateCollectibleGeometry('content resized');
+    if (view.ResizeObserver) {
+      resizeObserver=new view.ResizeObserver(invalidate);
+      resizeObserver.observe(root);
+      if (doc!==document && doc.documentElement!==root) {
+        resizeObserver.observe(doc.documentElement);
+      }
+    }
+    const resourceLoaded=event=>{
+      if (!event.target?.matches?.('img,video,source')) return;
+      invalidateCollectibleGeometry('resource loaded');
+      if (game.status==='playing') rescanVisibleArticle();
+    };
+    doc.addEventListener('load',resourceLoaded,true);
+    doc.addEventListener('error',resourceLoaded,true);
+    doc.fonts?.addEventListener?.('loadingdone',invalidate);
+    doc.fonts?.ready?.then(()=>{
+      if (collectRoot()===root) invalidateCollectibleGeometry('fonts ready');
+    }).catch(()=>{});
+    stopWatchingCollectibleLayout=()=>{
+      resizeObserver?.disconnect();
+      doc.removeEventListener('load',resourceLoaded,true);
+      doc.removeEventListener('error',resourceLoaded,true);
+      doc.fonts?.removeEventListener?.('loadingdone',invalidate);
+    };
   }
   function discoverCollectibles(append=false){
     // Text splitting changes the DOM, so temporarily disconnect the observer
@@ -738,11 +802,18 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
       game.sceneTotal+=discovered.length;game.total+=discovered.length;
       refreshLocks();updateHud();
     }
-    if(siteObserver)siteObserver.observe(root,{subtree:true,childList:true});
+    if(siteObserver)siteObserver.observe(root,{
+      subtree:true,childList:true,attributes:true,
+      attributeFilter:['style','hidden','width','height','src']
+    });
   }
   siteObserver=new MutationObserver(records=>{
-    // Only respond to DOM structure changes, not style/visibility changes.
-    if(!records.some(r=>[...r.addedNodes].some(n=>n.nodeType===Node.ELEMENT_NODE||n.nodeType===Node.TEXT_NODE)))return;
+    // Listen for structural changes and layout-affecting attributes; game-only
+    // classes such as .eaten/.locked are excluded to avoid endless rescans.
+    if(!records.some(r=>r.type==='attributes' ||
+      [...r.addedNodes,...r.removedNodes].some(
+        n=>n.nodeType===Node.ELEMENT_NODE||n.nodeType===Node.TEXT_NODE)))return;
+    invalidateCollectibleGeometry('DOM layout or structure changed');
     if(queuedRescan||game.status!=='playing')return;
     queuedRescan=true;
     const rescan=()=>{queuedRescan=false;if(game.status==='playing')discoverCollectibles(true)};
@@ -750,9 +821,12 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     else setTimeout(rescan,50);
   });
   function renderScene(){
+    stopWatchingCollectibleLayout();
+    invalidateCollectibleGeometry('scene replacement');
     siteObserver.disconnect();
     site.innerHTML=snapshotPage();
     discoverCollectibles();
+    watchCollectibleLayout(collectRoot());
     game.sceneTotal=collectibles.length;game.sceneEaten=0;game.total+=collectibles.length;
     const frame=snapshotIframe();
     if(frame){
@@ -772,6 +846,8 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
         doc.head.appendChild(style);
         const countBefore=game.sceneTotal;
         discoverCollectibles();
+        watchCollectibleLayout(collectRoot());
+        invalidateCollectibleGeometry('snapshot loaded');
         game.sceneTotal=collectibles.length;
         game.total+=game.sceneTotal-countBefore;
         game.sceneEaten=0;
@@ -1586,7 +1662,11 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
     updateHud();
   });
   $('soundBtn').addEventListener('click',()=>{game.sound=!game.sound;$('soundBtn').textContent=game.sound?'♫ Sound on':'♪ Sound off';$('soundBtn').setAttribute('aria-pressed',String(game.sound))});
-  window.addEventListener('resize',()=>{fitWorldToWindow();attachments.resize()});
+  window.addEventListener('resize',()=>{
+    fitWorldToWindow();
+    attachments.resize();
+    invalidateCollectibleGeometry('window resized');
+  });
   fitWorldToWindow();
   resetToIntro();
 
