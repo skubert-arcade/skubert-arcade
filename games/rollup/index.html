@@ -548,7 +548,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   const DURATION = 60;
   // MOVEMENT SETTINGS — change these values to customize the ball-like feel.
   const MOVE_SPEED = 450;          // Maximum speed (pixels/second).
-  const CHASE_RESPONSE = 7.0;      // Higher = snappier; lower = heavier / more momentum.
+  const CHASE_RESPONSE = 5.0;      // Higher = snappier; lower = heavier / more momentum.
   const SLOWDOWN_RADIUS = 105;     // Distance (px) over which Skubert brakes near the cursor.
   const EDGE_SCROLL_PUSH = 400;    // Virtual cursor target extension near an edge.
   const EDGE_SCROLL_ZONE = 500;     // Maximum distance (px) from an edge to begin scrolling.
@@ -560,9 +560,9 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
   // GROWTH SETTINGS — one size function controls the GLB/fallback, attached
   // items, drop-in landing, and the HTML pickup hitbox. Adjust here only.
   const AVATAR_START_SIZE = 30;       // Diameter in CSS pixels at zero mass.
-  const AVATAR_GROWTH_RATE = 10;      // Size gained per square root of mass (previously 13).
+  const AVATAR_GROWTH_RATE = 5;      // Size gained per square root of mass (previously 13).
   const AVATAR_MAX_SIZE = 1920;        // Maximum desktop diameter (previously 220).
-  const AVATAR_MAX_VIEWPORT = 0.90;  // Limit on narrow screens to 90% of field width.
+  const AVATAR_MAX_VIEWPORT = 2.0;  // Limit on narrow screens to 90% of field width.
   const COLLECT_RADIUS_FACTOR = 0.80; // Pickup radius as a fraction of avatar diameter.
   const BLOCK_LARGE_OBJECTS = true;
   const BLOCK_RADIUS_FACTOR = 0.44;
