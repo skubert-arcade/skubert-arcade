@@ -144,10 +144,11 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   let radius0=18,balls=[],particles=[],floating=[],shockwaves=[],score=0,highest=0;
   let unlocked=new Set([0]);
   let aimX=200,current=0,next=1,ended=false,dropWait=0;
-  // An ordinary ball must settle completely beneath the Domain / Eukarya top edge.
+  // All balls (dropped or merge-created) must settle below the Eukarya top edge.
+  // Each ball has its own post-creation grace period and sustained jam timer.
   const TOP_LINE_GRACE_SECONDS=1.3;
   const TOP_LINE_SETTLE_SECONDS=1.5;
-  const TOP_LINE_VELOCITY=75;
+  const TOP_LINE_TOTAL_SPEED=75;
   const POP_SEQUENCE_SECONDS=1.45;
   let popping=false,popElapsed=0,popQueue=[],popNext=0,popFragments=[],popRings=[];
   let started=false;
@@ -431,14 +432,13 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     const safeX=minX<=maxX?clamp(x,minX,maxX):apexX;
     return {id:++ballId,level,r,x:safeX,y,vx,vy,angle:0,omega:0,lastSpin:-10,
       squish:0,squishV:0,squishAxis:0,lastImpact:-10,born:time,pulse:0,
-      supported:false,contactCount:0,settleAge:0,dropped:false,topLineAge:0};
+      supported:false,contactCount:0,settleAge:0,topLineAge:0};
   }
   function drop(automatic=false){
     if(!started||ended||dropWait>0) return;
     const x=clampAim(aimX), y=spawnY(current);
     const droppedLevel=current;
     const dropped=createBall(droppedLevel,x,y,0,15);
-    dropped.dropped=true;
     balls.push(dropped);
     concealedRanks.add(droppedLevel);
     lastDroppedLevel=droppedLevel;
@@ -549,9 +549,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       spawned.pulse=.26;
       spawned.squish=.08*softness(p.level);
       spawned.squishV=-1.4*softness(p.level);
-      // These are merge-created balls, not direct drops; the invisible fail
-      // line should not penalize the explosion during its launch animation.
-      spawned.dropped=false;
+      // New burst balls receive their own creation-time grace period.
+      // Once settled, all balls participate in the overflow check.
       balls.push(spawned);
       concealedRanks.add(p.level);
       unlocked.add(p.level);
@@ -707,24 +706,29 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
         }
       } else { b.settleAge=0; }
     }
-    // The fail line is invisible and coincides with the TOP of the red
-    // Eukarya band. Only a directly dropped sphere that remains stuck across
-    // the line for long enough can end a run. Falling and merge-bounce transients
-    // do not count, and the timer is independent for each sphere.
-    for(const b of balls){
-      if(!b.dropped)continue;
-      const mature=time-b.born>TOP_LINE_GRACE_SECONDS;
-      const intersectsTop=b.y-b.r<topY+2;
-      const slow=Math.abs(b.vy)<TOP_LINE_VELOCITY;
-      b.topLineAge=(mature && intersectsTop && slow) ? b.topLineAge+dt : 0;
-      if(b.topLineAge>=TOP_LINE_SETTLE_SECONDS){
-        endGame();
-        break;
-      }
-    }
+    checkTopOverflow(dt);
     for(let i=shockwaves.length-1;i>=0;i--){ const w=shockwaves[i]; w.life-=dt; w.r+=(w.maxR-w.r)*Math.min(1,dt*11); if(w.life<=0) shockwaves.splice(i,1); }
     for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life-=dt; p.vy+=170*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.life<=0) particles.splice(i,1); }
     for(let i=floating.length-1;i>=0;i--){ floating[i].life-=dt; floating[i].y-=25*dt; if(floating[i].life<=0) floating.splice(i,1); }
+  }
+  // A top-of-pyramid jam is unfair to ignore just because its ball was
+  // created by a merge. The age check also protects newly created merge balls
+  // while they are still flying, and checking both velocity axes prevents a
+  // rapidly sliding ball from counting as settled.
+  function isTopOverflowCandidate(b){
+    return time-b.born>TOP_LINE_GRACE_SECONDS &&
+      b.y-b.r<topY+2 &&
+      b.supported &&
+      Math.hypot(b.vx,b.vy)<TOP_LINE_TOTAL_SPEED;
+  }
+  function checkTopOverflow(dt){
+    for(const b of balls){
+      b.topLineAge=isTopOverflowCandidate(b) ? b.topLineAge+dt : 0;
+      if(b.topLineAge>=TOP_LINE_SETTLE_SECONDS){
+        endGame();
+        return;
+      }
+    }
   }
   function popBall(ball){
     const color=LEVELS[ball.level].color;
