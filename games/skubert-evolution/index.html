@@ -122,7 +122,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   const fmt=new Intl.NumberFormat('en-US');
   const MAX_LEVEL=LEVELS.length-1;
   const MAX_DROP_LEVEL=MAX_LEVEL-1;
-  const storageKey='skubertEvolutionPrototypeBestV18';
+  const storageKey='skubertEvolutionPrototypeBestV19';
   let best=0;
   try { best=Number(localStorage.getItem(storageKey))||0; } catch (_) {}
 
@@ -130,7 +130,14 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   const TEST_LEVEL_MAP={species:0,genus:1,family:2,order:3,class:4,phylum:5,kingdom:6,domain:7};
   const requestedTestLevel=TEST_LEVEL_MAP[(params.get('test')||'').toLowerCase()] ?? null;
 
-  let W=400,H=400,topY=60,topLeft=0,topRight=0,apexX=0,apexY=0;
+  // All simulation coordinates live in this fixed square, independent of the
+  // browser window. A resize can change only the pixels used to display it.
+  const WORLD_WIDTH=1000;
+  const WORLD_HEIGHT=1000;
+  const W=WORLD_WIDTH,H=WORLD_HEIGHT;
+  const topY=H*.150,apexY=H*.941,apexX=W*.457;
+  const topLeft=W*.012,topRight=W*.901;
+  let displayWidth=0,displayHeight=0;
   let radius0=18,balls=[],particles=[],floating=[],shockwaves=[],score=0,highest=0;
   let unlocked=new Set([0]);
   let aimX=200,current=0,next=1,ended=false,dropWait=0;
@@ -350,23 +357,22 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
       b.vy-=(1+bounce)*speed*ny;
     }
   }
-  function resize(){
+  // Size the DISPLAY canvases only. The world coordinates, ball positions,
+  // radii, gravity, aim, walls and overflow checks are immutable on resize.
+  function resizeDisplay(){
     const rect=canvas.getBoundingClientRect();
-    const newW=Math.max(200,rect.width),newH=Math.max(200,rect.height);
-    const oldW=W,oldH=H;
-    W=newW; H=newH;
-    topY=H*.150; apexY=H*.941; apexX=W*.457;
-    topLeft=W*.012; topRight=W*.901;
-    radius0=clamp(W*.0205,8.8,17.2)*SIZE_MULTIPLIER;
+    const cssW=Math.max(1,rect.width),cssH=Math.max(1,rect.height);
     const dpr=Math.min(window.devicePixelRatio||1,2);
-    canvas.width=Math.round(W*dpr); canvas.height=Math.round(H*dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    discoveryCanvas.width=Math.round(W*dpr); discoveryCanvas.height=Math.round(H*dpr);
-    discoveryCtx.setTransform(dpr,0,0,dpr,0,0);
-    if(balls.length){
-      for(const b of balls){ b.x*=W/Math.max(1,oldW); b.y*=H/Math.max(1,oldH); b.r=radius(b.level); }
+    const pixelW=Math.max(1,Math.round(cssW*dpr));
+    const pixelH=Math.max(1,Math.round(cssH*dpr));
+    for(const [surface,context] of [[canvas,ctx],[discoveryCanvas,discoveryCtx]]){
+      if(surface.width!==pixelW)surface.width=pixelW;
+      if(surface.height!==pixelH)surface.height=pixelH;
+      // Drawing functions still use the original world-space coordinates.
+      context.setTransform(pixelW/W,0,0,pixelH/H,0,0);
     }
-    aimX=clampAim(aimX*W/Math.max(1,oldW));
+    displayWidth=cssW;
+    displayHeight=cssH;
   }
   function reset(){
     started=false;
@@ -808,7 +814,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     if(!started){
       // Clear any meshes remaining from the previous game and show the full
       // original infographic without outlines, preview sphere or countdown.
-      window.SkubertSphere3D?.render({balls:[],preview:null,width:W,height:H});
+      window.SkubertSphere3D?.render({balls:[],preview:null,
+        width:W,height:H,displayWidth,displayHeight});
       return;
     }
     ctx.save();
@@ -823,7 +830,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     } : null;
     let using3D=false;
     try {
-      using3D=window.SkubertSphere3D?.render({balls,preview,width:W,height:H})===true;
+      using3D=window.SkubertSphere3D?.render({balls,preview,
+        width:W,height:H,displayWidth,displayHeight})===true;
     } catch(error) {
       console.warn('3D sphere layer unavailable; using 2D fallback.',error);
       window.SkubertSphere3D?.disable?.();
@@ -911,7 +919,12 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
     }
     render(); requestAnimationFrame(frame);
   }
-  function aimFromPointer(e){ const rect=canvas.getBoundingClientRect(); const local=(e.clientX-rect.left)*W/rect.width; aimX=clampAim(local); }
+  function aimFromPointer(e){
+    const rect=canvas.getBoundingClientRect();
+    // Convert CSS pixels into the fixed 1000-unit simulation coordinates.
+    const local=(e.clientX-rect.left)*W/Math.max(1,rect.width);
+    aimX=clampAim(local);
+  }
   canvas.addEventListener('pointerdown',e=>{
     if(ended)return;
     e.preventDefault(); aimFromPointer(e);
@@ -939,8 +952,14 @@ a:focus-visible,button:focus-visible,canvas:focus-visible { outline:3px solid #c
   $('startButton').addEventListener('click',startGame);
   $('playAgain').addEventListener('click',reset);
   document.addEventListener('keydown',e=>{ if((e.key==='r'||e.key==='R')&&!e.ctrlKey&&!e.metaKey&&!e.altKey) reset(); });
-  window.addEventListener('resize',resize);
-  resize(); reset();
+  // Initialize physical object sizes once from the virtual world, not CSS.
+  radius0=clamp(W*.0205,8.8,17.2)*SIZE_MULTIPLIER;
+  window.addEventListener('resize',resizeDisplay);
+  // Covers parent layout changes that do not emit a window resize event.
+  if('ResizeObserver' in window){
+    new ResizeObserver(resizeDisplay).observe(document.querySelector('.scene'));
+  }
+  resizeDisplay(); reset();
   // Test URLs retain their immediate-drop convenience; normal play deliberately
   // opens on the unmodified full infographic until the player starts.
   if(requestedTestLevel!==null || params.get('autostart')==='1')startGame();

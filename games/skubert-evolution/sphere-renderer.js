@@ -1,6 +1,7 @@
 /**
  * Skubert Evolution - Phase 2 pilot: GPU sphere rendering with texture maps
- * for Genus through Kingdom, with higher-saturation colors. Original physics, timer, clipping and effects remain
+ * for all eight ranks. A fixed virtual world separates physics from the
+ * responsive WebGL display. Original physics, timer, clipping and effects remain
  * owned by index.html.
  */
 import * as THREE from 'three';
@@ -24,7 +25,7 @@ window.SkubertSphere3D=bridge;
 let renderer=null,scene=null,camera=null,geometry=null,materials=[],previewMaterials=[];
 let previewMesh=null;
 const meshes=new Map();
-let width=0,height=0,disabled=false;
+let width=0,height=0,worldWidth=0,worldHeight=0,renderDpr=0,disabled=false;
 
 function buildMaterial(color,map,preview=false){
   return new THREE.MeshStandardMaterial({
@@ -106,13 +107,19 @@ function init(){
   }
 }
 
-function resize(w,h){
+function resize(worldW,worldH,cssW,cssH){
   if(disabled||!renderer)return;
-  if(w===width&&h===height)return;
-  width=w;height=h;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
-  renderer.setSize(Math.round(w),Math.round(h),false);
-  camera.left=0;camera.right=w;camera.top=h;camera.bottom=0;
+  const displayW=Math.max(1,Math.round(cssW||worldW));
+  const displayH=Math.max(1,Math.round(cssH||worldH));
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  if(displayW===width && displayH===height &&
+     worldW===worldWidth && worldH===worldHeight && dpr===renderDpr)return;
+  width=displayW;height=displayH;
+  worldWidth=worldW;worldHeight=worldH;renderDpr=dpr;
+  // CSS size changes the canvas resolution but never the virtual world.
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(displayW,displayH,false);
+  camera.left=0;camera.right=worldW;camera.top=worldH;camera.bottom=0;
   camera.updateProjectionMatrix();
 }
 
@@ -124,10 +131,10 @@ function syncMesh(mesh,ball,h){
   mesh.rotation.set(0,0,ball.angle||0);
 }
 
-function render({balls,preview,width:w,height:h}){
+function render({balls,preview,width:w,height:h,displayWidth,displayHeight}){
   if(!bridge.ready||disabled||!renderer)return false;
   try {
-    resize(w,h);
+    resize(w,h,displayWidth,displayHeight);
     const liveIds=new Set();
     for(const ball of balls){
       liveIds.add(ball.id);
