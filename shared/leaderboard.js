@@ -8,7 +8,7 @@
   // Replace only this address with your deployed Worker HTTPS URL.
   const API_URL = 'https://skubert-arcade-api.ajones14test.workers.dev';
   const TIMEOUT_MS = 20000;
-  const GAMES = new Set(['rollup', 'typing', 'find-skubert', 'taxonomy-drop']);
+  const GAMES = new Set(['rollup', 'typing', 'taxonomy-drop']);
   const pending = new Map(); // Reuse UUID for retry after an uncertain POST.
 
   function endpoint(path) {
