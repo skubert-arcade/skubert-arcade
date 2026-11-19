@@ -27,7 +27,7 @@
     .refresh:hover { background:#ffd58e; }
     .refresh:disabled { opacity:.65; cursor:wait; }
     #lastUpdated { font-size:12px; color:#b5aecd; }
-    .overall { border:1px solid #8d70c3; border-radius:20px; background:linear-gradient(160deg,#261854,#121033); overflow:hidden; margin:0 0 35px; box-shadow:0 18px 42px #0005; }
+    .overall { border:1px solid #8d70c3; border-radius:20px; background:linear-gradient(160deg,#261854,#121033); overflow:hidden; max-width:840px; margin:0 auto 35px; box-shadow:0 18px 42px #0005; }
     .overall-head { padding:24px 25px 16px; }
     .overall-title { font-size:clamp(25px,4vw,34px); letter-spacing:-.025em; margin:0 0 8px; }
     .overall-description { color:#d0c5e5; font-size:13px; line-height:1.6; margin:0; }
@@ -91,7 +91,7 @@
     <h2 class="section-title">Individual game leaderboards</h2>
     <div class="boards">
       <section class="board" aria-labelledby="title-rollup" data-game="rollup">
-        <header class="board-header"><div class="game-icon" aria-hidden="true">📦</div><h3 id="title-rollup">Roll Up</h3><p class="board-subtitle">Top five game scores</p></header>
+        <header class="board-header"><div class="game-icon" aria-hidden="true">🕹️</div><h3 id="title-rollup">Roll Up</h3><p class="board-subtitle">Top five game scores</p></header>
         <div class="board-body" id="scores-rollup" aria-live="polite"><p class="board-status">Loading scores…</p></div>
         <footer class="board-footer"><a class="play-link" href="games/rollup/">Play Roll Up</a></footer>
       </section>
@@ -215,7 +215,7 @@
       table.setAttribute('aria-label', 'Overall Arcade standings by game placement points');
       const thead = document.createElement('thead');
       const headings = document.createElement('tr');
-      for (const label of ['Rank', 'Initials', 'Roll Up', 'Typing', 'Taxonomy', 'Total']) {
+      for (const label of ['Rank', 'Initials', 'Total', 'Roll Up', 'Typing', 'Taxonomy']) {
         const th = document.createElement('th');
         th.scope = 'col';
         th.textContent = label;
@@ -228,6 +228,7 @@
         const place = rows.findIndex(other => other.total === player.total) + 1;
         addCell(tr, place);
         addCell(tr, player.initials);
+        addCell(tr, String(player.total), 'total');
         for (const game of GAME_IDS) {
           const entry = player.games[game];
           const cell = addCell(tr, entry ? String(entry.points) : '—', entry ? '' : 'empty');
@@ -238,7 +239,6 @@
             cell.appendChild(sub);
           }
         }
-        addCell(tr, String(player.total), 'total');
         tbody.appendChild(tr);
       });
       table.append(thead, tbody);
