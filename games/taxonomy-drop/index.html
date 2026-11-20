@@ -182,6 +182,22 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   const ESCAPE_SIDE_WALL_RESTITUTION=.68;  // Fraction of horizontal speed after a bounce.
   const ESCAPE_HORIZONTAL_DRAG=.48;       // Per-second exponential drag between bounces.
   const ESCAPE_MAX_HORIZONTAL_SPEED=370;  // Cinematic world units per real second.
+  const ESCAPE_WATCHDOG_SECONDS=4.5;       // Hard wall-clock limit on the finale.
+  // Anti-jam only watches sustained congestion at the upper opening; merely
+  // reaching or crossing the Eukarya line is NOT a loss condition.
+  const JAM_BALL_GRACE_SECONDS=1.0;        // Ignore newly dropped/merged bodies.
+  const JAM_RIM_DEPTH=72;                 // Distance below the opening to examine.
+  const JAM_LIP_REACH=34;                 // Extra clearance around a side lip.
+  const JAM_WALL_PROXIMITY=42;            // Candidate must press near the slope.
+  const JAM_PRESSURE_GRACE_SECONDS=4.0;   // Let the normal pile resolve first.
+  const JAM_PRESSURE_CLEAR_SECONDS=.45;   // Ignore momentary contact jitter.
+  const JAM_NUDGE_RECOVERY_SECONDS=2.0;   // Give one outward nudge time to work.
+  const JAM_NUDGE_SPEED=310;
+  const JAM_NUDGE_LIFT=330;
+  const JAM_EJECTION_SECONDS=.52;         // Animated last resort, not a teleport.
+  const JAM_EJECTION_WATCHDOG_SECONDS=2.5;
+  let jamPressureAge=0,jamRecoveryAge=0,jamClearAge=0,jamNudged=false,jamSide=0;
+  let jamEjection=null;
   let escapeSequence=null;
   let fireworks=[],fireworkBursts=[],impactFlash=0;
   const FIREWORK_COLORS=['#ffdf54','#ffffff','#ff5b80','#6be4ff','#99ffcc','#e4a1ff','#ff9b4b'];
@@ -457,6 +473,135 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       }
     }
   }
+  // Pressure at an upper lip (not a high-ball threshold) is the only trigger.
+  // An ordinary ball rising above Eukarya without crowding a wall does nothing.
+  function getJamPressureCandidates(){
+    const candidates=[null,null];
+    const eligible=[];
+    for(const b of balls){
+      if(b.spilled || time-b.born<JAM_BALL_GRACE_SECONDS)continue;
+      if(b.y-b.r>topY+JAM_RIM_DEPTH)continue;
+      eligible.push(b);
+      for(const side of [-1,1]){
+        const edgeClearance=side<0 ? b.x-b.r-topLeft : topRight-b.x-b.r;
+        if(edgeClearance>JAM_LIP_REACH+b.r*.72)continue;
+        // The exact signed distance makes this scale correctly on both slopes.
+        const ax=side<0?topLeft:topRight;
+        const dx=apexX-ax,dy=apexY-topY,len=Math.hypot(dx,dy);
+        const nx=side<0?dy/len:-dy/len;
+        const ny=side<0?-dx/len:dx/len;
+        const slopeGap=(b.x-ax)*nx+(b.y-topY)*ny-visibleWallRadius(b);
+        if(slopeGap>JAM_WALL_PROXIMITY)continue;
+        const score=edgeClearance+Math.max(0,slopeGap)*.3;
+        const index=side<0?0:1;
+        if(!candidates[index]||score<candidates[index].score)
+          candidates[index]={ball:b,side,score};
+      }
+    }
+    // Fallback for an exceptionally dense wad centered at the mouth whose
+    // individual spheres never touch a lip. Neither height nor a single large
+    // ball is sufficient: require several mature spheres filling the entrance.
+    if(!candidates[0]&&!candidates[1] && eligible.length>=5){
+      const rimSpan=eligible.reduce((sum,b)=>sum+Math.min(b.r*2,190),0);
+      if(rimSpan>=(topRight-topLeft)*.85){
+        let closest=null;
+        for(const b of eligible){
+          const side=b.x<=(topLeft+topRight)/2?-1:1;
+          const gap=side<0 ? b.x-b.r-topLeft : topRight-b.x-b.r;
+          if(!closest || gap<closest.score)closest={ball:b,side,score:gap};
+        }
+        if(closest)candidates[closest.side<0?0:1]=closest;
+      }
+    }
+    return candidates;
+  }
+  function clearJamPressure(){
+    jamPressureAge=0;jamRecoveryAge=0;jamClearAge=0;jamNudged=false;jamSide=0;
+  }
+  function beginJamEjection(candidate){
+    if(ended||escapeSequence||jamEjection||!candidate)return;
+    const b=candidate.ball,side=candidate.side;
+    if(!balls.includes(b)||b.spilled)return;
+    // Take just the selected body out of the collision solver and animate it
+    // UP AND OVER the lip; the rest of the pyramid freezes unchanged.
+    b.spilled=side;
+    const margin=Math.min(W*.45,b.r+ESCAPE_SIDE_WARNING_CLEARANCE);
+    const targetX=side<0?margin:W-margin;
+    const targetY=Math.max(b.r*.48,topY-Math.min(86,22+b.r*.34));
+    jamEjection={id:b.id,side,elapsed:0,startedAt:performance.now(),
+      fromX:b.x,fromY:b.y,targetX,targetY};
+    b.vx=side*JAM_NUDGE_SPEED;b.vy=-JAM_NUDGE_LIFT;
+    dropDeadline=Infinity;down=false;
+    clearJamPressure();
+    setMessage(`The ${side<0?'left':'right'} rim is jammed! A ball is spilling over the lip...`);
+  }
+  function finishJamEjection(){
+    if(!jamEjection||ended)return;
+    const seq=jamEjection;
+    const b=balls.find(ball=>ball.id===seq.id);
+    jamEjection=null;
+    if(!b){
+      // Unlikely: a body disappeared while the pile was frozen. Recover the
+      // normal drop timer rather than leaving gameplay permanently disabled.
+      resetDropTimer();return;
+    }
+    b.x=seq.targetX;b.y=seq.targetY;b.spilled=seq.side;
+    beginEscapeSequence(b);
+  }
+  function updateJamEjection(dt){
+    const seq=jamEjection;
+    if(!seq||ended)return;
+    const b=balls.find(ball=>ball.id===seq.id);
+    if(!b){finishJamEjection();return;}
+    seq.elapsed+=dt;
+    const t=clamp(seq.elapsed/JAM_EJECTION_SECONDS,0,1);
+    const ease=t*t*(3-2*t);
+    b.x=seq.fromX+(seq.targetX-seq.fromX)*ease;
+    b.y=seq.fromY+(seq.targetY-seq.fromY)*ease;
+    b.angle+=b.omega*dt*ESCAPE_SLOW_MOTION_FACTOR;
+    time+=dt*ESCAPE_SLOW_MOTION_FACTOR;
+    updateBurstEffects(dt);
+    if(t>=1 || seq.elapsed>=JAM_EJECTION_WATCHDOG_SECONDS)finishJamEjection();
+  }
+  function updateJamProtection(dt){
+    if(ended||escapeSequence||jamEjection)return;
+    const candidates=getJamPressureCandidates();
+    // Stick to a pressured side when possible, avoiding side-switch jitter.
+    let selected=jamSide && candidates[jamSide<0?0:1];
+    if(!selected)selected=candidates[0] && candidates[1]
+      ? (candidates[0].score<=candidates[1].score?candidates[0]:candidates[1])
+      : (candidates[0]||candidates[1]);
+    if(!selected){
+      jamClearAge+=dt;
+      if(jamClearAge>=JAM_PRESSURE_CLEAR_SECONDS)clearJamPressure();
+      return;
+    }
+    // A brief release or migration to the opposite lip is still the same
+    // overcrowded mouth; do not allow numerical jitter to restart the clock.
+    jamClearAge=0;
+    jamSide=selected.side;
+    // A fresh merge may still settle the jam; preserve the time accumulated
+    // before the merge but briefly pause it while the pile rearranges.
+    if(time-lastMergeTime<.55)return;
+    jamPressureAge+=dt;
+    if(!jamNudged){
+      if(jamPressureAge<JAM_PRESSURE_GRACE_SECONDS)return;
+      const b=selected.ball;
+      b.vx+=selected.side*JAM_NUDGE_SPEED;
+      b.vy=Math.min(b.vy,-JAM_NUDGE_LIFT);
+      b.settleAge=0;
+      jamNudged=true;jamRecoveryAge=0;
+      makeParticles(b.x+selected.side*b.r*.6,b.y,'#ff4c63',10);
+      setMessage(`Pressure at the ${selected.side<0?'left':'right'} lip! Nudging the pile outward...`);
+      return;
+    }
+    jamRecoveryAge+=dt;
+    if(jamRecoveryAge>=JAM_NUDGE_RECOVERY_SECONDS){
+      // Still congested after a physical nudge: guarantee the intended loss
+      // by visibly pushing one ball across the lip into the existing finale.
+      beginJamEjection(selected);
+    }
+  }
   function detectSpill(b){
     if(b.spilled)return;
     // Center must actually get beyond an upper ENDPOINT, not just rise above
@@ -484,16 +629,28 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     // Almost-stationary spills should still visibly rebound from their side.
     const vx=Math.abs(inheritedVx)<110 ? b.spilled*145 : inheritedVx;
     escapeSequence={id:b.id,side:b.spilled,elapsed:0,startY:b.y,
-      targetY:H-b.r-10,minX,maxX,vx,wallFlash:0,wallFlashX:0,wallFlashY:0};
+      targetY:H-b.r-10,minX,maxX,vx,wallFlash:0,wallFlashX:0,wallFlashY:0,
+      startedAt:performance.now(),lastX:b.x,radius:b.r};
     dropDeadline=Infinity; // Stop auto-drop and allow no more manual drops.
     down=false;
     setMessage(`${LEVELS[b.level].name} escaped the ${b.spilled<0?'left':'right'} lip! Slow-motion fall...`);
+  }
+  function finishEscapeSequence(){
+    if(ended || !escapeSequence)return;
+    const seq=escapeSequence;
+    const b=balls.find(ball=>ball.id===seq.id);
+    // If a renderer/merge bug ever removes the escaping body, use its last
+    // known location for the fireworks instead of returning to live gameplay.
+    const impactBody=b || {x:seq.lastX,r:seq.radius};
+    if(b)b.y=seq.targetY;
+    launchFinale(impactBody);
+    endGame(b || null);
   }
   function updateEscapeSequence(dt){
     const seq=escapeSequence;
     if(!seq || ended)return;
     const b=balls.find(ball=>ball.id===seq.id);
-    if(!b){ escapeSequence=null; return; }
+    if(!b){finishEscapeSequence();return;}
     seq.elapsed+=dt;
     const progress=clamp(seq.elapsed/ESCAPE_FALL_DURATION_SECONDS,0,1);
     // The pile stays frozen; the escaped sphere alone retains horizontal
@@ -513,6 +670,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       b.x=attemptedX;
     }
     seq.vx*=Math.exp(-ESCAPE_HORIZONTAL_DRAG*dt);
+    seq.lastX=b.x;
     // Keep the previous slow-motion vertical timing and bottom-edge finale.
     const fallEase=Math.pow(progress,1.55);
     b.y=seq.startY+(seq.targetY-seq.startY)*fallEase;
@@ -520,9 +678,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     b.pulse=Math.max(0,b.pulse-dt*ESCAPE_SLOW_MOTION_FACTOR);
     time+=dt*ESCAPE_SLOW_MOTION_FACTOR;
     updateBurstEffects(dt);
-    if(progress>=1){
-      launchFinale(b);
-      endGame(b);
+    if(progress>=1 || seq.elapsed>=ESCAPE_WATCHDOG_SECONDS){
+      finishEscapeSequence();
     }
   }
   function spawnFireworkBurst(x,y,count=65,scale=1){
@@ -588,7 +745,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     aimX=(topLeft+topRight)/2; updateUnlocks();
     ended=false; dropWait=0; combo=0; lastMergeTime=-100; time=0; ballId=0;
     popping=false; popElapsed=0; popQueue=[]; popNext=0; popFragments=[]; popRings=[];
-    escapeSequence=null;fireworks=[];fireworkBursts=[];impactFlash=0;
+    escapeSequence=null;jamEjection=null;clearJamPressure();
+    fireworks=[];fireworkBursts=[];impactFlash=0;
     $('playAgain').textContent='Play again';
     overlay.hidden=true; updateScore(); updateNext();
     dropDurationMs=AUTO_DROP_MS;
@@ -607,7 +765,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       supported:false,contactCount:0,settleAge:0,spilled:0};
   }
   function drop(automatic=false){
-    if(!started||ended||escapeSequence||dropWait>0) return;
+    if(!started||ended||escapeSequence||jamEjection||dropWait>0) return;
     const x=clampAim(aimX), y=spawnY(current);
     const droppedLevel=current;
     const dropped=createBall(droppedLevel,x,y,0,15);
@@ -803,6 +961,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     if(!started)return;
     if(ended){updatePopSequence(dt);return;}
     if(escapeSequence){updateEscapeSequence(dt);return;}
+    if(jamEjection){updateJamEjection(dt);return;}
     time+=dt; dropWait=Math.max(0,dropWait-dt);
     updateBurstEffects(dt);
     for(const b of balls){
@@ -888,6 +1047,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
         }
       } else { b.settleAge=0; }
     }
+    // Check sustained physical congestion after all collisions and containment.
+    // If a real spill already started during this physics step, do not nudge.
+    if(!escapeSequence)updateJamProtection(dt);
     // A spill is now handled by updateEscapeSequence(), not an offscreen check.
     for(let i=shockwaves.length-1;i>=0;i--){ const w=shockwaves[i]; w.life-=dt; w.r+=(w.maxR-w.r)*Math.min(1,dt*11); if(w.life<=0) shockwaves.splice(i,1); }
     for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life-=dt; p.vy+=170*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.life<=0) particles.splice(i,1); }
@@ -1099,7 +1261,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     ctx.save();
     // One render request per gameplay frame; the Three.js module never runs
     // an independent animation loop. Until it becomes ready, use v12 sprites.
-    const preview=!ended&&!escapeSequence ? {
+    const preview=!ended&&!escapeSequence&&!jamEjection ? {
       x:clampAim(aimX), y:previewY(current),
       r:radius(current),level:current,angle:0,squish:0,squishAxis:0,pulse:0
     } : null;
@@ -1140,10 +1302,10 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     ctx.globalAlpha=1;
     ctx.restore();
     // Freeze/dim the rest of the board and spotlight the escaped ball.
-    if(escapeSequence&&!ended){
+    if((escapeSequence||jamEjection)&&!ended){
       ctx.save();
       ctx.fillStyle='rgba(30, 2, 17, .22)';ctx.fillRect(0,0,W,H);
-      const b=balls.find(ball=>ball.id===escapeSequence.id);
+      const b=balls.find(ball=>ball.id===(escapeSequence?.id??jamEjection?.id));
       if(b){
         ctx.shadowColor='#ff1736';ctx.shadowBlur=40;
         drawSphere(b.x,b.y,b.r,b.level,false,b.pulse,b.angle,b.squish,b.squishAxis);
@@ -1155,7 +1317,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       ctx.font='900 28px system-ui,Arial';ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillStyle='#ffffff';ctx.fillText('SPILL OVER!',W/2,70);
       ctx.font='800 13px system-ui,Arial';
-      ctx.fillText('SLOW MOTION',W/2,95);
+      ctx.fillText(jamEjection?'RIM PRESSURE — ESCAPING':'SLOW MOTION',W/2,95);
       ctx.restore();
     }
     // Escape warning follows the sphere outside the pyramid's open sides.
@@ -1227,7 +1389,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     ctx.strokeStyle='#ffffffc8'; ctx.lineWidth=4; ctx.stroke();
     ctx.strokeStyle='#23201da8'; ctx.lineWidth=1.6; ctx.stroke();
     ctx.restore();
-    if(!ended&&!escapeSequence){
+    if(!ended&&!escapeSequence&&!jamEjection){
       const r=radius(current), x=clampAim(aimX), py=previewY(current);
       const from=py+r+4, to=landingGuideY(x,current);
       if(to>from+1){
@@ -1257,7 +1419,16 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     let loops=0; while(accumulator>=step&&loops<4){ physics(step); accumulator-=step; loops++; }
     // Wall-clock deadline ensures that dropping never waits for the physics
     // simulation to accumulate a full three seconds on slower devices.
-    if(started && !ended && !escapeSequence && dropWait<=0 && performance.now()>=dropDeadline){
+    // Wall-clock watchdogs also work when a throttled tab produces few
+    // physics steps; never strand players in an escape/camera state.
+    if(escapeSequence && !ended &&
+       performance.now()-escapeSequence.startedAt>ESCAPE_WATCHDOG_SECONDS*1000)
+      finishEscapeSequence();
+    if(jamEjection && !ended &&
+       performance.now()-jamEjection.startedAt>JAM_EJECTION_WATCHDOG_SECONDS*1000)
+      finishJamEjection();
+    if(started && !ended && !escapeSequence && !jamEjection &&
+       dropWait<=0 && performance.now()>=dropDeadline){
       drop(true);
     }
     render(); requestAnimationFrame(frame);
@@ -1269,16 +1440,16 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     aimX=clampAim(local);
   }
   canvas.addEventListener('pointerdown',e=>{
-    if(ended||escapeSequence)return;
+    if(ended||escapeSequence||jamEjection)return;
     e.preventDefault(); aimFromPointer(e);
     if(!started){ startGame(); down=false; return; }
     down=true; canvas.setPointerCapture(e.pointerId);
   });
-  canvas.addEventListener('pointermove',e=>{ if(!ended&&!escapeSequence) aimFromPointer(e); });
+  canvas.addEventListener('pointermove',e=>{ if(!ended&&!escapeSequence&&!jamEjection) aimFromPointer(e); });
   canvas.addEventListener('pointerup',e=>{ if(!down) return; down=false; aimFromPointer(e); drop(); });
   canvas.addEventListener('pointercancel',()=>{ down=false; });
   document.addEventListener('keydown',e=>{
-    if(ended||escapeSequence||e.altKey||e.ctrlKey||e.metaKey) return;
+    if(ended||escapeSequence||jamEjection||e.altKey||e.ctrlKey||e.metaKey) return;
     if(!started){
       if((e.code==='Space'||e.code==='Enter')&&!e.repeat){e.preventDefault();startGame();}
       return;
