@@ -893,16 +893,27 @@ body.rollup-wide-gutters .stats .stat {
     const frame=snapshotIframe();
     const frameRect=frame?screenRect(frame):null;
     let node, capacity=WORDS_PER_SCAN;
+    // ROLLUP_COLLISION_SCAN_GRID_V1: many Wikipedia text nodes share a
+    // paragraph parent. Measure that parent's geometry and visibility only
+    // once per batch; do not cache across scrolling or layout changes.
+    const parentBoxes=new WeakMap();
+    const eligibleParents=new WeakMap();
     // Search the whole DOM without altering off-screen text.  Wrap newly
     // encountered words only where they can be collected on this screen.
     while((node=walker.nextNode())){
       const parent=node.parentElement;
       if(!parent || !node.nodeValue?.trim() || parent.closest('.dom-word'))continue;
       if(parent.closest('script,style,noscript,textarea,input,select,option,svg,canvas,[hidden],[aria-hidden="true"]'))continue;
-      const box=parent.getBoundingClientRect();
+      let box=parentBoxes.get(parent);
+      if(!box){box=parent.getBoundingClientRect();parentBoxes.set(parent,box);}
       const top=box.top+(frameRect?.top||0),bottom=box.bottom+(frameRect?.top||0);
       if(bottom<viewport.top-120||top>viewport.bottom+120 || box.width<2 || box.height<2)continue;
-      if(!eligibleWordText(node))continue;
+      let eligible=eligibleParents.get(parent);
+      if(eligible===undefined){
+        eligible=eligibleWordText(node);
+        eligibleParents.set(parent,eligible);
+      }
+      if(!eligible)continue;
       nodes.push(node);
       // Limit candidate text nodes as well as words to avoid collecting all
       // of a long, paragraph-heavy snapshot in a single scan.
@@ -1010,8 +1021,9 @@ body.rollup-wide-gutters .stats .stat {
   let stopWatchingCollectibleLayout = () => {};
   function invalidateCollectibleGeometry(reason) {
     collectibleLayoutVersion++;
-    // Don't re-measure everything during a resize or DOM callback. Objects
-    // are measured lazily when pickup or obstacle checks next need them.
+    // Schedule a rare full reindex during idle time; the query path can
+    // rebuild synchronously if movement starts before the idle callback.
+    scheduleSpatialRebuild();
   }
   function cacheCollectibleRect(c,scrollY) {
     if (!c.el.isConnected) return;
@@ -1046,6 +1058,81 @@ body.rollup-wide-gutters .stats .stat {
       top:origin.top+r.top-scrollY, bottom:origin.top+r.bottom-scrollY,
       width:r.width, height:r.height
     };
+  }
+  // ROLLUP_COLLISION_SCAN_GRID_V1 — world-space broadphase for pickups and walls.
+  // Static cached geometry lives in 192px cells. Sticky/fixed nodes are tested
+  // separately because their screen-space positions vary with article scroll.
+  // The final overlap checks still use the original precise rectangles.
+  const SPATIAL_CELL_SIZE=192;
+  const spatialCells=new Map();
+  const spatialDynamic=new Set();
+  let spatialVersion=-1;
+  let spatialRebuildQueued=false;
+  function spatialKey(x,y){return x+','+y;}
+  function clearSpatialIndex(){
+    spatialCells.clear();
+    spatialDynamic.clear();
+    spatialVersion=collectibleLayoutVersion;
+  }
+  function indexCollectible(c,scrollY=articleScrollPosition()){
+    if(c.eaten || !c.el.isConnected)return;
+    if(!c.cachedWorldRect || c.cachedLayoutVersion!==collectibleLayoutVersion){
+      cacheCollectibleRect(c,scrollY);
+    }
+    if(c.dynamicPosition){spatialDynamic.add(c);return;}
+    const r=c.cachedWorldRect;
+    if(!r || !Number.isFinite(r.left+r.right+r.top+r.bottom))return;
+    // AABB spans every cell it touches. This is conservative: elements at
+    // cell boundaries cannot disappear from the nearby candidate set.
+    const x0=Math.floor(r.left/SPATIAL_CELL_SIZE),x1=Math.floor(r.right/SPATIAL_CELL_SIZE);
+    const y0=Math.floor(r.top/SPATIAL_CELL_SIZE),y1=Math.floor(r.bottom/SPATIAL_CELL_SIZE);
+    for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+      const key=spatialKey(x,y);
+      let cell=spatialCells.get(key);
+      if(!cell){cell=[];spatialCells.set(key,cell);}
+      cell.push(c);
+    }
+  }
+  function rebuildSpatialIndex(){
+    clearSpatialIndex();
+    const scrollY=articleScrollPosition();
+    for(const c of collectibles)indexCollectible(c,scrollY);
+  }
+  function scheduleSpatialRebuild(){
+    if(spatialRebuildQueued || game.status!=='playing')return;
+    spatialRebuildQueued=true;
+    const run=()=>{
+      spatialRebuildQueued=false;
+      if(game.status==='playing' && spatialVersion!==collectibleLayoutVersion)
+        rebuildSpatialIndex();
+    };
+    if('requestIdleCallback' in window)requestIdleCallback(run,{timeout:160});
+    else setTimeout(run,25);
+  }
+  function nearbyCollectibles(worldX,worldY,reach){
+    // Layout invalidations are rare (fonts/resources/resizes), and usually
+    // refreshed off the movement frame by scheduleSpatialRebuild().
+    if(spatialVersion!==collectibleLayoutVersion)rebuildSpatialIndex();
+    const x0=Math.floor((worldX-reach)/SPATIAL_CELL_SIZE);
+    const x1=Math.floor((worldX+reach)/SPATIAL_CELL_SIZE);
+    const y0=Math.floor((worldY-reach)/SPATIAL_CELL_SIZE);
+    const y1=Math.floor((worldY+reach)/SPATIAL_CELL_SIZE);
+    const seen=new Set(spatialDynamic);
+    // Avoid iterating thousands of empty cells at extremely large diameters.
+    if((x1-x0+1)*(y1-y0+1)>1200){
+      for(const [key,items] of spatialCells){
+        const comma=key.indexOf(',');
+        const x=Number(key.slice(0,comma)),y=Number(key.slice(comma+1));
+        if(x<x0||x>x1||y<y0||y>y1)continue;
+        for(const c of items)seen.add(c);
+      }
+    }else{
+      for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+        const cell=spatialCells.get(spatialKey(x,y));
+        if(cell)for(const c of cell)seen.add(c);
+      }
+    }
+    return seen;
   }
   function watchCollectibleLayout(root) {
     stopWatchingCollectibleLayout();
@@ -1084,12 +1171,19 @@ body.rollup-wide-gutters .stats .stat {
     // to avoid triggering an endless mutation/re-scan loop.
     if(siteObserver)siteObserver.disconnect();
     const root=collectRoot();
-    if(!root){collectibles=[];pendingVisibleWordScan=false;return;}
+    if(!root){collectibles=[];pendingVisibleWordScan=false;clearSpatialIndex();return;}
     splitWords(root);
     const existing=new Set(append?collectibles.map(c=>c.el):[]);
-    const words=[...root.querySelectorAll('.dom-word')].filter(el=>!existing.has(el)&&isVisible(el));
-    const objects=[...root.querySelectorAll('*')].filter(el=>!existing.has(el)&&isVisualObject(el));
-    if(!append)collectibles=[];
+    // One element traversal instead of querying the complete DOM twice for
+    // each incremental batch. Existing/eaten collectibles are skipped first.
+    const words=[],objects=[];
+    for(const el of root.querySelectorAll('*')){
+      if(existing.has(el))continue;
+      if(el.classList.contains('dom-word')){
+        if(isVisible(el))words.push(el);
+      }else if(isVisualObject(el))objects.push(el);
+    }
+    if(!append){collectibles=[];clearSpatialIndex();}
     const discovered=[...words.map(el=>({el,type:'word',tier:1,charCount:wordCharacterCount(el.textContent),eaten:false})),
       ...objects.map(el=>({el,type:'object',tier:objectTier(el),eaten:false}))];
     for(const c of discovered){
@@ -1098,7 +1192,11 @@ body.rollup-wide-gutters .stats .stat {
     }
     collectibles.push(...discovered);
     const scanScroll=articleScrollPosition();
-    for(const c of discovered)cacheCollectibleRect(c,scanScroll);
+    for(const c of discovered){
+      cacheCollectibleRect(c,scanScroll);
+      // Append new entities without rebuilding the entire cell index.
+      if(spatialVersion===collectibleLayoutVersion)indexCollectible(c,scanScroll);
+    }
     if(append && discovered.length){
       game.sceneTotal+=discovered.length;game.total+=discovered.length;
       refreshLocks();updateHud();
@@ -1297,7 +1395,7 @@ body.rollup-wide-gutters .stats .stat {
       game.status='playing';game.previous=performance.now();
       pickupCheckElapsed=0;
       beginGameplayCamera();
-      if(pendingVisibleWordScan)rescanVisibleArticle();
+      rescanVisibleArticle(); // Refresh world-visible words after Drop In.
       $('pauseBtn').disabled=false;updateHud();
       setToast('PRODUCT LIFECYCLE · 1:00');
       field.focus({preventScroll:true});
@@ -1759,6 +1857,16 @@ body.rollup-wide-gutters .stats .stat {
     }
   }
   
+  // Read-only console aid for measuring broadphase effectiveness without
+  // changing the game UI: window.rollupSpatialStats().
+  window.rollupSpatialStats=()=>({
+    total:collectibles.length,
+    active:collectibles.reduce((n,c)=>n+(!c.eaten && c.el.isConnected),0),
+    cells:spatialCells.size,
+    localCandidates:nearbyCollectibles(game.x,game.y+articleScrollPosition(),collectRadius()).size,
+    cellSize:SPATIAL_CELL_SIZE,
+    layoutVersion:collectibleLayoutVersion
+  });
   // Solid obstacle physics: any independently collectible, visually painted
   // large element is solid, not just IMG/BUTTON. Parent wrappers with smaller
   // independently collectible child objects are deliberately not solid walls.
@@ -1771,14 +1879,16 @@ body.rollup-wide-gutters .stats .stat {
     return radius+Math.max(0,Math.min(x-r.left,r.right-x,y-r.top,r.bottom-y));
   }
   function moveAroundLargeObjects(dx,dy){
-    if(!BLOCK_LARGE_OBJECTS)return {x:game.x+dx,y:game.y+dy,hitX:false,hitY:false};
+    // Objects have at most Tier 3; no walls remain after unlocking Tier 3.
+    if(!BLOCK_LARGE_OBJECTS || game.level>=3)
+      return {x:game.x+dx,y:game.y+dy,hitX:false,hitY:false};
     const fr=logicalFieldRect();
     const scrollY=articleScrollPosition();
     const radius=avatarSize()*BLOCK_RADIUS_FACTOR;
     let x=game.x,y=game.y+scrollY;
     const reach=radius+Math.max(Math.abs(dx),Math.abs(dy))+12;
     const blockers=[];
-    for(const c of collectibles){
+    for(const c of nearbyCollectibles(x,y,reach)){
       if(c.eaten||c.type!=='object'||c.tier<=game.level||!c.el.isConnected)continue;
       if(isPassThroughTextLink(c.el))continue; // Plain longer links never block the player.
       if(c.el.closest('.eaten'))continue;
@@ -1815,7 +1925,7 @@ body.rollup-wide-gutters .stats .stat {
     const radiusSquared=radius*radius;
     const scrollY=articleScrollPosition();
     const inRange=[];
-    for(const c of collectibles){
+    for(const c of nearbyCollectibles(game.x,game.y+scrollY,radius)){
       if(c.eaten || !canCollectElement(c) || !c.el.isConnected)continue;
       const r=collectibleRect(c,scrollY);
       if(!r.width || !r.height)continue;
