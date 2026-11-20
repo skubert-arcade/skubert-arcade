@@ -183,20 +183,28 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   const ESCAPE_HORIZONTAL_DRAG=.48;       // Per-second exponential drag between bounces.
   const ESCAPE_MAX_HORIZONTAL_SPEED=370;  // Cinematic world units per real second.
   const ESCAPE_WATCHDOG_SECONDS=4.5;       // Hard wall-clock limit on the finale.
-  // Anti-jam only watches sustained congestion at the upper opening; merely
-  // reaching or crossing the Eukarya line is NOT a loss condition.
-  const JAM_BALL_GRACE_SECONDS=1.0;        // Ignore newly dropped/merged bodies.
-  const JAM_RIM_DEPTH=72;                 // Distance below the opening to examine.
-  const JAM_LIP_REACH=34;                 // Extra clearance around a side lip.
-  const JAM_WALL_PROXIMITY=42;            // Candidate must press near the slope.
-  const JAM_PRESSURE_GRACE_SECONDS=4.0;   // Let the normal pile resolve first.
-  const JAM_PRESSURE_CLEAR_SECONDS=.45;   // Ignore momentary contact jitter.
-  const JAM_NUDGE_RECOVERY_SECONDS=2.0;   // Give one outward nudge time to work.
-  const JAM_NUDGE_SPEED=310;
-  const JAM_NUDGE_LIFT=330;
-  const JAM_EJECTION_SECONDS=.52;         // Animated last resort, not a teleport.
+  // Anti-jam is an exceptional DEADLOCK recovery, not a secondary height / 
+  // congestion loss rule. A genuine side spill always takes priority.
+  const JAM_MIN_PLAYTIME_SECONDS=75;       // Never intervene during early play.
+  const JAM_BALL_GRACE_SECONDS=2.5;       // Ignore recent drops and merges.
+  const JAM_RIM_DEPTH=18;                // Ball's TOP must be very close to rim.
+  const JAM_LIP_REACH=18;                // Base clearance; scaled for large spheres.
+  const JAM_WALL_PROXIMITY=14;           // Must be tight against an upper slope.
+  const JAM_NEIGHBOR_TOLERANCE=10;       // Another mature ball must crowd it.
+  const JAM_MAX_HORIZONTAL_SPEED=24;     // A rolling ball is not jammed.
+  const JAM_MAX_VERTICAL_SPEED=42;
+  const JAM_STALL_MOTION_ALLOWANCE=16;   // Max drift (also scaled to ball size).
+  const JAM_MERGE_RESET_SECONDS=6;       // Recent merging = active, healthy play.
+  const JAM_PRESSURE_GRACE_SECONDS=18;   // Same stationary body, same lip.
+  const JAM_PRESSURE_CLEAR_SECONDS=.35;  // Brief numerical jitter only.
+  const JAM_NUDGE_RECOVERY_SECONDS=10;   // Allow natural movement after nudge.
+  const JAM_NUDGE_COAST_SECONDS=1.3;     // Let initial impulse settle.
+  const JAM_NUDGE_SPEED=165;            // Gentle outward push, not an ejection.
+  const JAM_NUDGE_LIFT=95;
+  const JAM_EJECTION_SECONDS=.52;       // Cinematic last resort.
   const JAM_EJECTION_WATCHDOG_SECONDS=2.5;
-  let jamPressureAge=0,jamRecoveryAge=0,jamClearAge=0,jamNudged=false,jamSide=0;
+  let jamPressureAge=0,jamRecoveryAge=0,jamClearAge=0,jamNudged=false,
+      jamSide=0,jamBallId=0,jamAnchorX=0,jamAnchorY=0,jamPostNudgeSettled=false;
   let jamEjection=null;
   let escapeSequence=null;
   let fireworks=[],fireworkBursts=[],impactFlash=0;
@@ -220,8 +228,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   const ART_SIZE=1254;
   const ART_TOP_LEFT={x:13,y:186}, ART_TOP_RIGHT={x:1127,y:186}, ART_APEX={x:571,y:1178};
   const AUTO_DROP_MS=3000;
-  const DROP_ACCELERATION_START_SECONDS=45;
-  const DROP_DURATION_MULTIPLIER=0.98;
+  const DROP_ACCELERATION_START_SECONDS=60;
+  const DROP_DURATION_MULTIPLIER=0.99;
   let dropDeadline=0, dropDurationMs=AUTO_DROP_MS;
   // "time" advances only during active gameplay, not while on the start/end screen.
   let time=0,lastMergeTime=-100,combo=0,lastFrame=0,accumulator=0,down=false,ballId=0;
@@ -473,50 +481,52 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       }
     }
   }
-  // Pressure at an upper lip (not a high-ball threshold) is the only trigger.
-  // An ordinary ball rising above Eukarya without crowding a wall does nothing.
+  // Only a stationary sphere physically crowded against the same upper lip
+  // qualifies. In particular, a high pile, a rolling sphere, or a dense wad
+  // in the CENTER does not count as a jam.
   function getJamPressureCandidates(){
     const candidates=[null,null];
-    const eligible=[];
     for(const b of balls){
       if(b.spilled || time-b.born<JAM_BALL_GRACE_SECONDS)continue;
       if(b.y-b.r>topY+JAM_RIM_DEPTH)continue;
-      eligible.push(b);
+      if(Math.abs(b.vx)>JAM_MAX_HORIZONTAL_SPEED ||
+         Math.abs(b.vy)>JAM_MAX_VERTICAL_SPEED)continue;
+      // A lone ball pressed against the boundary is normal wall contact.
+      const crowded=balls.some(other=>other!==b && !other.spilled &&
+        time-other.born>=JAM_BALL_GRACE_SECONDS &&
+        Math.hypot(other.x-b.x,other.y-b.y) <=
+          b.r+other.r+JAM_NEIGHBOR_TOLERANCE);
+      if(!crowded)continue;
       for(const side of [-1,1]){
         const edgeClearance=side<0 ? b.x-b.r-topLeft : topRight-b.x-b.r;
-        if(edgeClearance>JAM_LIP_REACH+b.r*.72)continue;
-        // The exact signed distance makes this scale correctly on both slopes.
+        if(edgeClearance>Math.max(JAM_LIP_REACH,b.r*.40) ||
+           edgeClearance<-b.r*.22)continue;
+        // Signed distance measured against the actual sloping wall.
         const ax=side<0?topLeft:topRight;
         const dx=apexX-ax,dy=apexY-topY,len=Math.hypot(dx,dy);
         const nx=side<0?dy/len:-dy/len;
         const ny=side<0?-dx/len:dx/len;
         const slopeGap=(b.x-ax)*nx+(b.y-topY)*ny-visibleWallRadius(b);
         if(slopeGap>JAM_WALL_PROXIMITY)continue;
-        const score=edgeClearance+Math.max(0,slopeGap)*.3;
-        const index=side<0?0:1;
-        if(!candidates[index]||score<candidates[index].score)
-          candidates[index]={ball:b,side,score};
-      }
-    }
-    // Fallback for an exceptionally dense wad centered at the mouth whose
-    // individual spheres never touch a lip. Neither height nor a single large
-    // ball is sufficient: require several mature spheres filling the entrance.
-    if(!candidates[0]&&!candidates[1] && eligible.length>=5){
-      const rimSpan=eligible.reduce((sum,b)=>sum+Math.min(b.r*2,190),0);
-      if(rimSpan>=(topRight-topLeft)*.85){
-        let closest=null;
-        for(const b of eligible){
-          const side=b.x<=(topLeft+topRight)/2?-1:1;
-          const gap=side<0 ? b.x-b.r-topLeft : topRight-b.x-b.r;
-          if(!closest || gap<closest.score)closest={ball:b,side,score:gap};
+        const i=side<0?0:1;
+        const score=Math.abs(edgeClearance)+Math.max(0,slopeGap);
+        if(!candidates[i]||score<candidates[i].score){
+          candidates[i]={ball:b,side,score};
         }
-        if(closest)candidates[closest.side<0?0:1]=closest;
       }
     }
     return candidates;
   }
   function clearJamPressure(){
-    jamPressureAge=0;jamRecoveryAge=0;jamClearAge=0;jamNudged=false;jamSide=0;
+    jamPressureAge=0;jamRecoveryAge=0;jamClearAge=0;jamNudged=false;
+    jamSide=0;jamBallId=0;jamAnchorX=0;jamAnchorY=0;
+    jamPostNudgeSettled=false;
+  }
+  function jamAnchorStillValid(b){
+    // Large balls can shift farther as the solver relaxes, but sustained
+    // position changes mean ordinary physics is resolving the pressure.
+    return Math.hypot(b.x-jamAnchorX,b.y-jamAnchorY) <=
+      Math.max(JAM_STALL_MOTION_ALLOWANCE,b.r*.16);
   }
   function beginJamEjection(candidate){
     if(ended||escapeSequence||jamEjection||!candidate)return;
@@ -565,40 +575,62 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   }
   function updateJamProtection(dt){
     if(ended||escapeSequence||jamEjection)return;
+    // No premature intervention during ordinary early gameplay, and never
+    // mistake a recently merging (healthy) pile for a permanent blockage.
+    if(time<JAM_MIN_PLAYTIME_SECONDS ||
+       time-lastMergeTime<JAM_MERGE_RESET_SECONDS){
+      clearJamPressure();return;
+    }
+    // A short coast prevents the nudge itself from looking like "jam cleared"
+    // for a few frames. The selected body is checked again afterwards.
+    if(jamNudged && jamRecoveryAge<JAM_NUDGE_COAST_SECONDS){
+      jamRecoveryAge+=dt;
+      return;
+    }
     const candidates=getJamPressureCandidates();
-    // Stick to a pressured side when possible, avoiding side-switch jitter.
-    let selected=jamSide && candidates[jamSide<0?0:1];
-    if(!selected)selected=candidates[0] && candidates[1]
-      ? (candidates[0].score<=candidates[1].score?candidates[0]:candidates[1])
-      : (candidates[0]||candidates[1]);
+    // Do not transfer accumulated pressure from one ball (or lip) to another.
+    const selected=candidates.find(c=>c && c.side===jamSide &&
+      c.ball.id===jamBallId) ||
+      (!jamBallId ? candidates.filter(Boolean).sort((a,b)=>a.score-b.score)[0] : null);
     if(!selected){
       jamClearAge+=dt;
       if(jamClearAge>=JAM_PRESSURE_CLEAR_SECONDS)clearJamPressure();
       return;
     }
-    // A brief release or migration to the opposite lip is still the same
-    // overcrowded mouth; do not allow numerical jitter to restart the clock.
     jamClearAge=0;
-    jamSide=selected.side;
-    // A fresh merge may still settle the jam; preserve the time accumulated
-    // before the merge but briefly pause it while the pile rearranges.
-    if(time-lastMergeTime<.55)return;
-    jamPressureAge+=dt;
+    const b=selected.ball;
+    if(!jamBallId){
+      jamBallId=b.id;jamSide=selected.side;
+      jamAnchorX=b.x;jamAnchorY=b.y;
+    }
     if(!jamNudged){
+      if(!jamAnchorStillValid(b)){
+        clearJamPressure();return;
+      }
+      jamPressureAge+=dt;
       if(jamPressureAge<JAM_PRESSURE_GRACE_SECONDS)return;
-      const b=selected.ball;
+      // One LOW-ENERGY physical nudge. No forced escape yet.
       b.vx+=selected.side*JAM_NUDGE_SPEED;
       b.vy=Math.min(b.vy,-JAM_NUDGE_LIFT);
       b.settleAge=0;
-      jamNudged=true;jamRecoveryAge=0;
-      makeParticles(b.x+selected.side*b.r*.6,b.y,'#ff4c63',10);
-      setMessage(`Pressure at the ${selected.side<0?'left':'right'} lip! Nudging the pile outward...`);
+      jamNudged=true;jamRecoveryAge=0;jamPostNudgeSettled=false;
+      makeParticles(b.x+selected.side*b.r*.6,b.y,'#ff4c63',8);
+      setMessage(`Persistent blockage at the ${selected.side<0?'left':'right'} lip: gently nudging a ball...`);
       return;
     }
+    // After the nudge, a moved or merged sphere means the jam was relieved.
+    // Re-anchor once after the initial impulse has had time to settle.
     jamRecoveryAge+=dt;
+    if(!jamPostNudgeSettled){
+      jamAnchorX=b.x;jamAnchorY=b.y;jamPostNudgeSettled=true;
+      return;
+    }
+    if(!jamAnchorStillValid(b)){
+      clearJamPressure();return;
+    }
     if(jamRecoveryAge>=JAM_NUDGE_RECOVERY_SECONDS){
-      // Still congested after a physical nudge: guarantee the intended loss
-      // by visibly pushing one ball across the lip into the existing finale.
+      // Last resort ONLY if the very same ball remained stationary and
+      // crowded against the very same lip throughout both waiting periods.
       beginJamEjection(selected);
     }
   }
@@ -1130,15 +1162,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       popping=false;
       endTitle.textContent='Game Over';
       endMessage.textContent=domainCreated
-        ? `Great job! You helped Skubert trace his roots back to Eukarya!
-
-Indeed, Skubert does exhibit distinct cell nuclei,
-
-membrane-bound organelles,
-
-and organization supported by a cytoskeleton.
-
-Always good to check though!`
+        ?'A sphere spilled out of the pyramid and reached the bottom. Great job! You helped Skubert trace his roots back to Eukarya! Indeed, Skubert does have a distinct cell nucleus, membrane-bound organelles, and organization supported by a cytoskeleton. Always good to check though.'
         :'A sphere spilled out of the pyramid and reached the bottom. Oops! Skubert still needs help tracing his roots back to Eukarya! Try matching faster!';
       endScore.textContent=fmt.format(score)+' points';
       $('playAgain').textContent='Play again';
