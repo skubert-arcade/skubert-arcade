@@ -429,7 +429,11 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
    The moving world still clips inside .game-shell; nothing gets reflowed. */
 .game-shell { isolation:isolate; background:#fff; }
 .game-shell::before,.game-shell::after { content:none!important; display:none!important; }
-#playfield {z-index:1;will-change:transform;}
+#playfield {
+  z-index:1;
+  /* ROLLUP_TEXT_CLARITY_V1: permit re-rasterization during zoom. */
+  will-change:auto;
+}
 /* Pause, help, game-over and toast are direct children of the shell; they
    never zoom or crop with the game camera. */
 .game-shell > .screen { z-index:55; }
@@ -465,6 +469,11 @@ body.rollup-wide-gutters .stats .stat {
   display:block; position:absolute; top:0; left:0; width:1920px;
   height:1080px; border:0; pointer-events:none;
   background:#fff; overflow:hidden;
+}
+/* Keep a second, decorative iframe scrollbar from appearing below the page. */
+#rollupPageBleed .page-bleed-window::after {
+  content:""; position:absolute; right:0; top:0; bottom:0; width:20px;
+  background:#fff; pointer-events:none; z-index:3;
 }
 #playfield { z-index:1; }
 
@@ -592,13 +601,19 @@ body.rollup-wide-gutters .stats .stat {
       style.id='rollup-page-bleed-copy-style';
       style.textContent=`
         html { scroll-behavior:auto!important; scroll-padding-top:0!important; }
-        /* Hide the copied Wikipedia navigation WITHOUT removing its width.
-           visibility:hidden preserves the main article's column geometry. */
+        /* ROLLUP_CONTINUATION_SEAM_V3: let the side columns retain their
+           natural appearance and scroll away instead of showing a second
+           sticky Contents/Appearance menu or blank white gutters. */
         .vector-column-start, .vector-column-end,
         #vector-toc, #mw-panel-toc, .vector-toc,
         #vector-page-tools-pinned-container, .vector-page-tools,
-        .vector-header-container, .vector-sticky-header-container,
-        #mw-panel, .mw-sidebar {
+        #mw-panel, .mw-sidebar, .vector-sticky-pinned-container {
+          position:static!important;
+          top:auto!important;
+          bottom:auto!important;
+        }
+        /* A fixed site header must not appear again lower down the page. */
+        .vector-header-container, .vector-sticky-header-container {
           visibility:hidden!important;
         }
       `;
@@ -610,6 +625,34 @@ body.rollup-wide-gutters .stats .stat {
       doc.body.style.paddingBottom='1280px';
     }
     return true;
+  }
+  // ROLLUP_CONTINUATION_PARAGRAPH_ALIGN_V1
+  // Independent iframe copies can wrap lines differently from the live
+  // collectible DOM. Align the nearest matching article paragraph at the seam.
+  // This affects only decorative iframe scrolling, never game-world geometry.
+  function bleedScrollCorrection(primaryDoc,primaryView,copyDoc,copyView,seamY){
+    let originals=primaryDoc.querySelectorAll('#mw-content-text p');
+    let copies=copyDoc.querySelectorAll('#mw-content-text p');
+    if(!originals.length){
+      originals=primaryDoc.querySelectorAll('main p');
+      copies=copyDoc.querySelectorAll('main p');
+    }
+    if(!originals.length || originals.length!==copies.length)return 0;
+    const primaryScroll=primaryView.scrollY||0;
+    let nearest=-1,nearestDistance=Infinity,originalTop=0;
+    for(let i=0;i<originals.length;i++){
+      const rect=originals[i].getBoundingClientRect();
+      if(rect.height<4)continue;
+      const top=rect.top+primaryScroll,bottom=rect.bottom+primaryScroll;
+      const distance=Math.max(0,top-seamY,seamY-bottom);
+      if(distance<nearestDistance){
+        nearest=i;nearestDistance=distance;originalTop=top;
+        if(distance===0)break;
+      }
+    }
+    if(nearest<0 || nearestDistance>WORLD_HEIGHT)return 0;
+    const copyTop=copies[nearest].getBoundingClientRect().top+(copyView.scrollY||0);
+    return Math.max(-350,Math.min(350,copyTop-originalTop));
   }
   function syncPageBleed(){
     const primary=snapshotIframe();
@@ -639,18 +682,20 @@ body.rollup-wide-gutters .stats .stat {
     pageBleedTopWindow.style.clipPath='inset('+(PAGE_BLEED_TOP-topVisible)+'px 0 0 0)';
     pageBleedBottomWindow.style.clipPath='inset(0 0 '+(PAGE_BLEED_BOTTOM-bottomVisible)+'px 0)';
     const targets=[
-      [pageBleedTop,pageBleedTopWindow,Math.max(0,scrollY-PAGE_BLEED_TOP),topVisible>0],
-      [pageBleedBottom,pageBleedBottomWindow,scrollY+WORLD_HEIGHT,bottomVisible>0]
+      [pageBleedTop,pageBleedTopWindow,Math.max(0,scrollY-PAGE_BLEED_TOP),topVisible>0,scrollY],
+      [pageBleedBottom,pageBleedBottomWindow,scrollY+WORLD_HEIGHT,bottomVisible>0,scrollY+WORLD_HEIGHT]
     ];
-    for(const [frame,windowEl,target,enabled] of targets){
+    for(const [frame,windowEl,target,enabled,seamY] of targets){
       if(!enabled){windowEl.style.visibility='hidden';continue;}
       try{
         if(!preparePageBleedCopy(frame)){windowEl.style.visibility='hidden';continue;}
         const view=frame.contentWindow;
-        if(Math.abs((view.scrollY||0)-target)>1)view.scrollTo(0,target);
+        const correction=bleedScrollCorrection(originalDoc,primary.contentWindow,frame.contentDocument,view,seamY);
+        const alignedTarget=Math.max(0,target+correction);
+        if(Math.abs((view.scrollY||0)-alignedTarget)>1)view.scrollTo(0,alignedTarget);
         // Never flash an unsynchronized page copy during loads or scrolling.
         // ROLLUP_PAGE_CONTINUATION_VISIBILITY_FIX — reveal the iframe as well as its window.
-        const aligned=Math.abs((view.scrollY||0)-target)<2;
+        const aligned=Math.abs((view.scrollY||0)-alignedTarget)<2;
         frame.style.visibility=aligned?'visible':'hidden';
         windowEl.style.visibility=aligned?'visible':'hidden';
       }catch(_){windowEl.style.visibility='hidden';}
