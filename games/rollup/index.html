@@ -449,19 +449,25 @@ body.rollup-wide-gutters .stats .stat {
 }
 
 
-/* ROLLUP_PAGE_CONTINUATION_V1 — decorative snapshot overscan; gameplay stays 1920x1080. */
-.game-shell{background:#fff!important;isolation:isolate;}
-#rollupPageBleed{
-  position:absolute;left:0;top:0;width:1920px;height:1080px;
-  pointer-events:none;overflow:visible;transform-origin:0 0;z-index:0;
+/* ROLLUP_PAGE_CONTINUATION_V2 — viewport-matched, decorative-only overscan. */
+.game-shell { background:#fff!important; isolation:isolate; }
+#rollupPageBleed {
+  position:absolute; left:0; top:0; width:1920px; height:1080px;
+  pointer-events:none; overflow:visible; transform-origin:0 0; z-index:0;
 }
-#rollupPageBleed .page-bleed-frame{
-  display:block;position:absolute;left:0;width:1920px;border:0;
-  pointer-events:none;background:#fff;overflow:hidden;
+#rollupPageBleed .page-bleed-window {
+  position:absolute; left:0; width:1920px;
+  pointer-events:none; overflow:hidden; background:#fff;
 }
-#rollupPageBleedTop{top:-720px;height:720px;}
-#rollupPageBleedBottom{top:1080px;height:980px;}
-#playfield{z-index:1;}
+#rollupPageBleedTopWindow { top:-720px; height:720px; }
+#rollupPageBleedBottomWindow { top:1080px; height:980px; }
+#rollupPageBleed .page-bleed-frame {
+  display:block; position:absolute; top:0; left:0; width:1920px;
+  height:1080px; border:0; pointer-events:none;
+  background:#fff; overflow:hidden;
+}
+#playfield { z-index:1; }
+
 
 </style>
 <link rel="stylesheet" href="../../shared/score-entry.css">
@@ -490,8 +496,12 @@ body.rollup-wide-gutters .stats .stat {
   </section>
   <div class="game-shell">
     <div id="rollupPageBleed" aria-hidden="true">
-      <iframe id="rollupPageBleedTop" class="page-bleed-frame" title="" tabindex="-1" loading="eager" sandbox="allow-same-origin"></iframe>
-      <iframe id="rollupPageBleedBottom" class="page-bleed-frame" title="" tabindex="-1" loading="eager" sandbox="allow-same-origin"></iframe>
+      <div id="rollupPageBleedTopWindow" class="page-bleed-window">
+        <iframe id="rollupPageBleedTop" class="page-bleed-frame" title="" tabindex="-1" loading="eager" sandbox="allow-same-origin"></iframe>
+      </div>
+      <div id="rollupPageBleedBottomWindow" class="page-bleed-window">
+        <iframe id="rollupPageBleedBottom" class="page-bleed-frame" title="" tabindex="-1" loading="eager" sandbox="allow-same-origin"></iframe>
+      </div>
     </div>
     <div id="playfield" tabindex="0" aria-label="Game area. Move your mouse or arrow keys to guide Skubert over page elements.">
       <div id="siteContent"></div>
@@ -554,10 +564,12 @@ body.rollup-wide-gutters .stats .stat {
   // Self-contained, original game. Automatic DOM discovery; no Weball source or external libraries.
   const $ = id => document.getElementById(id);
   const field = $('playfield');
-  // ROLLUP_PAGE_CONTINUATION_V1: visual snapshot only, excluded from #siteContent.
+  // ROLLUP_PAGE_CONTINUATION_V2 — only decorative views; never scanned or scored.
   const pageBleed=$('rollupPageBleed');
   const pageBleedTop=$('rollupPageBleedTop');
   const pageBleedBottom=$('rollupPageBleedBottom');
+  const pageBleedTopWindow=$('rollupPageBleedTopWindow');
+  const pageBleedBottomWindow=$('rollupPageBleedBottomWindow');
   const PAGE_BLEED_TOP=720;
   const PAGE_BLEED_BOTTOM=980;
   let pageBleedSource=null;
@@ -566,51 +578,83 @@ body.rollup-wide-gutters .stats .stat {
   function positionPageBleed(ox,oy,scale){
     if(pageBleed)pageBleed.style.transform='translate('+ox+'px,'+oy+'px) scale('+scale+')';
   }
+  function hidePageBleed(){
+    pageBleedTopWindow.style.visibility='hidden';
+    pageBleedBottomWindow.style.visibility='hidden';
+  }
+  function preparePageBleedCopy(frame){
+    const doc=frame.contentDocument;
+    if(!doc || doc.readyState!=='complete')return false;
+    // Keeping a 1080px viewport (same as the real level snapshot) prevents
+    // responsive height differences and sticky-sidebar repositioning.
+    if(!doc.getElementById('rollup-page-bleed-copy-style')){
+      const style=doc.createElement('style');
+      style.id='rollup-page-bleed-copy-style';
+      style.textContent=`
+        html { scroll-behavior:auto!important; scroll-padding-top:0!important; }
+        /* Hide the copied Wikipedia navigation WITHOUT removing its width.
+           visibility:hidden preserves the main article's column geometry. */
+        .vector-column-start, .vector-column-end,
+        #vector-toc, #mw-panel-toc, .vector-toc,
+        #vector-page-tools-pinned-container, .vector-page-tools,
+        .vector-header-container, .vector-sticky-header-container,
+        #mw-panel, .mw-sidebar {
+          visibility:hidden!important;
+        }
+      `;
+      (doc.head||doc.documentElement).appendChild(style);
+    }
+    // Let the clone scroll to the final document section without altering
+    // the original iframe or its collectibles.
+    if(doc.body && doc.body.style.paddingBottom!=='1280px'){
+      doc.body.style.paddingBottom='1280px';
+    }
+    return true;
+  }
   function syncPageBleed(){
     const primary=snapshotIframe();
-    if(!primary || !primary.getAttribute('src')){
-      pageBleedTop.style.visibility='hidden';
-      pageBleedBottom.style.visibility='hidden';
-      return;
-    }
-    const src=primary.getAttribute('src');
+    if(!primary || !primary.getAttribute('src')){ hidePageBleed(); return; }
     let originalDoc,scrollY;
     try{
       originalDoc=primary.contentDocument;
-      if(!originalDoc || originalDoc.readyState!=='complete')return;
+      if(!originalDoc || originalDoc.readyState!=='complete'){hidePageBleed();return;}
       scrollY=Math.max(0,primary.contentWindow.scrollY||0);
-    }catch(_){return;}
+    }catch(_){hidePageBleed();return;}
+    const src=primary.getAttribute('src');
     if(primary!==pageBleedPrimary || originalDoc!==pageBleedDocument || src!==pageBleedSource){
       pageBleedPrimary=primary;
       pageBleedDocument=originalDoc;
       pageBleedSource=src;
-      for(const iframe of [pageBleedTop,pageBleedBottom]){
-        iframe.style.visibility='hidden';
-        iframe.removeAttribute('src');
-        iframe.setAttribute('src',src);
+      for(const frame of [pageBleedTop,pageBleedBottom]){
+        frame.style.visibility='hidden';
+        frame.removeAttribute('src');
+        frame.setAttribute('src',src);
       }
     }
     const originalHeight=Math.max(originalDoc.documentElement?.scrollHeight||0,originalDoc.body?.scrollHeight||0);
     const topVisible=Math.min(PAGE_BLEED_TOP,scrollY);
-    pageBleedTop.style.clipPath='inset('+(PAGE_BLEED_TOP-topVisible)+'px 0 0 0)';
     const bottomVisible=Math.max(0,Math.min(PAGE_BLEED_BOTTOM,originalHeight-scrollY-WORLD_HEIGHT));
-    pageBleedBottom.style.clipPath='inset(0 0 '+(PAGE_BLEED_BOTTOM-bottomVisible)+'px 0)';
-    const targets=[[pageBleedTop,Math.max(0,scrollY-PAGE_BLEED_TOP),topVisible>0],
-                   [pageBleedBottom,scrollY+WORLD_HEIGHT,bottomVisible>0]];
-    for(const [iframe,target,enabled] of targets){
-      if(!enabled){iframe.style.visibility='hidden';continue;}
+    // Crop the overscan WINDOWS, not the full-size iframes. This retains
+    // the exact iframe viewport used by the playable stage (1920 x 1080).
+    pageBleedTopWindow.style.clipPath='inset('+(PAGE_BLEED_TOP-topVisible)+'px 0 0 0)';
+    pageBleedBottomWindow.style.clipPath='inset(0 0 '+(PAGE_BLEED_BOTTOM-bottomVisible)+'px 0)';
+    const targets=[
+      [pageBleedTop,pageBleedTopWindow,Math.max(0,scrollY-PAGE_BLEED_TOP),topVisible>0],
+      [pageBleedBottom,pageBleedBottomWindow,scrollY+WORLD_HEIGHT,bottomVisible>0]
+    ];
+    for(const [frame,windowEl,target,enabled] of targets){
+      if(!enabled){windowEl.style.visibility='hidden';continue;}
       try{
-        const doc=iframe.contentDocument;
-        if(!doc || doc.readyState!=='complete'){iframe.style.visibility='hidden';continue;}
-        // Extra bottom padding in the decorative COPY prevents clamping at the
-        // document end. It cannot affect the real collectible snapshot.
-        if(doc.body && doc.body.style.paddingBottom!=='1100px')doc.body.style.paddingBottom='1100px';
-        if(Math.abs((iframe.contentWindow.scrollY||0)-target)>1)iframe.contentWindow.scrollTo(0,target);
-        iframe.style.visibility='visible';
-      }catch(_){iframe.style.visibility='hidden';}
+        if(!preparePageBleedCopy(frame)){windowEl.style.visibility='hidden';continue;}
+        const view=frame.contentWindow;
+        if(Math.abs((view.scrollY||0)-target)>1)view.scrollTo(0,target);
+        // Never flash an unsynchronized page copy during loads or scrolling.
+        windowEl.style.visibility=Math.abs((view.scrollY||0)-target)<2?'visible':'hidden';
+      }catch(_){windowEl.style.visibility='hidden';}
     }
   }
   window.setInterval(syncPageBleed,160);
+
 
   const WORLD_WIDTH = 1920;
   const WORLD_HEIGHT = 1080;
