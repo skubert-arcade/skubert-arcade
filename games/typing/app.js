@@ -211,9 +211,9 @@ const WORD_LENGTH_BUCKET_DEFINITIONS = [
 // The preference windows can cross fixed bucket boundaries. For example,
 // 5-12 draws eligible terms from both the 3-8 and the 9-12 buckets.
 const WORD_SELECTION_PHASES = [
-  { startSeconds: 0,  min: 3, max: 8 },     // 0-15 seconds
-  { startSeconds: 15, min: 5, max: 12 },    // 15-30 seconds
-  { startSeconds: 30, min: 8, max: 18 },    // 30-60 seconds
+  { startSeconds: 0,  min: 0, max: 5 },     // 0-15 seconds
+  { startSeconds: 15, min: 3, max: 8 },    // 15-30 seconds
+  { startSeconds: 30, min: 8, max: 12 },    // 30-60 seconds
   { startSeconds: 60, min: 0, max: Infinity }, // 60+ seconds: no length preference
 ];
 
