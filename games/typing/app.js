@@ -156,6 +156,13 @@ const DICTIONARY = [
 // GAME START
 function init() {
   installPangramStyles();
+  // Suppress field history, autofill suggestions, and text corrections.
+  // The HTML input should also have autocomplete="off" as defense in depth.
+  inputElementID.autocomplete = 'off';
+  inputElementID.setAttribute('autocorrect', 'off');
+  inputElementID.setAttribute('autocapitalize', 'off');
+  inputElementID.spellcheck = false;
+  if (inputElementID.form) inputElementID.form.autocomplete = 'off';
   gameStartTime = performance.now();
   showLevel();
   setInterval(() => {
@@ -180,6 +187,7 @@ function drawWord() {
   wordDiv.appendChild(paragraph);
   wordDiv.classList.add('word');
   wordDiv.style.top = '-2px';
+  wordDiv._fallY = -2; // visual top, maintained in JS (no per-frame layout read)
   wordDiv.style.zIndex = '1';
   wordDiv.style.left = (Math.random() * (gameWidth - 150)).toString() + 'px';
   arrWordsDiv.push(wordDiv);
@@ -440,7 +448,7 @@ function spawnPangram() {
   // Begin fully visible at the bottom, and rise all the way off the top.
   const top = Math.max(0, gameContentID.clientHeight - element.offsetHeight - 4);
   element.style.top = top + 'px';
-  activePangram = { phrase, element, top, spawnedAt: performance.now() };
+  activePangram = { phrase, element, top, height: element.offsetHeight, spawnedAt: performance.now() };
 }
 
 function showPangramClear(wordsCleared, points) {
@@ -469,10 +477,12 @@ function completePangram() {
   let gainedPoints = 0;
   let gainedLetters = 0;
   for (const word of completed) {
-    updateScore(word);
     gainedPoints += word.length;
     gainedLetters += (word.match(/[a-z]/g) || []).length;
   }
+  // A single DOM update for the whole board clear; point totals are unchanged.
+  score += gainedPoints;
+  scoreElementID.innerHTML = `<p>Score ${score}</p>`;
 
   // One aggregate notification preserves the viewer's growth mechanism,
   // without creating a burst of simultaneous per-word animations.
@@ -546,14 +556,12 @@ function updateWordPosition() {
     lastUpdateTime = now;
     const globalFallDistance = BASE_FALL_SPEED_PX_PER_SECOND * speedMultiplier * deltaSeconds;
 
-    const wordText = document.getElementsByClassName('word');
     for (let i = 0; i < arrWords.length; i++) {
-      // Each word has a fixed length-based proportion of the global speed.
-      // Keep decimals: parseInt would discard the gradual speed changes.
+      const wordNode = arrWordsDiv[i];
       const wordFallDistance = globalFallDistance * getWordSpeedMultiplier(arrWords[i]);
-      const currentTop = parseFloat(wordText[i].style.top) || 0;
-      const newTop = currentTop + wordFallDistance;
+      const newTop = wordNode._fallY + wordFallDistance;
 
+      // Same game-over threshold as before, using JS coordinates.
       if (newTop + 15 > gameHeight) {
         gameOver = true;
         gameContentID.innerHTML = modalGameOver();
@@ -563,19 +571,22 @@ function updateWordPosition() {
         break;
       }
 
-      wordText[i].style.top = newTop + 'px';
+      wordNode._fallY = newTop;
+      // CSS transform moves the word without changing its layout box.
+      // Its visual top remains exactly newTop (original CSS top is -2px).
+      wordNode.style.transform = `translate3d(0, ${newTop + 2}px, 0)`;
     }
 
     // A missed pangram simply exits the top; ordinary falling words still
     // determine game over. Its speed is independent of the falling speedup.
     if (!gameOver && activePangram) {
-      const speed = gameContentID.clientHeight / PANGRAM_TRAVEL_SECONDS;
+      const speed = gameHeight / PANGRAM_TRAVEL_SECONDS;
       // Do not advance a just-spawned challenge by time elapsed before it appeared
       // (important when a browser tab resumes after being throttled).
       const secondsSinceSpawn = Math.max(0, (now - activePangram.spawnedAt) / 1000);
       activePangram.top -= speed * Math.min(deltaSeconds, secondsSinceSpawn);
       activePangram.element.style.top = activePangram.top + 'px';
-      if (activePangram.top + activePangram.element.offsetHeight < 0) {
+      if (activePangram.top + activePangram.height < 0) {
         activePangram.element.remove();
         activePangram = null;
       }
