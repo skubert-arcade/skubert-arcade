@@ -34,9 +34,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
 #sphere-layer {
   position:absolute; inset:0; z-index:2; display:block; width:100%; height:100%;
   background:transparent; pointer-events:none;
-  /* Expose the waiting sphere above Eukarya while keeping the pile clipped
-     * to the V-shaped walls. The physics constrains active balls below the rim. */
-  clip-path:polygon(1.2% 0%,90.1% 0%,90.1% 15%,45.7% 94.1%,1.2% 15%);
+  /* No V-shaped clipping: spheres that escape over either lip must remain
+     visible while falling down the outside of the pyramid. */
 }
 /* Transparent 2D canvas stays on top for the countdown, effects and outlines. */
 #game { position:absolute; inset:0; z-index:3; display:block; width:100%; height:100%; background:transparent; touch-action:none; cursor:crosshair; }
@@ -90,12 +89,12 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   <img class="taxonomy-image" src="taxonomy-ranking-system.png" width="1254" height="1254" alt="Taxonomic Ranking System inverted pyramid, from Domain Eukarya at the top to Species Mascotus Skubertus at the bottom." decoding="async">
   <canvas id="discovery-layer" aria-hidden="true"></canvas>
   <canvas id="sphere-layer" aria-hidden="true"></canvas>
-  <canvas id="game" tabindex="0" aria-label="Taxonomy Drop. Move the pointer or use left and right arrow keys to aim, then click, tap or press Space to drop a sphere. Matching spheres merge into the next taxonomic rank."></canvas>
+  <canvas id="game" tabindex="0" aria-label="Taxonomy Drop. Move the pointer or use left and right arrow keys to aim, then click, tap or press Space to drop a sphere. Matching spheres merge into the next taxonomic rank. The game ends when a sphere spills over a side of the pyramid and falls offscreen."></canvas>
   <div id="startPrompt" class="start-prompt"><button id="startButton" type="button">Start game</button></div>
   <div id="overlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
     <div class="modal">
       <h2 id="endTitle">Game Over</h2>
-      <p id="endMessage">A ball could not settle beneath the top of Eukarya.</p>
+      <p id="endMessage">A sphere spilled over the edge of the pyramid and fell offscreen.</p>
       <div id="endScore" class="final-score">0</div>
       <div id="taxonomyScoreMount" aria-label="Submit your Taxonomy Drop score"></div>
       <button id="playAgain" type="button">Play again</button>
@@ -163,18 +162,12 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   let balls=[],particles=[],floating=[],shockwaves=[],score=0,highest=0;
   let unlocked=new Set([0]);
   let aimX=200,current=0,next=1,ended=false,dropWait=0;
-  // v26: Every ball must clear Eukarya's upper rim, including merge-created balls.
-  // Do not cancel the overflow countdown just because the jammed pile is moving,
-  // wobbling, or briefly loses support: its TOP EDGE is what matters.
-  // A short post-creation grace protects new drops and merge animations; a ball
-  // must then remain above the rim throughout the warning countdown.
-  const TOP_LINE_GRACE_SECONDS=0.35;
-  const TOP_LINE_SETTLE_SECONDS=0.65;
-  // Once the countdown has started, allow a tiny clearance margin so numeric
-  // jitter across the rim cannot continuously reset an obvious overflow.
-  const TOP_LINE_CLEARANCE=4;
-  // Warning pulse is a visual cue only; it does not influence game physics.
-  const TOP_WARNING_PULSE_HZ=2.4;
+  // Loss condition: a ball must pass over the OPEN left or right upper lip,
+  // then completely exit the visible screen. Rising above Eukarya alone is safe.
+  const SPILL_LIP_MARGIN=2;
+  const SPILL_OUTWARD_SPEED=75;        // Minimum outward velocity after escape.
+  const SPILL_OUTWARD_ACCELERATION=260; // Prevents escaped balls drifting back in.
+  const SPILL_WARNING_PULSE_HZ=2.4;
   const REDUCED_MOTION=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   const POP_SEQUENCE_SECONDS=1.45;
   let popping=false,popElapsed=0,popQueue=[],popNext=0,popFragments=[],popRings=[];
@@ -342,7 +335,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     started=true;
     startPrompt.hidden=true;
     resetDropTimer();
-    setMessage('Drop within three seconds. Once a rank enters play, its pyramid band stays concealed until the run ends.');
+    setMessage('Drop within three seconds. The game ends only if a sphere spills over a side lip and falls offscreen.');
   }
   function radius(level){ return SPECIES_RADIUS*Math.pow(SIZE_GROWTH_FACTOR,level); }
   function choice(excludeLevel=null){
@@ -389,21 +382,52 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   }
   function clampAim(x,level=current){ const [lo,hi]=aimRange(level); return clamp(x,lo,hi); }
   function enforceSlope(b,ax,ay,bx,by,isLeft){
-    const dx=bx-ax, dy=by-ay, length=Math.hypot(dx,dy);
-    const nx=isLeft ? dy/length : -dy/length;
-    const ny=isLeft ? -dx/length : dx/length;
-    const distance=(b.x-ax)*nx+(b.y-ay)*ny;
-    const overlap=b.r-distance;
-    if(overlap<=0 || b.y+b.r<topY) return;
-    b.supported=true; b.contactCount++;
-    b.x+=nx*overlap; b.y+=ny*overlap;
+    if(b.spilled)return; // A ball that has escaped cannot collide with the walls again.
+    const dx=bx-ax,dy=by-ay,len2=dx*dx+dy*dy,length=Math.sqrt(len2);
+    const along=((b.x-ax)*dx+(b.y-ay)*dy)/len2;
+    let nx,ny,overlap;
+    if(along<0){
+      // Round off ONLY the upper lip. The lower end must remain a closed V,
+      // otherwise a fast small sphere can slip through beneath the apex.
+      // Unlike an infinite wall, the upper lip can be rolled over.
+      const vx=b.x-ax,vy=b.y-ay,dist=Math.hypot(vx,vy);
+      overlap=b.r-dist;
+      if(overlap<=0)return;
+      if(dist<.00001){
+        nx=isLeft?1:-1;ny=-.1;
+        const n=Math.hypot(nx,ny);nx/=n;ny/=n;
+      }else{nx=vx/dist;ny=vy/dist;}
+    }else{
+      // Keep the original inside-facing response at and below the apex.
+      nx=isLeft?dy/length:-dy/length;
+      ny=isLeft?-dx/length:dx/length;
+      const distance=(b.x-ax)*nx+(b.y-ay)*ny;
+      overlap=b.r-distance;
+      if(overlap<=0)return;
+    }
+    b.supported=true;b.contactCount++;
+    b.x+=nx*overlap;b.y+=ny*overlap;
     const speed=b.vx*nx+b.vy*ny;
     if(speed<0){
       impact(b,nx,ny,-speed);
-      const bounce=(-speed>125)? .34 : .01;
+      const bounce=(-speed>125)?.34:.01;
       b.vx-=(1+bounce)*speed*nx;
       b.vy-=(1+bounce)*speed*ny;
     }
+  }
+  function detectSpill(b){
+    if(b.spilled)return;
+    // Center must actually get beyond an upper ENDPOINT, not just rise above
+    // the top line or have part of a large ball project beyond the side wall.
+    // The segment solver above prevents cutting through a sloping wall.
+    if(b.y>=topY+b.r*.25)return;
+    const side=b.x<topLeft-SPILL_LIP_MARGIN?-1:
+      b.x>topRight+SPILL_LIP_MARGIN?1:0;
+    if(!side)return;
+    b.spilled=side;
+    b.vx=side*Math.max(side*b.vx,SPILL_OUTWARD_SPEED);
+    b.settleAge=0;
+    setMessage(`${LEVELS[b.level].name} spilled over the ${side<0?'left':'right'} edge!`);
   }
   // Size the DISPLAY canvases only. The world coordinates, ball positions,
   // radii, gravity, aim, walls and overflow checks are immutable on resize.
@@ -458,7 +482,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     const safeX=minX<=maxX?clamp(x,minX,maxX):apexX;
     return {id:++ballId,level,r,x:safeX,y,vx,vy,angle:0,omega:0,lastSpin:-10,
       squish:0,squishV:0,squishAxis:0,lastImpact:-10,born:time,pulse:0,
-      supported:false,contactCount:0,settleAge:0,topLineAge:0};
+      supported:false,contactCount:0,settleAge:0,spilled:0};
   }
   function drop(automatic=false){
     if(!started||ended||dropWait>0) return;
@@ -661,10 +685,12 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     for(const b of balls){
       b.supported=false; b.contactCount=0;
       b.vy+=clamp(H*4.1,1300,2600)*GRAVITY_MULTIPLIERS[b.level]*dt;
+      if(b.spilled)b.vx+=b.spilled*SPILL_OUTWARD_ACCELERATION*dt;
       b.vx*=Math.exp(-.75*dt); b.vy*=Math.exp(-.14*dt);
       b.pulse=Math.max(0,b.pulse-dt);
       b.vx=clamp(b.vx,-1100,1100); b.vy=clamp(b.vy,-1150,1150);
       b.x+=b.vx*dt; b.y+=b.vy*dt;
+      if(!b.spilled)detectSpill(b);
       b.omega*=Math.exp(-ANGULAR_DRAG*dt);
       if(Math.abs(b.omega)<SPIN_STOP_THRESHOLD) b.omega=0;
       b.angle+=b.omega*dt;
@@ -687,6 +713,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       outer: for(let i=0;i<balls.length;i++){
         for(let j=i+1;j<balls.length;j++){
           const a=balls[i], b=balls[j];
+          // An escaped ball is already leaving the playfield: don't let it
+          // merge with or rebound off the pile on its way down outside.
+          if(a.spilled||b.spilled)continue;
           const dx=b.x-a.x, dy=b.y-a.y, s=a.r+b.r;
           if(dx*dx+dy*dy>=s*s) continue;
           if(a.level===b.level && merges<7){
@@ -707,6 +736,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       }
     }
     for(const b of balls){
+      detectSpill(b); // Includes outward displacement by collision resolution.
+      if(b.spilled)continue;
       const leftDist = (b.x-xOnLeft(b.y));
       const rightDist = (xOnRight(b.y)-b.x);
       const onSlope = leftDist <= b.r+1.5 || rightDist <= b.r+1.5 || b.supported;
@@ -732,26 +763,17 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
         }
       } else { b.settleAge=0; }
     }
-    checkTopOverflow(dt);
+    checkSpillOffscreen();
     for(let i=shockwaves.length-1;i>=0;i--){ const w=shockwaves[i]; w.life-=dt; w.r+=(w.maxR-w.r)*Math.min(1,dt*11); if(w.life<=0) shockwaves.splice(i,1); }
     for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life-=dt; p.vy+=170*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.life<=0) particles.splice(i,1); }
     for(let i=floating.length-1;i>=0;i--){ floating[i].life-=dt; floating[i].y-=25*dt; if(floating[i].life<=0) floating.splice(i,1); }
   }
-  // An overflow is a ball persistently occupying space above the top rim.
-  // Velocity and collision support are intentionally NOT requirements: those
-  // checks allowed crowded, jostling piles to evade game over indefinitely.
-  // The four-unit exit margin applies only after a warning has begun.
-  function isTopOverflowCandidate(b){
-    if(time-b.born<TOP_LINE_GRACE_SECONDS)return false;
-    const topOfBall=b.y-b.r;
-    return topOfBall<topY ||
-      (b.topLineAge>0 && topOfBall<topY+TOP_LINE_CLEARANCE);
-  }
-  function checkTopOverflow(dt){
+  function checkSpillOffscreen(){
     for(const b of balls){
-      b.topLineAge=isTopOverflowCandidate(b) ? b.topLineAge+dt : 0;
-      if(b.topLineAge>=TOP_LINE_SETTLE_SECONDS){
-        // Remember the precise offending ball so it pops first.
+      if(!b.spilled)continue;
+      // The ENTIRE sphere must disappear past the left, right, or bottom of
+      // the fixed 1000x1000 world. A top-of-Eukarya jam cannot end the game.
+      if(b.x+b.r<0 || b.x-b.r>W || b.y-b.r>H){
         endGame(b);
         return;
       }
@@ -811,8 +833,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       popping=false;
       endTitle.textContent='Game Over';
       endMessage.textContent=domainCreated
-        ?'Great Job! You helped Skubert trace his roots back to Eukarya! Indeed, Skubert does have a distinct cell nucleus, membrane-bound organelles, and organization supported by a cytoskeleton. Always good to check though.'
-        :'Oops! Skubert still needs help tracing his roots back to Eukarya! Try matching faster!';
+        ?'A sphere spilled out of the pyramid and fell offscreen. Great job! You helped Skubert trace his roots back to Eukarya! Indeed, Skubert does have a distinct cell nucleus, membrane-bound organelles, and organization supported by a cytoskeleton. Always good to check though.'
+        :'A sphere spilled out of the pyramid and fell offscreen. Oops! Skubert still needs help tracing his roots back to Eukarya! Try matching faster!';
       endScore.textContent=fmt.format(score)+' points';
       $('playAgain').textContent='Play again';
       if(scoreUI){
@@ -835,8 +857,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     if(ended)return;
     ended=true;popping=true;popElapsed=0;popNext=0;
     dropDeadline=Infinity;down=false;
-    // The ball that crossed the threshold pops first, making the cause of
-    // game over unmistakable. The remaining balls follow top to bottom.
+    // The ball that visibly spilled out is the first popped. The remaining
+    // spheres follow top to bottom after it has fully left the screen.
     const order=balls.filter(b=>b.id!==offendingBall?.id).sort((a,b)=>a.y-b.y);
     popQueue=offendingBall ? [{id:offendingBall.id,when:0}] : [];
     const delay=offendingBall ? .12 : 0;
@@ -844,17 +866,16 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       when:delay+(i/Math.max(1,order.length))*(POP_SEQUENCE_SECONDS-delay)+Math.random()*.045})));
     popQueue.sort((a,b)=>a.when-b.when);
     overlay.hidden=true;
-    setMessage('Game over! The overflow ball is popping first!');
+    setMessage('Game over! A sphere spilled over the side and fell offscreen.');
   }
-  // This overlay is painted on the transparent game canvas rather than on
-  // individual Three.js meshes. It remains visible with either renderer and
-  // is intentionally drawn AFTER the pyramid clipping region is restored.
-  function drawTopOverflowWarnings(){
+  // Once a ball goes over the lip, pulse it red while it falls down the
+  // outside. The pulse never causes game over: only offscreen exit does.
+  function drawSpillWarnings(){
     if(ended)return;
     for(const b of balls){
-      if(b.topLineAge<=0)continue;
-      const progress=clamp(b.topLineAge/TOP_LINE_SETTLE_SECONDS,0,1);
-      const pulse=REDUCED_MOTION?0.65:(.5+.5*Math.sin(time*Math.PI*2*TOP_WARNING_PULSE_HZ));
+      if(!b.spilled)continue;
+      const progress=clamp((b.y-topY)/(H-topY),0,1);
+      const pulse=REDUCED_MOTION?0.65:(.5+.5*Math.sin(time*Math.PI*2*SPILL_WARNING_PULSE_HZ));
       const gap=Math.max(8,Math.min(18,b.r*.12));
       const ringRadius=b.r+gap+2*pulse;
       ctx.save();
@@ -937,9 +958,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       return;
     }
     ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(topLeft,topY); ctx.lineTo(topRight,topY); ctx.lineTo(apexX,apexY); ctx.closePath();
-    ctx.clip();
+    // Do NOT clip the 2D fallback spheres or effects to the V. A spilling
+    // sphere must be visible outside the walls, just like the 3D spheres.
     // One render request per gameplay frame; the Three.js module never runs
     // an independent animation loop. Until it becomes ready, use v12 sprites.
     const preview=!ended ? {
@@ -968,11 +988,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     for(const f of floating){ ctx.globalAlpha=Math.min(1,f.life*1.7); ctx.font='900 13px system-ui,Arial'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='#29203d'; ctx.strokeText(f.label,f.x,f.y); ctx.fillStyle='#fff'; ctx.fillText(f.label,f.x,f.y); }
     ctx.globalAlpha=1;
     ctx.restore();
-    // Keep warning halos fully visible above the top of Eukarya. The active
-    // balls themselves remain clipped to the V-shaped playfield as before.
-    drawTopOverflowWarnings();
-    // Spectacular end-of-run balloon bursts render outside the pyramid clip,
-    // so colorful shards can fly beyond the container instead of disappearing.
+    // Escape warning follows the sphere outside the pyramid's open sides.
+    drawSpillWarnings();
+    // Spectacular end-of-run balloon bursts can fly beyond the V walls.
     if(popping||popFragments.length||popRings.length){
       ctx.save();
       for(const ring of popRings){
