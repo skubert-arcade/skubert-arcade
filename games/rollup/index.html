@@ -449,24 +449,30 @@ body.rollup-wide-gutters .stats .stat {
 }
 
 
-/* ROLLUP_PAGE_CONTINUATION_V2 — viewport-matched, decorative-only overscan. */
-.game-shell { background:#fff!important; isolation:isolate; }
-#rollupPageBleed {
-  position:absolute; left:0; top:0; width:1920px; height:1080px;
-  pointer-events:none; overflow:visible; transform-origin:0 0; z-index:0;
+/* ROLLUP_SINGLE_CONTINUOUS_ARTICLE_V1
+   The SAME Wikipedia iframe paints both the playable 1920 x 1080 world and
+   the surrounding decorative article. No clones, seams or synchronization.
+   The game shell remains the only external viewport clipping boundary. */
+:root {
+  --rollup-article-overscan-top: 720px;
+  --rollup-article-overscan-bottom: 980px;
 }
-#rollupPageBleed .page-bleed-window {
-  position:absolute; left:0; width:1920px;
-  pointer-events:none; overflow:hidden; background:#fff;
+#playfield { z-index:1; overflow:visible!important; will-change:auto; }
+#siteContent, #playfield .wiki-snapshot-stage {
+  overflow:visible!important;
 }
-#rollupPageBleedTopWindow { top:-720px; height:720px; }
-#rollupPageBleedBottomWindow { top:1080px; height:980px; }
-#rollupPageBleed .page-bleed-frame {
-  display:block; position:absolute; top:0; left:0; width:1920px;
-  height:1080px; border:0; pointer-events:none;
-  background:#fff; overflow:hidden;
+#playfield .wiki-snapshot-stage { position:relative; }
+#playfield #levelSnapshot {
+  /* Relative positioning preserves the ORIGINAL iframe's 30px inset,
+     content-box width (1860px) and height (1020px). Absolute positioning
+     would accidentally alter Wikipedia line wrapping and hitboxes. */
+  position:relative!important;
+  top:calc(-1 * var(--rollup-article-overscan-top))!important;
+  left:0!important;
+  width:100%!important;
+  height:calc(100% + var(--rollup-article-overscan-top) + var(--rollup-article-overscan-bottom))!important;
+  visibility:hidden; /* show only after iframe padding matches world coordinates */
 }
-#playfield { z-index:1; }
 
 
 </style>
@@ -495,14 +501,6 @@ body.rollup-wide-gutters .stats .stat {
     <div class="stat"><div class="stat-label">Time left</div><div class="stat-value" id="timeLabel">1:00</div></div>
   </section>
   <div class="game-shell">
-    <div id="rollupPageBleed" aria-hidden="true">
-      <div id="rollupPageBleedTopWindow" class="page-bleed-window">
-        <iframe id="rollupPageBleedTop" class="page-bleed-frame" title="" tabindex="-1" loading="eager" sandbox="allow-same-origin"></iframe>
-      </div>
-      <div id="rollupPageBleedBottomWindow" class="page-bleed-window">
-        <iframe id="rollupPageBleedBottom" class="page-bleed-frame" title="" tabindex="-1" loading="eager" sandbox="allow-same-origin"></iframe>
-      </div>
-    </div>
     <div id="playfield" tabindex="0" aria-label="Game area. Move your mouse or arrow keys to guide Skubert over page elements.">
       <div id="siteContent"></div>
       <canvas id="attachmentBack" class="attachment-layer" aria-hidden="true"></canvas>
@@ -564,100 +562,34 @@ body.rollup-wide-gutters .stats .stat {
   // Self-contained, original game. Automatic DOM discovery; no Weball source or external libraries.
   const $ = id => document.getElementById(id);
   const field = $('playfield');
-  // ROLLUP_PAGE_CONTINUATION_V2 — only decorative views; never scanned or scored.
-  const pageBleed=$('rollupPageBleed');
-  const pageBleedTop=$('rollupPageBleedTop');
-  const pageBleedBottom=$('rollupPageBleedBottom');
-  const pageBleedTopWindow=$('rollupPageBleedTopWindow');
-  const pageBleedBottomWindow=$('rollupPageBleedBottomWindow');
-  const PAGE_BLEED_TOP=720;
-  const PAGE_BLEED_BOTTOM=980;
-  let pageBleedSource=null;
-  let pageBleedPrimary=null;
-  let pageBleedDocument=null;
-  function positionPageBleed(ox,oy,scale){
-    if(pageBleed)pageBleed.style.transform='translate('+ox+'px,'+oy+'px) scale('+scale+')';
-  }
-  function hidePageBleed(){
-    pageBleedTopWindow.style.visibility='hidden';
-    pageBleedBottomWindow.style.visibility='hidden';
-  }
-  function preparePageBleedCopy(frame){
+  // ROLLUP_SINGLE_CONTINUOUS_ARTICLE_V1
+  // The saved article lives in exactly ONE iframe. The padded internal page
+  // places document coordinate zero at game-world y=0, despite a taller
+  // viewport that visually extends above and below the playable world.
+  const ARTICLE_OVERSCAN_TOP = 720;
+  const ARTICLE_OVERSCAN_BOTTOM = 980;
+  function prepareContinuousArticle(frame){
     const doc=frame.contentDocument;
-    if(!doc || doc.readyState!=='complete')return false;
-    // Keeping a 1080px viewport (same as the real level snapshot) prevents
-    // responsive height differences and sticky-sidebar repositioning.
-    if(!doc.getElementById('rollup-page-bleed-copy-style')){
+    if(!doc?.body)return false;
+    if(!doc.getElementById('rollup-single-article-overscan-style')){
       const style=doc.createElement('style');
-      style.id='rollup-page-bleed-copy-style';
+      style.id='rollup-single-article-overscan-style';
       style.textContent=`
-        html { scroll-behavior:auto!important; scroll-padding-top:0!important; }
-        /* Hide the copied Wikipedia navigation WITHOUT removing its width.
-           visibility:hidden preserves the main article's column geometry. */
-        .vector-column-start, .vector-column-end,
-        #vector-toc, #mw-panel-toc, .vector-toc,
-        #vector-page-tools-pinned-container, .vector-page-tools,
-        .vector-header-container, .vector-sticky-header-container,
-        #mw-panel, .mw-sidebar {
-          visibility:hidden!important;
+        /* Inset original content by the amount of negative iframe top.
+           This keeps the original 1920px-wide layout and pickup positions. */
+        body {
+          padding-top: ${ARTICLE_OVERSCAN_TOP}px !important;
+          padding-bottom: ${ARTICLE_OVERSCAN_BOTTOM}px !important;
         }
+        html { scroll-behavior:auto !important; }
       `;
       (doc.head||doc.documentElement).appendChild(style);
     }
-    // Let the clone scroll to the final document section without altering
-    // the original iframe or its collectibles.
-    if(doc.body && doc.body.style.paddingBottom!=='1280px'){
-      doc.body.style.paddingBottom='1280px';
-    }
+    // Scroll zero still means the original article's beginning, not overscan.
+    frame.contentWindow?.scrollTo(0,0);
+    frame.style.visibility='visible';
     return true;
   }
-  function syncPageBleed(){
-    const primary=snapshotIframe();
-    if(!primary || !primary.getAttribute('src')){ hidePageBleed(); return; }
-    let originalDoc,scrollY;
-    try{
-      originalDoc=primary.contentDocument;
-      if(!originalDoc || originalDoc.readyState!=='complete'){hidePageBleed();return;}
-      scrollY=Math.max(0,primary.contentWindow.scrollY||0);
-    }catch(_){hidePageBleed();return;}
-    const src=primary.getAttribute('src');
-    if(primary!==pageBleedPrimary || originalDoc!==pageBleedDocument || src!==pageBleedSource){
-      pageBleedPrimary=primary;
-      pageBleedDocument=originalDoc;
-      pageBleedSource=src;
-      for(const frame of [pageBleedTop,pageBleedBottom]){
-        frame.style.visibility='hidden';
-        frame.removeAttribute('src');
-        frame.setAttribute('src',src);
-      }
-    }
-    const originalHeight=Math.max(originalDoc.documentElement?.scrollHeight||0,originalDoc.body?.scrollHeight||0);
-    const topVisible=Math.min(PAGE_BLEED_TOP,scrollY);
-    const bottomVisible=Math.max(0,Math.min(PAGE_BLEED_BOTTOM,originalHeight-scrollY-WORLD_HEIGHT));
-    // Crop the overscan WINDOWS, not the full-size iframes. This retains
-    // the exact iframe viewport used by the playable stage (1920 x 1080).
-    pageBleedTopWindow.style.clipPath='inset('+(PAGE_BLEED_TOP-topVisible)+'px 0 0 0)';
-    pageBleedBottomWindow.style.clipPath='inset(0 0 '+(PAGE_BLEED_BOTTOM-bottomVisible)+'px 0)';
-    const targets=[
-      [pageBleedTop,pageBleedTopWindow,Math.max(0,scrollY-PAGE_BLEED_TOP),topVisible>0],
-      [pageBleedBottom,pageBleedBottomWindow,scrollY+WORLD_HEIGHT,bottomVisible>0]
-    ];
-    for(const [frame,windowEl,target,enabled] of targets){
-      if(!enabled){windowEl.style.visibility='hidden';continue;}
-      try{
-        if(!preparePageBleedCopy(frame)){windowEl.style.visibility='hidden';continue;}
-        const view=frame.contentWindow;
-        if(Math.abs((view.scrollY||0)-target)>1)view.scrollTo(0,target);
-        // Never flash an unsynchronized page copy during loads or scrolling.
-        // ROLLUP_PAGE_CONTINUATION_VISIBILITY_FIX — reveal the iframe as well as its window.
-        const aligned=Math.abs((view.scrollY||0)-target)<2;
-        frame.style.visibility=aligned?'visible':'hidden';
-        windowEl.style.visibility=aligned?'visible':'hidden';
-      }catch(_){windowEl.style.visibility='hidden';}
-    }
-  }
-  window.setInterval(syncPageBleed,160);
-
 
   const WORLD_WIDTH = 1920;
   const WORLD_HEIGHT = 1080;
@@ -717,7 +649,6 @@ body.rollup-wide-gutters .stats .stat {
     if(WORLD_HEIGHT*scale<=hostHeight)oy=(hostHeight-WORLD_HEIGHT*scale)/2;
     else oy=Math.max(hostHeight-WORLD_HEIGHT*scale,Math.min(0,oy));
     field.style.transform='translate('+ox+'px,'+oy+'px) scale('+scale+')';
-    positionPageBleed(ox,oy,scale);
   }
   // Returns the actual visible world rectangle, including clipping by the
   // fullscreen host, not the full 1920x1080 world. Used for edge scrolling.
@@ -1158,6 +1089,12 @@ body.rollup-wide-gutters .stats .stat {
         if(!doc?.body){
           console.warn('Required saved webpage could not be accessed:',expectedUrl);
           setToast('COULD NOT LOAD '+SCENES[renderedScene].name);
+          return;
+        }
+        // Set up the tall, single article BEFORE measuring any collectibles.
+        // Without this padding, the playable text would jump 720px upward.
+        if(!prepareContinuousArticle(frame)){
+          console.warn('Could not prepare the continuous saved webpage');
           return;
         }
         // Saved-page scripts remain disabled; the game can collect DOM objects.
