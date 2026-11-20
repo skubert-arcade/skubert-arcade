@@ -228,8 +228,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   const ART_SIZE=1254;
   const ART_TOP_LEFT={x:13,y:186}, ART_TOP_RIGHT={x:1127,y:186}, ART_APEX={x:571,y:1178};
   const AUTO_DROP_MS=3000;
-  const DROP_ACCELERATION_START_SECONDS=60;
-  const DROP_DURATION_MULTIPLIER=0.99;
+  const DROP_ACCELERATION_START_SECONDS=30;
+  const DROP_DURATION_MULTIPLIER=0.98;
   let dropDeadline=0, dropDurationMs=AUTO_DROP_MS;
   // "time" advances only during active gameplay, not while on the start/end screen.
   let time=0,lastMergeTime=-100,combo=0,lastFrame=0,accumulator=0,down=false,ballId=0;
