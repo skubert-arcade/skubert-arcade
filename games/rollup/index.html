@@ -649,7 +649,10 @@ body.rollup-wide-gutters .stats .stat {
         const view=frame.contentWindow;
         if(Math.abs((view.scrollY||0)-target)>1)view.scrollTo(0,target);
         // Never flash an unsynchronized page copy during loads or scrolling.
-        windowEl.style.visibility=Math.abs((view.scrollY||0)-target)<2?'visible':'hidden';
+        // ROLLUP_PAGE_CONTINUATION_VISIBILITY_FIX — reveal the iframe as well as its window.
+        const aligned=Math.abs((view.scrollY||0)-target)<2;
+        frame.style.visibility=aligned?'visible':'hidden';
+        windowEl.style.visibility=aligned?'visible':'hidden';
       }catch(_){windowEl.style.visibility='hidden';}
     }
   }
