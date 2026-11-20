@@ -16,6 +16,20 @@ const FULL_SPEED_WORD_LENGTH = 5;
 const HALF_SPEED_WORD_LENGTH = 22;
 const MIN_WORD_SPEED_MULTIPLIER = 0.5;
 
+// PANGRAM CHALLENGE (edit these constants to tune the feature).
+// A new upward-moving pangram appears at 0:30, 1:00, 1:30, ...
+// It takes approximately 24 seconds to travel across the game field.
+const PANGRAM_INTERVAL_SECONDS = 30;
+const PANGRAM_TRAVEL_SECONDS = 24;
+const PANGRAMS = [
+  'the quick brown fox jumps over the lazy dog',
+  'sphinx of black quartz judge my vow',
+  'pack my box with five dozen liquor jugs',
+  'how vexingly quick daft zebras jump',
+  'the five boxing wizards jump quickly',
+  'jackdaws love my big sphinx of quartz',
+];
+
 function getWordSpeedMultiplier(word) {
   const lengthRatio = (word.length - FULL_SPEED_WORD_LENGTH) /
     (HALF_SPEED_WORD_LENGTH - FULL_SPEED_WORD_LENGTH);
@@ -41,6 +55,10 @@ let gameOver = false;
 let arrWords = [];
 let arrWordsDiv = [];
 let gameStartTime = 0;
+let activePangram = null;
+let lastPangramInterval = 0;
+let remainingPangrams = [];
+let previousPangram = null;
 
 // SOUNDS
 const startGameSound = document.getElementById('StartGameSound');
@@ -137,6 +155,7 @@ const DICTIONARY = [
 
 // GAME START
 function init() {
+  installPangramStyles();
   gameStartTime = performance.now();
   showLevel();
   setInterval(() => {
@@ -192,9 +211,9 @@ const WORD_LENGTH_BUCKET_DEFINITIONS = [
 // The preference windows can cross fixed bucket boundaries. For example,
 // 5-12 draws eligible terms from both the 3-8 and the 9-12 buckets.
 const WORD_SELECTION_PHASES = [
-  { startSeconds: 0,  min: 0, max: 5 },     // 0-15 seconds
-  { startSeconds: 15, min: 3, max: 8 },    // 15-30 seconds
-  { startSeconds: 30, min: 8, max: 12 },    // 30-60 seconds
+  { startSeconds: 0,  min: 3, max: 8 },     // 0-15 seconds
+  { startSeconds: 15, min: 5, max: 12 },    // 15-30 seconds
+  { startSeconds: 30, min: 8, max: 18 },    // 30-60 seconds
   { startSeconds: 60, min: 0, max: Infinity }, // 60+ seconds: no length preference
 ];
 
@@ -305,10 +324,178 @@ function generateRandomWord() {
   if (word !== null) selectionCycle.pop();
   return word;
 }
+// PANGRAM CHALLENGE — independent of the normal falling-word dictionary.
+function installPangramStyles() {
+  if (document.getElementById('pangram-challenge-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'pangram-challenge-styles';
+  style.textContent = `
+    #GameContent .pangram-special {
+      position: absolute !important;
+      left: 50% !important;
+      transform: translateX(-50%);
+      box-sizing: border-box;
+      width: max-content;
+      max-width: calc(100% - 14px);
+      padding: 8px 14px;
+      text-align: center;
+      border-radius: 13px;
+      border: 1px solid rgba(116, 130, 188, .38);
+      background: rgba(255, 255, 255, .91);
+      box-shadow: 0 3px 16px rgba(68, 80, 144, .12);
+      pointer-events: none;
+      z-index: 12;
+    }
+    #GameContent .pangram-special .pangram-label {
+      display: block;
+      font: 700 10px/1.4 system-ui, sans-serif;
+      text-transform: uppercase;
+      letter-spacing: .14em;
+      color: #6a738c;
+      margin-bottom: 3px;
+    }
+    #GameContent .pangram-special .pangram-text {
+      display: block;
+      margin: 0;
+      padding: 0;
+      font: 800 clamp(14px, 2.2vw, 22px)/1.3 system-ui, sans-serif;
+      overflow-wrap: normal;
+      white-space: normal;
+      color: #686ac2;
+      background: linear-gradient(105deg,
+        #8c64b6 0%, #5f83c0 21%, #4d9ca2 44%,
+        #ac9159 66%, #b67c9f 85%, #8c64b6 100%);
+      background-size: 200% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: pangram-rainbow-shift 7s ease-in-out infinite alternate;
+    }
+    @keyframes pangram-rainbow-shift {
+      from { background-position: 0% 50%; }
+      to { background-position: 100% 50%; }
+    }
+    #GameContent .pangram-all-clear {
+      position: absolute;
+      left: 50%;
+      top: 43%;
+      transform: translate(-50%, -50%);
+      padding: 12px 18px;
+      max-width: calc(100% - 16px);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, .95);
+      border: 1px solid rgba(110, 132, 201, .35);
+      box-shadow: 0 4px 20px rgba(82, 88, 150, .17);
+      color: #5f639f;
+      font: 800 clamp(15px, 2.5vw, 23px)/1.25 system-ui, sans-serif;
+      text-align: center;
+      white-space: normal;
+      pointer-events: none;
+      z-index: 14;
+      animation: pangram-clear-pop 1.15s ease-out both;
+    }
+    @keyframes pangram-clear-pop {
+      0% { opacity: 0; transform: translate(-50%, -43%) scale(.92); }
+      16% { opacity: 1; transform: translate(-50%, -50%) scale(1.04); }
+      72% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -60%) scale(1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #GameContent .pangram-special .pangram-text,
+      #GameContent .pangram-all-clear { animation: none; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+function nextPangram() {
+  if (remainingPangrams.length === 0) {
+    remainingPangrams = shuffleInPlace([...PANGRAMS]);
+    if (remainingPangrams.length > 1 && remainingPangrams[remainingPangrams.length - 1] === previousPangram) {
+      [remainingPangrams[0], remainingPangrams[remainingPangrams.length - 1]] =
+        [remainingPangrams[remainingPangrams.length - 1], remainingPangrams[0]];
+    }
+  }
+  const phrase = remainingPangrams.pop();
+  previousPangram = phrase;
+  return phrase;
+}
+
+function spawnPangram() {
+  if (gameOver || activePangram) return;
+  const phrase = nextPangram();
+  const element = document.createElement('div');
+  element.className = 'pangram-special'; // NOT a .word (preserve array / DOM alignment)
+  element.setAttribute('aria-label', 'Pangram challenge: ' + phrase);
+
+  const label = document.createElement('span');
+  label.className = 'pangram-label';
+  label.textContent = 'Pangram • type to clear the board';
+  const text = document.createElement('p');
+  text.className = 'pangram-text';
+  text.textContent = phrase;
+  element.append(label, text);
+  gameContentID.appendChild(element);
+
+  // Begin fully visible at the bottom, and rise all the way off the top.
+  const top = Math.max(0, gameContentID.clientHeight - element.offsetHeight - 4);
+  element.style.top = top + 'px';
+  activePangram = { phrase, element, top, spawnedAt: performance.now() };
+}
+
+function showPangramClear(wordsCleared, points) {
+  const message = document.createElement('div');
+  message.className = 'pangram-all-clear';
+  message.textContent = `PANGRAM! ALL CLEAR · ${wordsCleared} words · +${points}`;
+  message.setAttribute('role', 'status');
+  gameContentID.appendChild(message);
+  setTimeout(() => message.remove(), 1200);
+}
+
+function completePangram() {
+  if (!activePangram || gameOver) return;
+  const pangram = activePangram;
+  activePangram = null;
+  pangram.element.remove();
+
+  // Take a snapshot, then remove every active regular word from both arrays
+  // and the DOM. This prevents the falling-word loop from seeing stale nodes.
+  const clearedWords = arrWords.splice(0);
+  const clearedNodes = arrWordsDiv.splice(0);
+  for (const node of clearedNodes) node.remove();
+
+  // Score the phrase AND every cleared word exactly as if it was typed.
+  const completed = [pangram.phrase, ...clearedWords];
+  let gainedPoints = 0;
+  let gainedLetters = 0;
+  for (const word of completed) {
+    updateScore(word);
+    gainedPoints += word.length;
+    gainedLetters += (word.match(/[a-z]/g) || []).length;
+  }
+
+  // One aggregate notification preserves the viewer's growth mechanism,
+  // without creating a burst of simultaneous per-word animations.
+  window.skubertGrowthLetters = (window.skubertGrowthLetters || 0) + gainedLetters;
+  window.dispatchEvent(new CustomEvent('skubert:word-correct', {
+    detail: { word: pangram.phrase, letters: gainedLetters,
+              totalLetters: window.skubertGrowthLetters,
+              pangram: true, clearedWords: clearedWords.length }
+  }));
+  playSound(pointSound, 0, notPointSound);
+  showPangramClear(clearedWords.length, gainedPoints);
+}
+
 // GET VALUE FROM INPUT
 function getWord() {
   let inputValue = inputElementID.value.toLowerCase();
   inputElementID.value = '';
+  // Matching the special phrase accepts accidental extra spaces, but the
+  // ordinary word-matching rules remain unchanged.
+  if (activePangram && inputValue.trim().replace(/\s+/g, ' ') === activePangram.phrase) {
+    completePangram();
+    return;
+  }
   if (arrWords.includes(inputValue)) {
     updateScore(inputValue);
 
@@ -343,6 +530,13 @@ function updateWordPosition() {
 
     const now = performance.now();
     const elapsedSeconds = Math.floor((now - gameStartTime) / 1000);
+    // Schedule by actual game elapsed time (0:30, 1:00, 1:30, ...),
+    // rather than starting a drifting independent timer.
+    const elapsedPangramIntervals = Math.floor(elapsedSeconds / PANGRAM_INTERVAL_SECONDS);
+    if (elapsedPangramIntervals > lastPangramInterval) {
+      lastPangramInterval = elapsedPangramIntervals;
+      spawnPangram();
+    }
     const secondsAtHigherSpeed = Math.max(0, elapsedSeconds - SPEEDUP_DELAY_SECONDS);
     const speedMultiplier = Math.pow(SPEEDUP_MULTIPLIER_PER_SECOND, secondsAtHigherSpeed);
 
@@ -370,6 +564,21 @@ function updateWordPosition() {
       }
 
       wordText[i].style.top = newTop + 'px';
+    }
+
+    // A missed pangram simply exits the top; ordinary falling words still
+    // determine game over. Its speed is independent of the falling speedup.
+    if (!gameOver && activePangram) {
+      const speed = gameContentID.clientHeight / PANGRAM_TRAVEL_SECONDS;
+      // Do not advance a just-spawned challenge by time elapsed before it appeared
+      // (important when a browser tab resumes after being throttled).
+      const secondsSinceSpawn = Math.max(0, (now - activePangram.spawnedAt) / 1000);
+      activePangram.top -= speed * Math.min(deltaSeconds, secondsSinceSpawn);
+      activePangram.element.style.top = activePangram.top + 'px';
+      if (activePangram.top + activePangram.element.offsetHeight < 0) {
+        activePangram.element.remove();
+        activePangram = null;
+      }
     }
   }, 20);
 }
