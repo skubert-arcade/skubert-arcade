@@ -62,6 +62,8 @@
   /* Skubert moves via the independent CSS translate property, so motion does
      not invalidate webpage layout. Existing drop-in transform animation remains. */
   .attachment-layer{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  /* Persistent Bigfoot stamps are drawn in logical world coordinates, behind Skubert. */
+  #footprintLayer{z-index:6}
   #attachmentBack{z-index:7}
   #attachmentFront{z-index:9}
   #avatar .avatar-inner{width:100%;height:100%;position:relative;transform:rotate(var(--turn,0deg));transition:transform .13s linear}
@@ -500,6 +502,7 @@ body.rollup-wide-gutters .stats .stat {
   <div class="game-shell">
     <div id="playfield" tabindex="0" aria-label="Game area. Move your mouse or arrow keys to guide Skubert over page elements.">
       <div id="siteContent"></div>
+      <canvas id="footprintLayer" class="attachment-layer" aria-hidden="true"></canvas>
       <canvas id="attachmentBack" class="attachment-layer" aria-hidden="true"></canvas>
       <!-- Enlarged presentation stage: the existing avatar is moved here during intro. -->
       <div id="introSkubertStage" aria-hidden="true"><div class="skubert-launch-fx" id="skubertLaunchFx"></div></div>
@@ -615,6 +618,22 @@ body.rollup-wide-gutters .stats .stat {
           "WORDS_PER_SCAN": 400,
           "SPATIAL_CELL_SIZE": 192
       },
+      "footprints": {
+          "ENABLED": true,
+          "LENGTH_RATIO": 0.68,
+          "WIDTH_RATIO": 0.34,
+          "SIDE_OFFSET_RATIO": 0.21,
+          "BACK_OFFSET_RATIO": 0.22,
+          "STEP_DISTANCE_RATIO": 0.68,
+          "MIN_STEP_DISTANCE": 15,
+          "MIN_STEP_INTERVAL_MS": 105,
+          "OPACITY": 0.46,
+          "FILL_COLOR": "#372c46",
+          "LIFETIME_MS": 8000,
+          "FADE_MS": 3000,
+          "MAX_COUNT": 120,
+          "DRAW_FPS": 30
+      },
       "attachments": {
           "MAX_ITEMS": 110,
           "MAX_PENDING_SPRITES": 110,
@@ -662,6 +681,7 @@ body.rollup-wide-gutters .stats .stat {
   const { WORDS_PER_SCAN, SPATIAL_CELL_SIZE } = ROLLUP_CONFIG.discovery;
   const { MAX_ITEMS, MAX_PENDING_SPRITES, SPRITES_PER_FRAME, SPRITE_FRAME_BUDGET_MS, ATTACHMENT_MAX_FPS, SPRITE_FADE_MS, MAX_CAPTURE_QUEUE, WORD_SPRITE_RASTER_SCALE, WORD_OUTLINE_WIDTH, WORD_SPRITE_PADDING, WORD_OUTLINE_GLOW } = ROLLUP_CONFIG.attachments;
   const { PHYSICS_MAX_STEP_SECONDS, PHYSICS_MAX_CATCHUP_SECONDS, PICKUP_CHECK_INTERVAL_SECONDS } = ROLLUP_CONFIG.physics;
+  const FOOTPRINT_CONFIG = ROLLUP_CONFIG.footprints;
   const SCORE_RULES = ROLLUP_CONFIG.scoring;
 
   // Self-contained, original game. Automatic DOM discovery; no Weball source or external libraries.
@@ -832,6 +852,7 @@ body.rollup-wide-gutters .stats .stat {
   const site = $('siteContent');
   const avatar = $('avatar');
   const introSkubertStage = $('introSkubertStage');
+  const footprintCanvas = $('footprintLayer');
   const attachmentBack = $('attachmentBack');
   const attachmentFront = $('attachmentFront');
   const intro = $('introOverlay');
@@ -1536,6 +1557,7 @@ body.rollup-wide-gutters .stats .stat {
     game.previous=0;
     game.status='intro';game.score=0;game.mass=0;game.level=1;game.eaten=0;game.total=0;game.scene=0;game.sceneEaten=0;game.combo=0;game.remaining=DURATION;game.transitioning=false;game.saved=false;game.pointer=false;
     attachments.reset();
+    footprints.reset();
     game.x=field.clientWidth*.50;game.y=field.clientHeight*.35;game.tx=game.x;game.ty=game.y;game.vx=0;game.vy=0;
     showCloseupAvatar();
     renderScene();positionAvatar();
@@ -1551,6 +1573,7 @@ body.rollup-wide-gutters .stats .stat {
     }
     if(snapshotIframe()?.dataset.snapshotReady!=='true'){setToast('SNAPSHOT IS STILL LOADING');return;}
     if(game.status!=='intro')resetToIntro();
+    footprints.reset();
     game.mode=mode;game.status='dropping';
     game.remaining=mode==='relaxed'?Infinity:DURATION;
     game.x=field.clientWidth*.5;game.y=field.clientHeight*.44;
@@ -1569,6 +1592,7 @@ body.rollup-wide-gutters .stats .stat {
       game.status='playing';game.previous=performance.now();
       pickupCheckElapsed=0;
       beginGameplayCamera();
+      footprints.resetSampling(); // Landing/intro flight never creates footprints.
       rescanVisibleArticle(); // Refresh world-visible words after Drop In.
       $('pauseBtn').disabled=false;updateHud();
       setToast('PRODUCT LIFECYCLE · 1:00');
@@ -1630,6 +1654,154 @@ body.rollup-wide-gutters .stats .stat {
     }
     avatar.style.translate=`${game.x}px ${game.y}px`;
   }
+  // ROLLUP_BIGFOOT_FOOTPRINTS_V1
+  // One independent world-space canvas. Existing attachment canvases clear every
+  // frame and cannot retain footprints. The camera transforms this entire layer
+  // along with the Wikipedia scene. The article scroll offset is recorded with
+  // each stamp so it stays on the exact part of the page where it was placed.
+  const footprints = (() => {
+    const cfg=FOOTPRINT_CONFIG;
+    const ctx=footprintCanvas.getContext('2d');
+    const marks=[];
+    let previous=null, walkedSincePrint=0, leftFoot=true, clockMs=0;
+    let lastStampMs=-Infinity, lastDrawMs=-Infinity, dpr=1;
+    const MAX_SPAWNS_PER_FRAME=12;
+    function articleY(){
+      try{return Math.max(0,scrollTarget()?.scrollTop||0);}catch(_){return 0;}
+    }
+    function resize(){
+      if(!ctx)return;
+      // CSS keeps this canvas exactly 1920 x 1080 logical pixels. Resize only
+      // the backing store; never use the screen-space/zoomed avatar bounds.
+      const ratio=Math.min(1.5,window.devicePixelRatio||1);
+      const w=Math.max(1,Math.round(WORLD_WIDTH*ratio));
+      const h=Math.max(1,Math.round(WORLD_HEIGHT*ratio));
+      if(footprintCanvas.width===w&&footprintCanvas.height===h)return;
+      footprintCanvas.width=w;footprintCanvas.height=h;
+      dpr=ratio;
+      footprintCanvas.style.width=WORLD_WIDTH+'px';
+      footprintCanvas.style.height=WORLD_HEIGHT+'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      lastDrawMs=-Infinity;
+    }
+    function resetSampling(){
+      previous=null;walkedSincePrint=0;
+    }
+    function reset(){
+      marks.length=0;leftFoot=true;clockMs=0;lastStampMs=-Infinity;
+      resetSampling();
+      if(ctx){resize();ctx.clearRect(0,0,WORLD_WIDTH,WORLD_HEIGHT);}
+      lastDrawMs=-Infinity;
+    }
+    // Original vector silhouette: curved heel, slight inner arch, broad
+    // forefoot and five separately distinguishable toes. The larger toe is
+    // on the inside; mirroring alternates anatomical left and right feet.
+    function paintStamp(fp,scroll,age){
+      const remaining=cfg.LIFETIME_MS-age;
+      if(remaining<=0)return;
+      const fade=Math.min(1,remaining/Math.max(1,cfg.FADE_MS));
+      const x=fp.x,y=fp.y-scroll;
+      if(x < -fp.length || x > WORLD_WIDTH+fp.length ||
+         y < -fp.length || y > WORLD_HEIGHT+fp.length)return;
+      const w=fp.width,h=fp.length;
+      ctx.save();
+      ctx.translate(x,y);
+      ctx.rotate(fp.heading+Math.PI/2);
+      if(fp.left)ctx.scale(-1,1);
+      ctx.globalAlpha=cfg.OPACITY*fade;
+      ctx.fillStyle=cfg.FILL_COLOR;
+      ctx.strokeStyle='#1e172b';
+      ctx.lineWidth=Math.max(.55,w*.026);
+      ctx.beginPath();
+      // The back of the footprint lies at +Y; toes point toward -Y.
+      ctx.moveTo(-.06*w,.45*h);
+      ctx.bezierCurveTo(-.38*w,.47*h,-.38*w,.28*h,-.32*w,.15*h);
+      ctx.bezierCurveTo(-.26*w,.035*h,-.48*w,-.13*h,-.42*w,-.31*h);
+      ctx.bezierCurveTo(-.37*w,-.46*h,-.12*w,-.49*h,.13*w,-.45*h);
+      ctx.bezierCurveTo(.43*w,-.43*h,.49*w,-.28*h,.40*w,-.13*h);
+      ctx.bezierCurveTo(.35*w,.025*h,.34*w,.22*h,.34*w,.33*h);
+      ctx.bezierCurveTo(.31*w,.53*h,.06*w,.55*h,-.06*w,.45*h);
+      ctx.closePath();ctx.fill();ctx.stroke();
+      // Five toe pads: the biggest is the inside toe, slightly farther ahead.
+      const toes=[
+        [-.35,-.52,.092],[-.18,-.588,.115],
+        [0,-.625,.132],[.20,-.615,.155],[.39,-.565,.178]
+      ];
+      for(const [tx,ty,r] of toes){
+        ctx.beginPath();
+        ctx.ellipse(tx*w,ty*h,Math.max(.7,r*w),Math.max(.85,r*w*1.12),-.13,0,Math.PI*2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    function stamp(x,y,heading,size,now){
+      const side=leftFoot?-1:1;
+      const perpX=-Math.sin(heading),perpY=Math.cos(heading);
+      const back=cfg.BACK_OFFSET_RATIO*size;
+      const sideways=cfg.SIDE_OFFSET_RATIO*size*side;
+      marks.push({
+        x:x+perpX*sideways-Math.cos(heading)*back,
+        y:y+perpY*sideways-Math.sin(heading)*back,
+        heading,left:leftFoot,length:size*cfg.LENGTH_RATIO,
+        width:size*cfg.WIDTH_RATIO,born:now
+      });
+      leftFoot=!leftFoot;
+      if(marks.length>cfg.MAX_COUNT)marks.splice(0,marks.length-cfg.MAX_COUNT);
+    }
+    function updateAndRender(dtMs,now){
+      if(!ctx||!cfg.ENABLED)return;
+      resize();
+      if(game.status==='playing'){
+        clockMs+=Math.max(0,dtMs);
+        const current={x:game.x,y:game.y+articleY(),diameter:avatarSize()};
+        if(previous){
+          const dx=current.x-previous.x,dy=current.y-previous.y;
+          const distance=Math.hypot(dx,dy);
+          if(distance>0.12 && distance<Math.max(200,current.diameter*5)){
+            const heading=Math.atan2(dy,dx);
+            let advanced=0,remaining=distance,emitted=0;
+            // Interpolate each step along the real path. This remains stable
+            // when frame rate dips or Skubert grows between simulation steps.
+            while(remaining>0 && emitted<MAX_SPAWNS_PER_FRAME){
+              const t=advanced/distance;
+              const size=previous.diameter+(current.diameter-previous.diameter)*t;
+              const stride=Math.max(cfg.MIN_STEP_DISTANCE,size*cfg.STEP_DISTANCE_RATIO);
+              const needed=Math.max(.001,stride-walkedSincePrint);
+              if(remaining<needed){walkedSincePrint+=remaining;break;}
+              advanced+=needed;remaining-=needed;walkedSincePrint=0;
+              const f=advanced/distance;
+              const stampTime=clockMs; // Run-time clock freezes when paused.
+              if(stampTime-lastStampMs>=cfg.MIN_STEP_INTERVAL_MS){
+                stamp(previous.x+dx*f,previous.y+dy*f,heading,
+                  previous.diameter+(current.diameter-previous.diameter)*f,stampTime);
+                lastStampMs=stampTime;emitted++;
+              }
+            }
+            if(emitted>=MAX_SPAWNS_PER_FRAME)walkedSincePrint=0;
+          }else if(distance>=Math.max(200,current.diameter*5)){
+            // Ignore teleports and major scene/scroll discontinuities.
+            walkedSincePrint=0;
+          }
+        }
+        previous=current;
+      }else{
+        // Pause, help, the intro and the finish screen don't create steps;
+        // time/opacity remains frozen, without a jump when play resumes.
+        previous=null;
+      }
+      if(clockMs-lastDrawMs<1000/Math.max(1,cfg.DRAW_FPS))return;
+      lastDrawMs=clockMs;
+      ctx.clearRect(0,0,WORLD_WIDTH,WORLD_HEIGHT);
+      const scroll=articleY();
+      for(let i=marks.length-1;i>=0;i--){
+        const mark=marks[i],age=clockMs-mark.born;
+        if(age>=cfg.LIFETIME_MS){marks.splice(i,1);continue;}
+        paintStamp(mark,scroll,age);
+      }
+    }
+    return {updateAndRender,reset,resetSampling,resize,get count(){return marks.length;}};
+  })();
+
   function soundEat(tier){if(!game.sound)return;try{const Ctx=window.AudioContext||window.webkitAudioContext;if(!Ctx)return;if(!soundEat.context)soundEat.context=new Ctx();const ctx=soundEat.context;if(ctx.state==='suspended')ctx.resume();const o=ctx.createOscillator(),g=ctx.createGain(),t=ctx.currentTime;o.type='sine';o.frequency.setValueAtTime(380+tier*100,t);o.frequency.exponentialRampToValueAtTime(145,t+.12);g.gain.setValueAtTime(.05,t);g.gain.exponentialRampToValueAtTime(.001,t+.14);o.connect(g).connect(ctx.destination);o.start(t);o.stop(t+.15)}catch(e){}}
   function puff(x,y,tier){
     for(let i=0;i<Math.min(tier+3,7);i++){const part=document.createElement('div');part.className='particle';part.style.left=`${x}px`;part.style.top=`${y}px`;part.style.setProperty('--dx',`${Math.cos(i*2.4)* (27+Math.random()*28)}px`);part.style.setProperty('--dy',`${Math.sin(i*2.4)* (27+Math.random()*28)}px`);part.style.setProperty('--part-color',i%2?'#ffd16a':'#a4df69');field.appendChild(part);setTimeout(()=>part.remove(),700)}
@@ -2244,6 +2416,9 @@ body.rollup-wide-gutters .stats .stat {
     }
     // The visual camera is updated once per rendered frame, never per substep.
     updateGameplayCamera(simulatedElapsed);
+    // Canvas stamps use world + document coordinates, never avatar screen pixels.
+    // Their size is frozen at creation, even if Skubert keeps growing.
+    footprints.updateAndRender(game.status==='playing'?simulatedElapsed*1000:0,now);
     attachments.render(now,game.x-previousX,game.y-previousY+frameScrollDelta);
     requestAnimationFrame(frame);
   }
@@ -2350,6 +2525,7 @@ body.rollup-wide-gutters .stats .stat {
     measureArticleFraming();
     fitWorldToWindow();
     attachments.resize();
+    footprints.resize();
     // World positions are unchanged by camera scale or host resize.
     // Real content changes are still caught by the geometry observers.
   });
