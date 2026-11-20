@@ -195,9 +195,12 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
         <h3>How to Play</h3>
         <p class="instructions-intro" id="instructionsDescription">Drop a ball so it touches <strong>another of the same type</strong>.<br>They merge into a ball of the <strong>next type!</strong></p>
         <div class="merge-demo" aria-label="Looping tutorial showing all seven merges, Species through Domain, followed by two Eukarya spheres bursting into all seven lower ranks.">
-        <div class="demo-topline">
-          <button id="mergeDemoReplay" type="button">↻ Replay</button>
-        </div>
+        
+<div class="demo-topline">
+  <span id="mergeDemoStep"></span>
+  <button id="mergeDemoReplay" type="button">↻ Replay</button>
+</div>
+
           <div class="merge-stage" aria-hidden="true"><canvas id="mergeDemo3D"></canvas><canvas id="mergeDemoCanvas"></canvas></div>
           <p class="merge-equation" id="mergeDemoEquation">Species + Species → Genus</p>
           <div class="demo-progress" id="mergeDemoProgress" aria-hidden="true"></div>
