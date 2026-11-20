@@ -34,8 +34,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
 #sphere-layer {
   position:absolute; inset:0; z-index:2; display:block; width:100%; height:100%;
   background:transparent; pointer-events:none;
-  /* No V-shaped clipping: spheres that escape over either lip must remain
-     visible while falling down the outside of the pyramid. */
+  /* Contain the still-active 3D spheres cleanly within the original V.
+     Escaped spheres are drawn separately on the un-clipped foreground canvas. */
+  clip-path:polygon(1.2% 0%,90.1% 0%,90.1% 15%,45.7% 94.1%,1.2% 15%);
 }
 /* Transparent 2D canvas stays on top for the countdown, effects and outlines. */
 #game { position:absolute; inset:0; z-index:3; display:block; width:100%; height:100%; background:transparent; touch-action:none; cursor:crosshair; }
@@ -56,7 +57,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
 .overlay[hidden] { display:none; }
 .start-prompt {
   position:absolute; inset:0; z-index:4; display:flex; justify-content:center;
-  align-items:flex-start; padding-top:10.8%; pointer-events:none;
+  align-items:flex-start; padding-top:7.8%; pointer-events:none;
 }
 .start-prompt[hidden] { display:none; }
 .start-prompt button {
@@ -75,7 +76,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
 .modal > button[hidden] { display:none; }
 .visually-hidden { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important; overflow:hidden!important; clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important; }
 @media (max-width:520px) {
-  .start-prompt { align-items:center; padding-top:0; }
+  /* On small screens the start button is centered, but slightly higher. */
+  .start-prompt { align-items:center; padding-top:0; transform:translateY(-20px); }
   .arcade-link, .score-display { top:max(7px,env(safe-area-inset-top)); font-size:12px; padding:7px 10px; }
   .arcade-link { left:max(7px,env(safe-area-inset-left)); }
   .score-display { right:max(7px,env(safe-area-inset-right)); }
@@ -167,6 +169,10 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   const SPILL_LIP_MARGIN=2;
   const SPILL_OUTWARD_SPEED=75;        // Minimum outward velocity after escape.
   const SPILL_OUTWARD_ACCELERATION=260; // Prevents escaped balls drifting back in.
+  // Preserve rigid wall contact even when squash deforms the visible sphere.
+  // The physical sphere-to-sphere radius remains unchanged.
+  const WALL_SKIN_PADDING=.75;
+  const WALL_FINAL_SOLVER_PASSES=12;
   const SPILL_WARNING_PULSE_HZ=2.4;
   const REDUCED_MOTION=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   const POP_SEQUENCE_SECONDS=1.45;
@@ -381,28 +387,38 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     return [xOnLeft(y)+r+4,xOnRight(y)-r-4];
   }
   function clampAim(x,level=current){ const [lo,hi]=aimRange(level); return clamp(x,lo,hi); }
+  function visibleWallRadius(b){
+    // Our squash animation can enlarge one axis by up to ~40%. Reserve
+    // space for that enlarged silhouette so it cannot bulge through a wall.
+    const squashExpansion=Math.max(0,-b.squish,b.squish*.7);
+    const pulseExpansion=b.pulse>0?.10*(b.pulse/.26):0;
+    return b.r*(1+Math.min(.45,squashExpansion)+pulseExpansion)+WALL_SKIN_PADDING;
+  }
   function enforceSlope(b,ax,ay,bx,by,isLeft){
-    if(b.spilled)return; // A ball that has escaped cannot collide with the walls again.
+    if(b.spilled)return;
     const dx=bx-ax,dy=by-ay,len2=dx*dx+dy*dy,length=Math.sqrt(len2);
     const along=((b.x-ax)*dx+(b.y-ay)*dy)/len2;
+    const wallR=visibleWallRadius(b);
     let nx,ny,overlap;
-    if(along<0){
-      // Round off ONLY the upper lip. The lower end must remain a closed V,
-      // otherwise a fast small sphere can slip through beneath the apex.
-      // Unlike an infinite wall, the upper lip can be rolled over.
+    // Keep the original inward-facing, SOLID wall along the V and below
+    // its apex. Do not treat deeply penetrated spheres as being on the
+    // opposite side of the wall: that is what allowed compressed spheres
+    // to appear embedded in or half outside the boundary.
+    // Only above an upper lip can a sphere roll around the rounded corner.
+    const canRoundLip=along<0 && b.y<topY-Math.min(b.r*.35,20);
+    if(canRoundLip){
       const vx=b.x-ax,vy=b.y-ay,dist=Math.hypot(vx,vy);
-      overlap=b.r-dist;
+      overlap=wallR-dist;
       if(overlap<=0)return;
       if(dist<.00001){
         nx=isLeft?1:-1;ny=-.1;
         const n=Math.hypot(nx,ny);nx/=n;ny/=n;
       }else{nx=vx/dist;ny=vy/dist;}
     }else{
-      // Keep the original inside-facing response at and below the apex.
       nx=isLeft?dy/length:-dy/length;
       ny=isLeft?-dx/length:dx/length;
       const distance=(b.x-ax)*nx+(b.y-ay)*ny;
-      overlap=b.r-distance;
+      overlap=wallR-distance;
       if(overlap<=0)return;
     }
     b.supported=true;b.contactCount++;
@@ -413,6 +429,20 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       const bounce=(-speed>125)?.34:.01;
       b.vx-=(1+bounce)*speed*nx;
       b.vy-=(1+bounce)*speed*ny;
+    }
+  }
+  function finalizeWallContainment(){
+    // A large pile can push a sphere back into a wall during the LAST ball-
+    // to-ball collision pass. Project once more AFTER all pairs are solved.
+    // Alternate both slopes to satisfy the narrowing V at the same time.
+    for(const b of balls){
+      if(b.spilled)continue;
+      for(let n=0;n<WALL_FINAL_SOLVER_PASSES;n++){
+        const x=b.x,y=b.y;
+        enforceSlope(b,topLeft,topY,apexX,apexY,true);
+        enforceSlope(b,topRight,topY,apexX,apexY,false);
+        if(Math.abs(b.x-x)+Math.abs(b.y-y)<.015)break;
+      }
     }
   }
   function detectSpill(b){
@@ -729,6 +759,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       if(ended) break;
       if(didMerge){ pass=-1; continue; }
     }
+    // Do this after pair contacts: a late collision must not leave part of an
+    // active sphere through the visible V edge until the following frame.
+    finalizeWallContainment();
     // Contact memory is bounded even on a long-running session.
     if(collisionDeflections.size>512){
       for(const [key,last] of collisionDeflections){
@@ -833,7 +866,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       popping=false;
       endTitle.textContent='Game Over';
       endMessage.textContent=domainCreated
-        ?'A sphere spilled out of the pyramid and fell offscreen. Great job! You helped Skubert trace his roots back to Eukarya! Indeed, Skubert does have a distinct cell nucleus, membrane-bound organelles, and organization supported by a cytoskeleton. Always good to check though.'
+        ?'Great job! You helped Skubert trace his roots back to Eukarya! Indeed, Skubert does have a distinct cell nucleus, membrane-bound organelles, and organization supported by a cytoskeleton. Always good to check though.'
         :'A sphere spilled out of the pyramid and fell offscreen. Oops! Skubert still needs help tracing his roots back to Eukarya! Try matching faster!';
       endScore.textContent=fmt.format(score)+' points';
       $('playAgain').textContent='Play again';
@@ -958,8 +991,6 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       return;
     }
     ctx.save();
-    // Do NOT clip the 2D fallback spheres or effects to the V. A spilling
-    // sphere must be visible outside the walls, just like the 3D spheres.
     // One render request per gameplay frame; the Three.js module never runs
     // an independent animation loop. Until it becomes ready, use v12 sprites.
     const preview=!ended ? {
@@ -968,15 +999,29 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     } : null;
     let using3D=false;
     try {
-      using3D=window.SkubertSphere3D?.render({balls,preview,
+      // The WebGL layer is clipped to the pyramid. Escaped balls are
+      // deliberately omitted and drawn on the un-clipped 2D canvas instead.
+      using3D=window.SkubertSphere3D?.render({balls:balls.filter(b=>!b.spilled),preview,
         width:W,height:H,displayWidth,displayHeight})===true;
     } catch(error) {
       console.warn('3D sphere layer unavailable; using 2D fallback.',error);
       window.SkubertSphere3D?.disable?.();
     }
     if(!using3D){
-      for(const b of balls) drawSphere(b.x,b.y,b.r,b.level,false,b.pulse,b.angle,b.squish,b.squishAxis);
+      // Clip active 2D fallback spheres exactly like the 3D layer.
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(topLeft,0);ctx.lineTo(topRight,0);
+      ctx.lineTo(topRight,topY);ctx.lineTo(apexX,apexY);
+      ctx.lineTo(topLeft,topY);ctx.closePath();ctx.clip();
+      for(const b of balls)if(!b.spilled)
+        drawSphere(b.x,b.y,b.r,b.level,false,b.pulse,b.angle,b.squish,b.squishAxis);
+      ctx.restore();
     }
+    // Unlike the active pile, escaped spheres are not clipped by the V.
+    // Draw even when 3D is enabled, so spills remain visible past the lip.
+    for(const b of balls)if(b.spilled)
+      drawSphere(b.x,b.y,b.r,b.level,false,b.pulse,b.angle,b.squish,b.squishAxis);
     for(const w of shockwaves){
       ctx.globalAlpha=(w.life/w.maxLife)*.55;
       ctx.beginPath(); ctx.arc(w.x,w.y,w.r,0,Math.PI*2);
