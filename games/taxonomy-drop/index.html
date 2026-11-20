@@ -91,12 +91,12 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   <img class="taxonomy-image" src="taxonomy-ranking-system.png" width="1254" height="1254" alt="Taxonomic Ranking System inverted pyramid, from Domain Eukarya at the top to Species Mascotus Skubertus at the bottom." decoding="async">
   <canvas id="discovery-layer" aria-hidden="true"></canvas>
   <canvas id="sphere-layer" aria-hidden="true"></canvas>
-  <canvas id="game" tabindex="0" aria-label="Taxonomy Drop. Move the pointer or use left and right arrow keys to aim, then click, tap or press Space to drop a sphere. Matching spheres merge into the next taxonomic rank. The game ends when a sphere spills over a side of the pyramid and falls offscreen."></canvas>
+  <canvas id="game" tabindex="0" aria-label="Taxonomy Drop. Move the pointer or use left and right arrow keys to aim, then click, tap or press Space to drop a sphere. Matching spheres merge into the next taxonomic rank. The game enters slow motion when a sphere escapes a side lip, then ends with fireworks when it reaches the bottom."></canvas>
   <div id="startPrompt" class="start-prompt"><button id="startButton" type="button">Start game</button></div>
   <div id="overlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
     <div class="modal">
       <h2 id="endTitle">Game Over</h2>
-      <p id="endMessage">A sphere spilled over the edge of the pyramid and fell offscreen.</p>
+      <p id="endMessage">A sphere spilled over the edge of the pyramid and struck the bottom.</p>
       <div id="endScore" class="final-score">0</div>
       <div id="taxonomyScoreMount" aria-label="Submit your Taxonomy Drop score"></div>
       <button id="playAgain" type="button">Play again</button>
@@ -167,12 +167,18 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   // Loss condition: a ball must pass over the OPEN left or right upper lip,
   // then completely exit the visible screen. Rising above Eukarya alone is safe.
   const SPILL_LIP_MARGIN=2;
-  const SPILL_OUTWARD_SPEED=75;        // Minimum outward velocity after escape.
-  const SPILL_OUTWARD_ACCELERATION=260; // Prevents escaped balls drifting back in.
   // Preserve rigid wall contact even when squash deforms the visible sphere.
   // The physical sphere-to-sphere radius remains unchanged.
   const WALL_SKIN_PADDING=.75;
   const WALL_FINAL_SOLVER_PASSES=12;
+  // Escape is a one-way cinematic state. Freeze the pyramid, suspend drops,
+  // track the escaped sphere in view, and finish on a bottom-edge impact.
+  const ESCAPE_FALL_DURATION_SECONDS=2.35; // Real-time duration of the fall.
+  const ESCAPE_SLOW_MOTION_FACTOR=.32;     // Spin/secondary animation speed.
+  const ESCAPE_SIDE_TRACK_SECONDS=.72;     // Ease into the visible side gutter.
+  let escapeSequence=null;
+  let fireworks=[],fireworkBursts=[],impactFlash=0;
+  const FIREWORK_COLORS=['#ffdf54','#ffffff','#ff5b80','#6be4ff','#99ffcc','#e4a1ff','#ff9b4b'];
   const SPILL_WARNING_PULSE_HZ=2.4;
   const REDUCED_MOTION=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   const POP_SEQUENCE_SECONDS=1.45;
@@ -341,7 +347,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     started=true;
     startPrompt.hidden=true;
     resetDropTimer();
-    setMessage('Drop within three seconds. The game ends only if a sphere spills over a side lip and falls offscreen.');
+    setMessage('Drop within three seconds. A side spill triggers a slow-motion fall and a fireworks finale.');
   }
   function radius(level){ return SPECIES_RADIUS*Math.pow(SIZE_GROWTH_FACTOR,level); }
   function choice(excludeLevel=null){
@@ -455,9 +461,67 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       b.x>topRight+SPILL_LIP_MARGIN?1:0;
     if(!side)return;
     b.spilled=side;
-    b.vx=side*Math.max(side*b.vx,SPILL_OUTWARD_SPEED);
     b.settleAge=0;
-    setMessage(`${LEVELS[b.level].name} spilled over the ${side<0?'left':'right'} edge!`);
+    beginEscapeSequence(b);
+  }
+  function beginEscapeSequence(b){
+    if(escapeSequence || ended)return;
+    const gutter=Math.max(58,b.r+36);
+    escapeSequence={id:b.id,side:b.spilled,elapsed:0,startX:b.x,startY:b.y,
+      targetX:b.spilled<0?gutter:W-gutter,targetY:H-b.r-10};
+    dropDeadline=Infinity; // Stop auto-drop and allow no more manual drops.
+    down=false;
+    setMessage(`${LEVELS[b.level].name} escaped the ${b.spilled<0?'left':'right'} lip! Slow-motion fall...`);
+  }
+  function updateEscapeSequence(dt){
+    const seq=escapeSequence;
+    if(!seq || ended)return;
+    const b=balls.find(ball=>ball.id===seq.id);
+    if(!b){ escapeSequence=null; return; }
+    seq.elapsed+=dt;
+    const progress=clamp(seq.elapsed/ESCAPE_FALL_DURATION_SECONDS,0,1);
+    // Deliberate, readable slow-motion path. The rest of the pile is frozen;
+    // no hidden collision forces or merges run during this sequence.
+    const fallEase=Math.pow(progress,1.55);
+    const track=clamp(seq.elapsed/ESCAPE_SIDE_TRACK_SECONDS,0,1);
+    const trackEase=1-Math.pow(1-track,3);
+    b.x=seq.startX+(seq.targetX-seq.startX)*trackEase;
+    b.y=seq.startY+(seq.targetY-seq.startY)*fallEase;
+    b.angle+=b.omega*dt*ESCAPE_SLOW_MOTION_FACTOR;
+    b.pulse=Math.max(0,b.pulse-dt*ESCAPE_SLOW_MOTION_FACTOR);
+    time+=dt*ESCAPE_SLOW_MOTION_FACTOR;
+    updateBurstEffects(dt);
+    if(progress>=1){
+      // The impact happens on the bottom edge, NOT as soon as the ball
+      // crosses Eukarya or slips just outside the sloping walls.
+      launchFinale(b);
+      endGame(b);
+    }
+  }
+  function spawnFireworkBurst(x,y,count=65,scale=1){
+    const base=Math.random()*FIREWORK_COLORS.length;
+    for(let i=0;i<count;i++){
+      const a=(i/count)*Math.PI*2+(Math.random()-.5)*.23;
+      const speed=(115+Math.random()*370)*scale;
+      const color=FIREWORK_COLORS[(Math.floor(base)+i)%FIREWORK_COLORS.length];
+      const maxLife=.75+Math.random()*1.10;
+      fireworks.push({x,y,vx:Math.cos(a)*speed,vy:Math.sin(a)*speed-90,
+        px:x,py:y,color,life:maxLife,maxLife,r:1.2+Math.random()*2.8,
+        flicker:i%5===0});
+    }
+    if(fireworks.length>630)fireworks.splice(0,fireworks.length-630);
+  }
+  function launchFinale(b){
+    impactFlash=.48;
+    // The first blast comes from the exact point of impact. Follow-up aerial
+    // fireworks span the screen, so a left-edge spill remains spectacular.
+    spawnFireworkBurst(b.x,H-18,140,1.4);
+    const locations=[[.20,.63],[.43,.44],[.73,.57],[.56,.28],[.84,.35],[.32,.23]];
+    fireworkBursts=locations.map(([x,y],i)=>({x:x*W,y:y*H,
+      delay:.13+i*.20,count:i%2?61:73,scale:.85+Math.random()*.35}));
+    shockwaves.push({x:b.x,y:H-20,r:8,maxR:Math.max(165,b.r*2.5),
+      life:.52,maxLife:.52,color:'#ffef9a'});
+    setMessage('Impact! Fireworks! Game over.');
   }
   // Size the DISPLAY canvases only. The world coordinates, ball positions,
   // radii, gravity, aim, walls and overflow checks are immutable on resize.
@@ -497,6 +561,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     aimX=(topLeft+topRight)/2; updateUnlocks();
     ended=false; dropWait=0; combo=0; lastMergeTime=-100; time=0; ballId=0;
     popping=false; popElapsed=0; popQueue=[]; popNext=0; popFragments=[]; popRings=[];
+    escapeSequence=null;fireworks=[];fireworkBursts=[];impactFlash=0;
     $('playAgain').textContent='Play again';
     overlay.hidden=true; updateScore(); updateNext();
     dropDurationMs=AUTO_DROP_MS;
@@ -515,7 +580,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       supported:false,contactCount:0,settleAge:0,spilled:0};
   }
   function drop(automatic=false){
-    if(!started||ended||dropWait>0) return;
+    if(!started||ended||escapeSequence||dropWait>0) return;
     const x=clampAim(aimX), y=spawnY(current);
     const droppedLevel=current;
     const dropped=createBall(droppedLevel,x,y,0,15);
@@ -710,12 +775,12 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   function physics(dt){
     if(!started)return;
     if(ended){updatePopSequence(dt);return;}
+    if(escapeSequence){updateEscapeSequence(dt);return;}
     time+=dt; dropWait=Math.max(0,dropWait-dt);
     updateBurstEffects(dt);
     for(const b of balls){
       b.supported=false; b.contactCount=0;
       b.vy+=clamp(H*4.1,1300,2600)*GRAVITY_MULTIPLIERS[b.level]*dt;
-      if(b.spilled)b.vx+=b.spilled*SPILL_OUTWARD_ACCELERATION*dt;
       b.vx*=Math.exp(-.75*dt); b.vy*=Math.exp(-.14*dt);
       b.pulse=Math.max(0,b.pulse-dt);
       b.vx=clamp(b.vx,-1100,1100); b.vy=clamp(b.vy,-1150,1150);
@@ -796,21 +861,10 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
         }
       } else { b.settleAge=0; }
     }
-    checkSpillOffscreen();
+    // A spill is now handled by updateEscapeSequence(), not an offscreen check.
     for(let i=shockwaves.length-1;i>=0;i--){ const w=shockwaves[i]; w.life-=dt; w.r+=(w.maxR-w.r)*Math.min(1,dt*11); if(w.life<=0) shockwaves.splice(i,1); }
     for(let i=particles.length-1;i>=0;i--){ const p=particles[i]; p.life-=dt; p.vy+=170*dt; p.x+=p.vx*dt; p.y+=p.vy*dt; if(p.life<=0) particles.splice(i,1); }
     for(let i=floating.length-1;i>=0;i--){ floating[i].life-=dt; floating[i].y-=25*dt; if(floating[i].life<=0) floating.splice(i,1); }
-  }
-  function checkSpillOffscreen(){
-    for(const b of balls){
-      if(!b.spilled)continue;
-      // The ENTIRE sphere must disappear past the left, right, or bottom of
-      // the fixed 1000x1000 world. A top-of-Eukarya jam cannot end the game.
-      if(b.x+b.r<0 || b.x-b.r>W || b.y-b.r>H){
-        endGame(b);
-        return;
-      }
-    }
   }
   function popBall(ball){
     const color=LEVELS[ball.level].color;
@@ -837,6 +891,22 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     makeParticles(ball.x,ball.y,color,10);
   }
   function updateBurstEffects(dt){
+    impactFlash=Math.max(0,impactFlash-dt);
+    for(let i=fireworkBursts.length-1;i>=0;i--){
+      const burst=fireworkBursts[i];
+      burst.delay-=dt;
+      if(burst.delay<=0){
+        spawnFireworkBurst(burst.x,burst.y,burst.count,burst.scale);
+        fireworkBursts.splice(i,1);
+      }
+    }
+    for(let i=fireworks.length-1;i>=0;i--){
+      const p=fireworks[i];p.life-=dt;
+      if(p.life<=0){fireworks.splice(i,1);continue;}
+      p.px=p.x;p.py=p.y;
+      p.vy+=125*dt;p.vx*=Math.exp(-.48*dt);
+      p.x+=p.vx*dt;p.y+=p.vy*dt;
+    }
     for(let i=popFragments.length-1;i>=0;i--){
       const p=popFragments[i];p.life-=dt;
       p.vy+=290*dt;p.vx*=Math.exp(-.35*dt);
@@ -858,6 +928,11 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       if(index>=0)popBall(balls.splice(index,1)[0]);
     }
     updateBurstEffects(dt);
+    for(let i=shockwaves.length-1;i>=0;i--){
+      const w=shockwaves[i];w.life-=dt;
+      w.r+=(w.maxR-w.r)*Math.min(1,dt*11);
+      if(w.life<=0)shockwaves.splice(i,1);
+    }
     for(let i=particles.length-1;i>=0;i--){
       const p=particles[i];p.life-=dt;p.vy+=170*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;
       if(p.life<=0)particles.splice(i,1);
@@ -866,8 +941,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       popping=false;
       endTitle.textContent='Game Over';
       endMessage.textContent=domainCreated
-        ?'Great job! You helped Skubert trace his roots back to Eukarya! Indeed, Skubert does have a distinct cell nucleus, membrane-bound organelles, and organization supported by a cytoskeleton. Always good to check though.'
-        :'A sphere spilled out of the pyramid and fell offscreen. Oops! Skubert still needs help tracing his roots back to Eukarya! Try matching faster!';
+        ?'A sphere spilled out of the pyramid and reached the bottom. Great job! You helped Skubert trace his roots back to Eukarya! Indeed, Skubert does have a distinct cell nucleus, membrane-bound organelles, and organization supported by a cytoskeleton. Always good to check though.'
+        :'A sphere spilled out of the pyramid and reached the bottom. Oops! Skubert still needs help tracing his roots back to Eukarya! Try matching faster!';
       endScore.textContent=fmt.format(score)+' points';
       $('playAgain').textContent='Play again';
       if(scoreUI){
@@ -890,8 +965,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     if(ended)return;
     ended=true;popping=true;popElapsed=0;popNext=0;
     dropDeadline=Infinity;down=false;
-    // The ball that visibly spilled out is the first popped. The remaining
-    // spheres follow top to bottom after it has fully left the screen.
+    // The spilled ball bursts at the bottom on impact; then the pile pops.
     const order=balls.filter(b=>b.id!==offendingBall?.id).sort((a,b)=>a.y-b.y);
     popQueue=offendingBall ? [{id:offendingBall.id,when:0}] : [];
     const delay=offendingBall ? .12 : 0;
@@ -899,19 +973,24 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       when:delay+(i/Math.max(1,order.length))*(POP_SEQUENCE_SECONDS-delay)+Math.random()*.045})));
     popQueue.sort((a,b)=>a.when-b.when);
     overlay.hidden=true;
-    setMessage('Game over! A sphere spilled over the side and fell offscreen.');
+    setMessage('Game over! The escaping sphere struck the bottom in a fireworks finale.');
   }
-  // Once a ball goes over the lip, pulse it red while it falls down the
-  // outside. The pulse never causes game over: only offscreen exit does.
+  // During the slow-motion fall, the escaped ball receives strong red
+  // indicators. The sequence concludes only at its bottom-edge impact.
   function drawSpillWarnings(){
     if(ended)return;
     for(const b of balls){
       if(!b.spilled)continue;
       const progress=clamp((b.y-topY)/(H-topY),0,1);
-      const pulse=REDUCED_MOTION?0.65:(.5+.5*Math.sin(time*Math.PI*2*SPILL_WARNING_PULSE_HZ));
+      const pulse=REDUCED_MOTION?0.65:(.5+.5*Math.sin((escapeSequence?.elapsed??time)*Math.PI*2*SPILL_WARNING_PULSE_HZ));
       const gap=Math.max(8,Math.min(18,b.r*.12));
-      const ringRadius=b.r+gap+2*pulse;
+      const ringRadius=b.r+gap+4*pulse;
       ctx.save();
+      // A second, pulsing danger ring projects well beyond the sphere edge.
+      ctx.beginPath();ctx.arc(b.x,b.y,ringRadius+15+9*pulse,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(255, 36, 62, ${.35+.50*pulse})`;
+      ctx.lineWidth=4+5*pulse;ctx.setLineDash([18,12]);ctx.stroke();
+      ctx.setLineDash([]);
       // Broad soft halo; the brighter flash becomes more urgent near game over.
       ctx.beginPath();ctx.arc(b.x,b.y,ringRadius,0,Math.PI*2);
       ctx.strokeStyle=`rgba(225, 33, 43, ${(.23+.30*pulse+.24*progress).toFixed(3)})`;
@@ -993,7 +1072,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     ctx.save();
     // One render request per gameplay frame; the Three.js module never runs
     // an independent animation loop. Until it becomes ready, use v12 sprites.
-    const preview=!ended ? {
+    const preview=!ended&&!escapeSequence ? {
       x:clampAim(aimX), y:previewY(current),
       r:radius(current),level:current,angle:0,squish:0,squishAxis:0,pulse:0
     } : null;
@@ -1033,6 +1112,25 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     for(const f of floating){ ctx.globalAlpha=Math.min(1,f.life*1.7); ctx.font='900 13px system-ui,Arial'; ctx.textAlign='center'; ctx.lineWidth=3; ctx.strokeStyle='#29203d'; ctx.strokeText(f.label,f.x,f.y); ctx.fillStyle='#fff'; ctx.fillText(f.label,f.x,f.y); }
     ctx.globalAlpha=1;
     ctx.restore();
+    // Freeze/dim the rest of the board and spotlight the escaped ball.
+    if(escapeSequence&&!ended){
+      ctx.save();
+      ctx.fillStyle='rgba(30, 2, 17, .22)';ctx.fillRect(0,0,W,H);
+      const b=balls.find(ball=>ball.id===escapeSequence.id);
+      if(b){
+        ctx.shadowColor='#ff1736';ctx.shadowBlur=40;
+        drawSphere(b.x,b.y,b.r,b.level,false,b.pulse,b.angle,b.squish,b.squishAxis);
+        ctx.shadowBlur=0;
+      }
+      const bannerW=318,bannerX=(W-bannerW)/2;
+      ctx.fillStyle='#b8132de9';ctx.fillRect(bannerX,44,bannerW,65);
+      ctx.strokeStyle='#ffffffed';ctx.lineWidth=3;ctx.strokeRect(bannerX,44,bannerW,65);
+      ctx.font='900 28px system-ui,Arial';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillStyle='#ffffff';ctx.fillText('SPILL OVER!',W/2,70);
+      ctx.font='800 13px system-ui,Arial';
+      ctx.fillText('SLOW MOTION',W/2,95);
+      ctx.restore();
+    }
     // Escape warning follows the sphere outside the pyramid's open sides.
     drawSpillWarnings();
     // Spectacular end-of-run balloon bursts can fly beyond the V walls.
@@ -1062,13 +1160,30 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       }
       ctx.restore();
     }
+    // Fireworks are deliberately outside the V clipping and glow on top.
+    if(fireworks.length || impactFlash>0){
+      ctx.save();
+      if(impactFlash>0){
+        ctx.fillStyle=`rgba(255, 240, 183, ${Math.min(.38,impactFlash*.65)})`;
+        ctx.fillRect(0,0,W,H);
+      }
+      ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
+      for(const p of fireworks){
+        const fade=Math.min(1,p.life/.35);
+        ctx.globalAlpha=fade*(p.flicker&&!REDUCED_MOTION?.57+Math.random()*.43:1);
+        ctx.strokeStyle=p.color;ctx.lineWidth=p.r*1.4;
+        ctx.beginPath();ctx.moveTo(p.px,p.py);ctx.lineTo(p.x,p.y);ctx.stroke();
+        ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+      }
+      ctx.restore();
+    }
     ctx.save();
     ctx.lineJoin='round'; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(topLeft,topY); ctx.lineTo(apexX,apexY); ctx.lineTo(topRight,topY);
     ctx.strokeStyle='#ffffffc8'; ctx.lineWidth=4; ctx.stroke();
     ctx.strokeStyle='#23201da8'; ctx.lineWidth=1.6; ctx.stroke();
     ctx.restore();
-    if(!ended){
+    if(!ended&&!escapeSequence){
       const r=radius(current), x=clampAim(aimX), py=previewY(current);
       const from=py+r+4, to=landingGuideY(x,current);
       if(to>from+1){
@@ -1098,7 +1213,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     let loops=0; while(accumulator>=step&&loops<4){ physics(step); accumulator-=step; loops++; }
     // Wall-clock deadline ensures that dropping never waits for the physics
     // simulation to accumulate a full three seconds on slower devices.
-    if(started && !ended && dropWait<=0 && performance.now()>=dropDeadline){
+    if(started && !ended && !escapeSequence && dropWait<=0 && performance.now()>=dropDeadline){
       drop(true);
     }
     render(); requestAnimationFrame(frame);
@@ -1110,16 +1225,16 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     aimX=clampAim(local);
   }
   canvas.addEventListener('pointerdown',e=>{
-    if(ended)return;
+    if(ended||escapeSequence)return;
     e.preventDefault(); aimFromPointer(e);
     if(!started){ startGame(); down=false; return; }
     down=true; canvas.setPointerCapture(e.pointerId);
   });
-  canvas.addEventListener('pointermove',e=>{ if(!ended) aimFromPointer(e); });
+  canvas.addEventListener('pointermove',e=>{ if(!ended&&!escapeSequence) aimFromPointer(e); });
   canvas.addEventListener('pointerup',e=>{ if(!down) return; down=false; aimFromPointer(e); drop(); });
   canvas.addEventListener('pointercancel',()=>{ down=false; });
   document.addEventListener('keydown',e=>{
-    if(ended||e.altKey||e.ctrlKey||e.metaKey) return;
+    if(ended||escapeSequence||e.altKey||e.ctrlKey||e.metaKey) return;
     if(!started){
       if((e.code==='Space'||e.code==='Enter')&&!e.repeat){e.preventDefault();startGame();}
       return;
