@@ -40,6 +40,7 @@ let score = 0;
 let gameOver = false;
 let arrWords = [];
 let arrWordsDiv = [];
+let gameStartTime = 0;
 
 // SOUNDS
 const startGameSound = document.getElementById('StartGameSound');
@@ -136,6 +137,7 @@ const DICTIONARY = [
 
 // GAME START
 function init() {
+  gameStartTime = performance.now();
   showLevel();
   setInterval(() => {
     if (!gameOver) {
@@ -176,45 +178,131 @@ function drawWord() {
   paragraph.style.setProperty('color', wordBlue, 'important');
 }
 
-// GET RANDOM WORD FROM DICTIONARY WITHOUT REPEATS
-let unusedWords = [];
+// LENGTH-WEIGHTED WORD SELECTION WITH INDEPENDENT NO-REPEAT POOLS
+// Character counts INCLUDE spaces (they must be typed).
+// The buckets are DISJOINT. This means exhausting the 3-8 character pool
+// refills only that pool; it never waits for the longer-word pools.
+const WORD_LENGTH_BUCKET_DEFINITIONS = [
+  { label: '3-8', min: 3, max: 8 },
+  { label: '9-12', min: 9, max: 12 },
+  { label: '13-18', min: 13, max: 18 },
+  { label: '19+', min: 19, max: Infinity },
+];
+
+// The preference windows can cross fixed bucket boundaries. For example,
+// 5-12 draws eligible terms from both the 3-8 and the 9-12 buckets.
+const WORD_SELECTION_PHASES = [
+  { startSeconds: 0,  min: 3, max: 8 },     // 0-15 seconds
+  { startSeconds: 15, min: 5, max: 12 },    // 15-30 seconds
+  { startSeconds: 30, min: 8, max: 18 },    // 30-60 seconds
+  { startSeconds: 60, min: 0, max: Infinity }, // 60+ seconds: no length preference
+];
+
+// Four of every five successful spawns are from the preferred window;
+// the fifth is from OUTSIDE that window. The order is shuffled every five.
+// This is 80% exactly over complete five-spawn cycles (when words are available).
+const PREFERRED_SPAWNS_PER_CYCLE = 4;
+const SELECTION_CYCLE_SIZE = 5;
+
+function shuffleInPlace(items) {
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  return items;
+}
+
+function createWordLengthBuckets(words) {
+  const allUniqueWords = [...new Set(
+    words.map(word => word.toLowerCase().trim()).filter(Boolean)
+  )];
+  return WORD_LENGTH_BUCKET_DEFINITIONS.map(definition => {
+    const all = allUniqueWords.filter(word =>
+      word.length >= definition.min && word.length <= definition.max
+    );
+    return { ...definition, all, unused: shuffleInPlace([...all]) };
+  });
+}
+
+const wordLengthBuckets = createWordLengthBuckets(DICTIONARY);
 let lastSpawnedWord = null;
+let currentSelectionPhaseIndex = -1;
+let selectionCycle = [];
 
-function generateRandomWord(words) {
-  // Refill only after every word has been selected.
-  if (unusedWords.length === 0) {
-    unusedWords = [...new Set(
-      words.map(word => word.toLowerCase().trim())
-    )];
+function getSelectionPhaseIndex(elapsedSeconds) {
+  for (let i = WORD_SELECTION_PHASES.length - 1; i >= 0; i--) {
+    if (elapsedSeconds >= WORD_SELECTION_PHASES[i].startSeconds) return i;
+  }
+  return 0;
+}
 
-    // Fisher-Yates shuffle
-    for (let i = unusedWords.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [unusedWords[i], unusedWords[j]] =
-        [unusedWords[j], unusedWords[i]];
+// The queue for each fixed length bucket is only replenished when empty.
+function refillExhaustedBuckets() {
+  for (const bucket of wordLengthBuckets) {
+    if (bucket.unused.length === 0) {
+      bucket.unused = shuffleInPlace([...bucket.all]);
     }
   }
+}
 
-  // Prefer a word not already on screen,
-  // and not the word most recently spawned.
-  let index = unusedWords.findLastIndex(
-    word =>
-      !arrWords.includes(word) &&
-      word !== lastSpawnedWord
-  );
+// Choose uniformly from currently unused, eligible terms in the requested
+// length window, respecting words already on screen. The most recently
+// spawned word is excluded where another eligible term is available.
+function drawUnusedWordInWindow(minLength, maxLength, insideWindow) {
+  refillExhaustedBuckets();
+  const possible = [];
+  for (const bucket of wordLengthBuckets) {
+    for (const word of bucket.unused) {
+      const inside = word.length >= minLength && word.length <= maxLength;
+      if (inside === insideWindow && !arrWords.includes(word)) {
+        possible.push({ bucket, word });
+      }
+    }
+  }
+  if (possible.length === 0) return null;
 
-  // Allow the previous word only if necessary.
-  if (index === -1) {
-    index = unusedWords.findLastIndex(
-      word => !arrWords.includes(word)
-    );
+  const notRecent = possible.filter(candidate => candidate.word !== lastSpawnedWord);
+  const available = notRecent.length ? notRecent : possible;
+  const selected = available[Math.floor(Math.random() * available.length)];
+  selected.bucket.unused.splice(selected.bucket.unused.indexOf(selected.word), 1);
+  lastSpawnedWord = selected.word;
+  return selected.word;
+}
+
+function generateRandomWord() {
+  const elapsedSeconds = Math.max(0, (performance.now() - gameStartTime) / 1000);
+  const phaseIndex = getSelectionPhaseIndex(elapsedSeconds);
+  const phase = WORD_SELECTION_PHASES[phaseIndex];
+
+  // Reset the 4-in-5 preference schedule when entering a new time window.
+  if (phaseIndex !== currentSelectionPhaseIndex) {
+    currentSelectionPhaseIndex = phaseIndex;
+    selectionCycle = [];
   }
 
-  // All remaining words are currently on screen.
-  if (index === -1) return null;
+  // After 60 seconds there is no preference: all lengths are eligible,
+  // but the four independent no-repeat buckets still cycle separately.
+  if (phaseIndex === WORD_SELECTION_PHASES.length - 1) {
+    return drawUnusedWordInWindow(phase.min, phase.max, true);
+  }
 
-  const [word] = unusedWords.splice(index, 1);
-  lastSpawnedWord = word;
+  if (selectionCycle.length === 0) {
+    selectionCycle = shuffleInPlace([
+      ...Array(PREFERRED_SPAWNS_PER_CYCLE).fill(true),
+      ...Array(SELECTION_CYCLE_SIZE - PREFERRED_SPAWNS_PER_CYCLE).fill(false),
+    ]);
+  }
+
+  const wantPreferred = selectionCycle[selectionCycle.length - 1];
+  let word = drawUnusedWordInWindow(phase.min, phase.max, wantPreferred);
+
+  // Exception: if every unused matching word is currently on screen, or
+  // the matching subset of a bucket is exhausted, allow the opposite range.
+  // This prevents stalls without resetting a partially used length bucket.
+  if (word === null) {
+    word = drawUnusedWordInWindow(phase.min, phase.max, !wantPreferred);
+  }
+  if (word !== null) selectionCycle.pop();
   return word;
 }
 // GET VALUE FROM INPUT
@@ -248,7 +336,6 @@ function getWord() {
 // FALLING WORD LOGIC + GAMEOVER
 function updateWordPosition() {
   // Start the timer when gameplay starts, not when the script loads.
-  const gameStartTime = performance.now();
   let lastUpdateTime = gameStartTime;
 
   setInterval(() => {
@@ -275,12 +362,10 @@ function updateWordPosition() {
 
       if (newTop + 15 > gameHeight) {
         gameOver = true;
-        gameContentID.classList.add('sk-typing-ended');
         gameContentID.innerHTML = modalGameOver();
-        inputElementID.setAttribute('disabled', true);
-        showTypingScoreEntry();
         playSound(gameoverSound, 8, startGameSound);
         gameoverSound.style.zIndex = 1;
+        inputElementID.setAttribute('disabled', true);
         break;
       }
 
@@ -322,13 +407,11 @@ function showLevel() {
 }
 
 // GAMEOVER MODAL
-// The game owns its final score; the shared component only displays/submits it.
 function modalGameOver() {
   return `
     <div class="modal-gameover col-8">
-      <h1>Game Over</h1>
-      <h2 id="typingFinalScoreFallback">Score: ${score}</h2>
-      <div id="typingScoreMount" class="typing-score-entry"></div>
+      <h1> Game Over </h2>
+      <h2> Score: ${score} </h2>
       <button id="Restart" class="my-2 btn-modal">
         <a href="game.html">
           <h6>Restart</h6>
@@ -341,32 +424,6 @@ function modalGameOver() {
       </button>
     </div>
   `;
-}
-
-function showTypingScoreEntry() {
-  const mount = document.getElementById('typingScoreMount');
-  const fallback = document.getElementById('typingFinalScoreFallback');
-  if (!mount) return;
-
-  // If shared resources fail to load, leave the final score and restart visible.
-  if (!window.SkubertScoreUI?.create) {
-    mount.textContent = 'Score submission is unavailable. Please refresh and try again.';
-    console.warn('Typing Frenzy: shared score-entry.js is not available.');
-    return;
-  }
-
-  try {
-    const scoreUI = window.SkubertScoreUI.create(mount, {
-      game: 'typing',
-      previewCount: 5,
-      rankingsHref: '../../leaderboards.html'
-    });
-    scoreUI.show({ score, eligible: true });
-    if (fallback) fallback.hidden = true; // The shared widget displays the score.
-  } catch (error) {
-    console.error('Typing Frenzy: could not initialize score entry.', error);
-    mount.textContent = 'Score submission is unavailable. Please refresh and try again.';
-  }
 }
 
 init();
