@@ -132,8 +132,19 @@
       <div id="skubert-viewer" aria-hidden="true"></div>
 
 
-      <form onsubmit="getWord(); return false">
-        <input
+<form autocomplete="off" onsubmit="getWord(); return false">
+  <input
+    type="text"
+    id="InputWord"
+    class="form-control form-control-lg"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+    autofocus
+  />
+  <input type="submit" hidden />
+</form>        <input
           type="text"
           id="InputWord"
           class="form-control form-control-lg"
