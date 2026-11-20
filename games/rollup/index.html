@@ -604,11 +604,21 @@ body.rollup-wide-gutters .stats .stat {
   const CAMERA_DEAD_ZONE = 0.15; // fraction of currently visible camera width/height
   const CAMERA_LOOK_AHEAD = 0.08; // up to 8% of visible world width
   const CAMERA_LOOK_AHEAD_RESPONSE = 5.0;
+  // ROLLUP_HORIZONTAL_ARTICLE_FRAMING_V1
+  // At wide aspect ratios, prefer Wikipedia's article column over blank side
+  // margins, but NEVER modify the saved page's layout or collectible geometry.
+  const CAMERA_ARTICLE_VIEWPORT_SHARE = 0.70; // Intended article share of screen width.
+  const CAMERA_ARTICLE_ZOOM_CEILING = 1.75;  // Mild late-game zoom floor, not a size cap.
+  const CAMERA_ARTICLE_MIN_ASPECT = 1.20;     // Don't force extra zoom on portrait phones.
+  const CAMERA_ARTICLE_FOCUS_BIAS = 0.36;    // Soft content centering when zoomed out.
+  const CAMERA_ARTICLE_FOCUS_RESPONSE = 3.0;
+  const CAMERA_ARTICLE_PLAYER_SAFE_FRACTION = 0.32; // Keep Skubert near the central 64%.
   const CAMERA_REDUCED_MOTION = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   let displayScale = 1;
   const camera = {
     active:false,zoom:1,centerX:WORLD_WIDTH/2,centerY:WORLD_HEIGHT/2,
-    baseScale:1,pointerClientX:null,pointerClientY:null,lookAheadX:0
+    baseScale:1,pointerClientX:null,pointerClientY:null,lookAheadX:0,
+    article:null
   };
   function resetCamera(){
     camera.active=false;
@@ -659,9 +669,17 @@ body.rollup-wide-gutters .stats .stat {
       Math.max(1,host.clientWidth)/(WORLD_WIDTH*base),
       Math.max(1,host.clientHeight)/(WORLD_HEIGHT*base)
     );
-    // Cover ordinary desktop ratios; retain a reasonable field of view on
-    // portrait/ultrawide screens, where full cover would crop too aggressively.
-    return Math.max(CAMERA_MIN_ZOOM,Math.min(CAMERA_COVER_ZOOM_LIMIT,fillZoom));
+    // Preserve the old screen-filling behavior on every display.
+    let minimum=Math.max(CAMERA_MIN_ZOOM,Math.min(CAMERA_COVER_ZOOM_LIMIT,fillZoom));
+    // When the wiki article occupies a small fraction of a wide display,
+    // zoom in modestly. This changes only the presentation transform.
+    const aspect=host.clientWidth/Math.max(1,host.clientHeight);
+    if(camera.article && aspect>=CAMERA_ARTICLE_MIN_ASPECT){
+      const desired=(host.clientWidth*CAMERA_ARTICLE_VIEWPORT_SHARE)/
+        Math.max(1,camera.article.width*base);
+      minimum=Math.max(minimum,Math.min(CAMERA_ARTICLE_ZOOM_CEILING,desired));
+    }
+    return Math.min(CAMERA_START_ZOOM,minimum);
   }
   function cameraVisibleBounds(){
     const host=field.parentElement.getBoundingClientRect();
@@ -708,6 +726,16 @@ body.rollup-wide-gutters .stats .stat {
     const followAlpha=CAMERA_REDUCED_MOTION?1:1-Math.exp(-CAMERA_FOLLOW_RESPONSE*dt);
     camera.centerX=trackingX+(followX-trackingX)*followAlpha+camera.lookAheadX;
     camera.centerY+=(followY-camera.centerY)*followAlpha;
+    // Content-aware late-game composition: softly favor the article's center,
+    // keeping the PLAYER visible and never affecting input / collision math.
+    if(camera.article && host.clientWidth/Math.max(1,host.clientHeight)>=CAMERA_ARTICLE_MIN_ASPECT){
+      const zoomedOut=clamp((CAMERA_START_ZOOM-camera.zoom)/
+        Math.max(.001,CAMERA_START_ZOOM-minZoom),0,1);
+      const travel=visibleW*CAMERA_ARTICLE_PLAYER_SAFE_FRACTION;
+      const desiredCenter=clamp(camera.article.centerX,game.x-travel,game.x+travel);
+      const focusAlpha=CAMERA_REDUCED_MOTION?1:1-Math.exp(-CAMERA_ARTICLE_FOCUS_RESPONSE*dt);
+      camera.centerX+=(desiredCenter-camera.centerX)*focusAlpha*CAMERA_ARTICLE_FOCUS_BIAS*zoomedOut;
+    }
     fitWorldToWindow(); // Keep viewport clamping and inverse pointer mapping unchanged.
   }
 
@@ -922,6 +950,31 @@ body.rollup-wide-gutters .stats .stat {
     const width=r.width/displayScale,height=r.height/displayScale;
     return {left:stage.left+x,top:stage.top+y,right:stage.left+x+width,bottom:stage.top+y+height,width,height};
   }
+  // Measure the ACTUAL main article column once at load (and on resize),
+  // rather than guessing from the outer 1920px document. Coordinates are
+  // unscaled world X values and do not affect the DOM, hitboxes or scrolling.
+  function measureArticleFraming(){
+    const frame=snapshotIframe();
+    let doc;
+    try{doc=frame?.contentDocument;}catch(_){doc=null;}
+    camera.article=null;
+    if(!doc?.body)return;
+    const selectors=[
+      '#mw-content-text','.mw-body-content','.mw-content-container',
+      'main#content','main','[role="main"]','#content','#bodyContent'
+    ];
+    for(const selector of selectors){
+      const el=doc.querySelector(selector);
+      if(!el)continue;
+      const r=screenRect(el),origin=logicalFieldRect();
+      const left=r.left-origin.left,width=r.width;
+      if(!Number.isFinite(left)||!Number.isFinite(width) ||
+         width<340 || width>WORLD_WIDTH*.82)continue;
+      const centerX=clamp(left+width/2,0,WORLD_WIDTH);
+      camera.article={left,width,centerX,selector};
+      break;
+    }
+  }
   function isVisible(el,margin=0){
     const style=(el.ownerDocument.defaultView||window).getComputedStyle(el);
     if(style.display==='none'||style.visibility==='hidden'||Number(style.opacity)===0)return false;
@@ -1075,6 +1128,7 @@ body.rollup-wide-gutters .stats .stat {
     stopWatchingCollectibleLayout();
     invalidateCollectibleGeometry('scene replacement');
     siteObserver.disconnect();
+    camera.article=null; // Never reuse bounds from an old scene / iframe.
     site.innerHTML=snapshotPage();
     discoverCollectibles();
     watchCollectibleLayout(collectRoot());
@@ -1097,6 +1151,10 @@ body.rollup-wide-gutters .stats .stat {
           console.warn('Could not prepare the continuous saved webpage');
           return;
         }
+        measureArticleFraming();
+        doc.fonts?.ready?.then(()=>{
+          if(snapshotIframe()===frame)measureArticleFraming();
+        }).catch(()=>{});
         // Saved-page scripts remain disabled; the game can collect DOM objects.
         const style=doc.createElement('style');
         style.textContent='.eaten{visibility:hidden!important;opacity:0!important}.dom-word{display:inline}';
@@ -1993,6 +2051,8 @@ body.rollup-wide-gutters .stats .stat {
   });
   $('soundBtn').addEventListener('click',()=>{game.sound=!game.sound;$('soundBtn').textContent=game.sound?'♫ Sound on':'♪ Sound off';$('soundBtn').setAttribute('aria-pressed',String(game.sound))});
   window.addEventListener('resize',()=>{
+    // Re-measure without resizing the canonical 1920 x 1080 world.
+    measureArticleFraming();
     fitWorldToWindow();
     attachments.resize();
     // World positions are unchanged by camera scale or host resize.
