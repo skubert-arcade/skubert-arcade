@@ -85,8 +85,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
 .instructions-content h3 { margin:0 0 7px; font-size:20px; line-height:1.2; }
 .instructions-intro { margin:0 auto 12px; max-width:365px; line-height:1.43; font-size:14px; }
 .instructions-intro strong { color:#173d8a; }
-/* INTRO PREVIEW — draws the SAME textured 2D spheres as the game fallback.
-   The motions are deliberately storyboarded, not part of live game physics. */
+/* INTRO PREVIEW — uses real 3D game spheres from sphere-renderer.js.
+   The transparent 2D overlay supplies labels/effects and WebGL fallback. */
 .merge-demo {
   border-radius:15px; background:linear-gradient(165deg,#12253e,#1e3a60);
   color:#fff; padding:10px 12px 12px; overflow:hidden;
@@ -99,7 +99,12 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   font-size:11px; padding:4px 8px; cursor:pointer; }
 .demo-topline button:hover { background:#ffffff25; }
 .merge-stage { height:180px; width:100%; position:relative; overflow:hidden; }
-#mergeDemoCanvas { display:block; width:100%; height:100%; }
+#mergeDemo3D, #mergeDemoCanvas {
+  position:absolute; inset:0; display:block; width:100%; height:100%;
+  background:transparent; pointer-events:none;
+}
+#mergeDemo3D { z-index:1; }
+#mergeDemoCanvas { z-index:2; }
 .merge-equation {
   margin:2px auto 0; min-height:18px; color:#f6ecff; font-size:13px;
   font-weight:900; line-height:1.3; text-align:center;
@@ -183,7 +188,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
         <p class="instructions-intro" id="instructionsDescription">Drop a ball so it touches <strong>another of the same type</strong>. They merge into a ball of the <strong>next type!</strong></p>
         <div class="merge-demo" aria-label="Looping tutorial showing all seven merges, Species through Domain, followed by two Eukarya spheres bursting into all seven lower ranks.">
           <div class="demo-topline"><span id="mergeDemoStep">Step 1 of 8 · Merge</span><button id="mergeDemoReplay" type="button" aria-label="Replay the full merge demonstration">↻ Replay</button></div>
-          <div class="merge-stage" aria-hidden="true"><canvas id="mergeDemoCanvas"></canvas></div>
+          <div class="merge-stage" aria-hidden="true"><canvas id="mergeDemo3D"></canvas><canvas id="mergeDemoCanvas"></canvas></div>
           <p class="merge-equation" id="mergeDemoEquation">Species + Species → Genus</p>
           <div class="demo-progress" id="mergeDemoProgress" aria-hidden="true"></div>
         </div>
@@ -209,7 +214,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   </div>
 </main>
 <div id="message" class="visually-hidden" role="status" aria-live="polite"></div>
-<script type="module" src="sphere-renderer.js"></script>
+<script type="module" src="sphere-renderer.js?v=20261120-real-game-balls"></script>
 <script src="../../shared/leaderboard.js"></script>
 <script src="../../shared/score-entry.js"></script>
 <script>
@@ -330,6 +335,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   const instructionsLaunch=$('instructionsLaunch');
   const demoCanvas=$('mergeDemoCanvas');
   const demoCtx=demoCanvas.getContext('2d');
+  const demo3DCanvas=$('mergeDemo3D');
   const demoEquation=$('mergeDemoEquation');
   const demoStep=$('mergeDemoStep');
   const demoProgress=$('mergeDemoProgress');
@@ -494,9 +500,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     }
     discoveryCtx.restore();
   }
-  // Tutorial renderer. Reuses drawSphere() — the same fallback renderer called
-  // by live gameplay — including its actual silhouette images and shading.
-  // The tutorial canvas cannot mutate the game's balls/physics/score.
+  // Tutorial storyboard creates balls for the actual THREE.js game renderer.
+  // drawSphere() remains the fallback when WebGL is unavailable. The tutorial
+  // does not mutate gameplay balls, physics, timing or score.
   const demoEaseOut=t=>1-Math.pow(1-clamp(t,0,1),3);
   const demoEaseIn=t=>Math.pow(clamp(t,0,1),2.1);
   function resetMergeDemo(){
@@ -542,30 +548,16 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     // Compress the real game's 14:1 size progression for readability in a
     // 180px tutorial: only display size changes, never actual physics values.
     const demoRadius=level=>maxRadius*(.39+.61*Math.pow(level/7,.86));
-    const sphere=(x,y,r,level,pulse=0,squish=0)=>
-      drawSphere(x,y,r,level,false,pulse,0,squish,0,demoCtx);
-    const label=(text,x,y,size=11)=>{
-      demoCtx.save();
-      demoCtx.textAlign='center';demoCtx.textBaseline='middle';
-      demoCtx.font=`900 ${size}px system-ui,Arial,sans-serif`;
-      demoCtx.lineWidth=3.2;demoCtx.strokeStyle='#10233ee6';
-      demoCtx.strokeText(text,x,y);
-      demoCtx.fillStyle='#f9fbff';demoCtx.fillText(text,x,y);
-      demoCtx.restore();
+    const demoBalls=[];
+    const demoLabels=[];
+    const demoSparkles=[];
+    const sphere=(x,y,r,level,pulse=0,squish=0)=>{
+      demoBalls.push({x,y,r,level,pulse,squish,angle:0,squishAxis:0,
+        opacity:demoCtx.globalAlpha});
     };
+    const label=(text,x,y,size=11)=>demoLabels.push({text,x,y,size});
     const sparkle=(x,y,amount)=>{
-      if(amount<=0)return;
-      demoCtx.save();
-      for(let k=0;k<12;k++){
-        const a=k*Math.PI*2/12;
-        const distance=(17+45*demoEaseOut(amount))*Math.min(1,width/350);
-        const xx=x+Math.cos(a)*distance, yy=y+Math.sin(a)*distance*.72;
-        const alpha=(1-amount)*.92;
-        demoCtx.globalAlpha=alpha;
-        demoCtx.beginPath();demoCtx.arc(xx,yy,1.5+(k%3===0?1.8:0),0,Math.PI*2);
-        demoCtx.fillStyle=['#fff9c5','#fff','#91efff','#ff96b4'][k%4];demoCtx.fill();
-      }
-      demoCtx.restore();
+      if(amount>0)demoSparkles.push({x,y,amount});
     };
     if(stage<7){
       const p=REDUCED_MOTION ? .50 : (t-stage*DEMO_MERGE_SECONDS)/DEMO_MERGE_SECONDS;
@@ -636,6 +628,52 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
         }
       }
     }
+    // Render exactly the live game's THREE.Mesh spheres (same SphereGeometry,
+    // textured MeshStandardMaterial, geometry transform and lighting rig).
+    // The shared module owns this independent canvas; it cannot affect physics.
+    let renderedWith3D=false;
+    try{
+      renderedWith3D=window.SkubertSphere3D?.renderDemo({
+        balls:demoBalls,width,height
+      })===true;
+    }catch(error){
+      console.warn('Taxonomy Drop tutorial: 3D preview unavailable.',error);
+    }
+    demo3DCanvas.style.visibility=renderedWith3D?'visible':'hidden';
+    if(!renderedWith3D){
+      // Match the existing game's own fallback when WebGL is not available.
+      for(const ball of demoBalls){
+        demoCtx.save();
+        demoCtx.globalAlpha=ball.opacity;
+        drawSphere(ball.x,ball.y,ball.r,ball.level,false,
+          ball.pulse,ball.angle,ball.squish,ball.squishAxis,demoCtx);
+        demoCtx.restore();
+      }
+    }
+    // Effects and rank captions stay above the 3D sphere canvas.
+    for(const {x,y,amount} of demoSparkles){
+      demoCtx.save();
+      for(let k=0;k<12;k++){
+        const a=k*Math.PI*2/12;
+        const distance=(17+45*demoEaseOut(amount))*Math.min(1,width/350);
+        const xx=x+Math.cos(a)*distance,yy=y+Math.sin(a)*distance*.72;
+        demoCtx.globalAlpha=(1-amount)*.92;
+        demoCtx.beginPath();
+        demoCtx.arc(xx,yy,1.5+(k%3===0?1.8:0),0,Math.PI*2);
+        demoCtx.fillStyle=['#fff9c5','#fff','#91efff','#ff96b4'][k%4];
+        demoCtx.fill();
+      }
+      demoCtx.restore();
+    }
+    for(const {text,x,y,size} of demoLabels){
+      demoCtx.save();
+      demoCtx.textAlign='center';demoCtx.textBaseline='middle';
+      demoCtx.font=`900 ${size}px system-ui,Arial,sans-serif`;
+      demoCtx.lineWidth=3.2;demoCtx.strokeStyle='#10233ee6';
+      demoCtx.strokeText(text,x,y);
+      demoCtx.fillStyle='#f9fbff';demoCtx.fillText(text,x,y);
+      demoCtx.restore();
+    }
   }
   function showInstructions(){
     if(instructionsOpen)return;
@@ -658,6 +696,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     if(jamEjection)jamEjection.startedAt+=pausedFor;
     instructionsOpen=false;
     instructionsOverlay.hidden=true;
+    window.SkubertSphere3D?.clearDemo?.();
     helpButton.hidden=false;
     accumulator=0;
     lastFrame=performance.now();
