@@ -429,11 +429,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
    The moving world still clips inside .game-shell; nothing gets reflowed. */
 .game-shell { isolation:isolate; background:#fff; }
 .game-shell::before,.game-shell::after { content:none!important; display:none!important; }
-#playfield {
-  z-index:1;
-  /* ROLLUP_TEXT_CLARITY_V1: permit re-rasterization during zoom. */
-  will-change:auto;
-}
+#playfield {z-index:1;will-change:transform;}
 /* Pause, help, game-over and toast are direct children of the shell; they
    never zoom or crop with the game camera. */
 .game-shell > .screen { z-index:55; }
@@ -469,11 +465,6 @@ body.rollup-wide-gutters .stats .stat {
   display:block; position:absolute; top:0; left:0; width:1920px;
   height:1080px; border:0; pointer-events:none;
   background:#fff; overflow:hidden;
-}
-/* Keep a second, decorative iframe scrollbar from appearing below the page. */
-#rollupPageBleed .page-bleed-window::after {
-  content:""; position:absolute; right:0; top:0; bottom:0; width:20px;
-  background:#fff; pointer-events:none; z-index:3;
 }
 #playfield { z-index:1; }
 
@@ -601,19 +592,13 @@ body.rollup-wide-gutters .stats .stat {
       style.id='rollup-page-bleed-copy-style';
       style.textContent=`
         html { scroll-behavior:auto!important; scroll-padding-top:0!important; }
-        /* ROLLUP_CONTINUATION_SEAM_V3: let the side columns retain their
-           natural appearance and scroll away instead of showing a second
-           sticky Contents/Appearance menu or blank white gutters. */
+        /* Hide the copied Wikipedia navigation WITHOUT removing its width.
+           visibility:hidden preserves the main article's column geometry. */
         .vector-column-start, .vector-column-end,
         #vector-toc, #mw-panel-toc, .vector-toc,
         #vector-page-tools-pinned-container, .vector-page-tools,
-        #mw-panel, .mw-sidebar, .vector-sticky-pinned-container {
-          position:static!important;
-          top:auto!important;
-          bottom:auto!important;
-        }
-        /* A fixed site header must not appear again lower down the page. */
-        .vector-header-container, .vector-sticky-header-container {
+        .vector-header-container, .vector-sticky-header-container,
+        #mw-panel, .mw-sidebar {
           visibility:hidden!important;
         }
       `;
@@ -625,34 +610,6 @@ body.rollup-wide-gutters .stats .stat {
       doc.body.style.paddingBottom='1280px';
     }
     return true;
-  }
-  // ROLLUP_CONTINUATION_PARAGRAPH_ALIGN_V1
-  // Independent iframe copies can wrap lines differently from the live
-  // collectible DOM. Align the nearest matching article paragraph at the seam.
-  // This affects only decorative iframe scrolling, never game-world geometry.
-  function bleedScrollCorrection(primaryDoc,primaryView,copyDoc,copyView,seamY){
-    let originals=primaryDoc.querySelectorAll('#mw-content-text p');
-    let copies=copyDoc.querySelectorAll('#mw-content-text p');
-    if(!originals.length){
-      originals=primaryDoc.querySelectorAll('main p');
-      copies=copyDoc.querySelectorAll('main p');
-    }
-    if(!originals.length || originals.length!==copies.length)return 0;
-    const primaryScroll=primaryView.scrollY||0;
-    let nearest=-1,nearestDistance=Infinity,originalTop=0;
-    for(let i=0;i<originals.length;i++){
-      const rect=originals[i].getBoundingClientRect();
-      if(rect.height<4)continue;
-      const top=rect.top+primaryScroll,bottom=rect.bottom+primaryScroll;
-      const distance=Math.max(0,top-seamY,seamY-bottom);
-      if(distance<nearestDistance){
-        nearest=i;nearestDistance=distance;originalTop=top;
-        if(distance===0)break;
-      }
-    }
-    if(nearest<0 || nearestDistance>WORLD_HEIGHT)return 0;
-    const copyTop=copies[nearest].getBoundingClientRect().top+(copyView.scrollY||0);
-    return Math.max(-350,Math.min(350,copyTop-originalTop));
   }
   function syncPageBleed(){
     const primary=snapshotIframe();
@@ -682,20 +639,18 @@ body.rollup-wide-gutters .stats .stat {
     pageBleedTopWindow.style.clipPath='inset('+(PAGE_BLEED_TOP-topVisible)+'px 0 0 0)';
     pageBleedBottomWindow.style.clipPath='inset(0 0 '+(PAGE_BLEED_BOTTOM-bottomVisible)+'px 0)';
     const targets=[
-      [pageBleedTop,pageBleedTopWindow,Math.max(0,scrollY-PAGE_BLEED_TOP),topVisible>0,scrollY],
-      [pageBleedBottom,pageBleedBottomWindow,scrollY+WORLD_HEIGHT,bottomVisible>0,scrollY+WORLD_HEIGHT]
+      [pageBleedTop,pageBleedTopWindow,Math.max(0,scrollY-PAGE_BLEED_TOP),topVisible>0],
+      [pageBleedBottom,pageBleedBottomWindow,scrollY+WORLD_HEIGHT,bottomVisible>0]
     ];
-    for(const [frame,windowEl,target,enabled,seamY] of targets){
+    for(const [frame,windowEl,target,enabled] of targets){
       if(!enabled){windowEl.style.visibility='hidden';continue;}
       try{
         if(!preparePageBleedCopy(frame)){windowEl.style.visibility='hidden';continue;}
         const view=frame.contentWindow;
-        const correction=bleedScrollCorrection(originalDoc,primary.contentWindow,frame.contentDocument,view,seamY);
-        const alignedTarget=Math.max(0,target+correction);
-        if(Math.abs((view.scrollY||0)-alignedTarget)>1)view.scrollTo(0,alignedTarget);
+        if(Math.abs((view.scrollY||0)-target)>1)view.scrollTo(0,target);
         // Never flash an unsynchronized page copy during loads or scrolling.
         // ROLLUP_PAGE_CONTINUATION_VISIBILITY_FIX — reveal the iframe as well as its window.
-        const aligned=Math.abs((view.scrollY||0)-alignedTarget)<2;
+        const aligned=Math.abs((view.scrollY||0)-target)<2;
         frame.style.visibility=aligned?'visible':'hidden';
         windowEl.style.visibility=aligned?'visible':'hidden';
       }catch(_){windowEl.style.visibility='hidden';}
@@ -851,10 +806,10 @@ body.rollup-wide-gutters .stats .stat {
   // TIMED RUN: 60 seconds on the Product Lifecycle snapshot.
   const DURATION = 60;
   // MOVEMENT SETTINGS — change these values to customize the ball-like feel.
-  const MOVE_SPEED = 450;          // Maximum speed (pixels/second).
+  const MOVE_SPEED = 225;          // Maximum speed (pixels/second).
   // ROLLUP_SIZE_MOMENTUM_V1 — steering response depends on Skubert diameter.
-  const CHASE_RESPONSE_SMALL = 9.0;      // Fast steering when smallest.
-  const CHASE_RESPONSE_LARGE = 3.0;      // Heavy steering when largest.
+  const CHASE_RESPONSE_SMALL = 4.5;      // Fast steering when smallest.
+  const CHASE_RESPONSE_LARGE = 1.5;      // Heavy steering when largest.
   const CHASE_RESPONSE_CURVE_POWER = 0.5; // 1 = linear; 0.5 = heavier sooner.
   const SLOWDOWN_RADIUS = 105;     // Distance (px) over which Skubert brakes near the cursor.
   const EDGE_SCROLL_PUSH = 400;    // Virtual cursor target extension near an edge.
@@ -867,9 +822,7 @@ body.rollup-wide-gutters .stats .stat {
   // GROWTH SETTINGS — one size function controls the GLB/fallback, attached
   // items, drop-in landing, and the HTML pickup hitbox. Adjust here only.
   const AVATAR_START_SIZE = 18;       // Diameter in CSS pixels at zero mass.
-  const AVATAR_GROWTH_RATE = 4;      // Size gained per square root of mass (previously 13).
-  const AVATAR_MAX_SIZE = 1920;        // Maximum desktop diameter (previously 220).
-  const AVATAR_MAX_VIEWPORT = 2.0;  // Limit on narrow screens to 90% of field width.
+  const AVATAR_GROWTH_RATE = 8; // Uncapped diameter gained per square root of collected mass.
   const AVATAR_INERTIA_REFERENCE_SIZE = 1920;
   const COLLECT_RADIUS_FACTOR = 0.50; // Pickup radius as a fraction of avatar diameter.
   // ROLLUP_WORD_GROWTH_V1 — word length, visible diameter and camera grow together.
@@ -906,9 +859,11 @@ body.rollup-wide-gutters .stats .stat {
   // World-space diameter, not screen transform. The same result drives drawing,
   // attachments and collision distance so the pickup area always grows with Skubert.
   function avatarSize(){
-  return AVATAR_START_SIZE +
-    AVATAR_GROWTH_RATE * Math.sqrt(Math.max(0,game.mass));
-}
+    // ROLLUP_DOUBLE_GROWTH_INERTIA_HALF_SPEED_V1
+    // No viewport or maximum-diameter cap: growth depends only on accumulated mass.
+    return AVATAR_START_SIZE +
+      AVATAR_GROWTH_RATE * Math.sqrt(Math.max(0, game.mass));
+  }
   function collectRadius(){return avatarSize()*COLLECT_RADIUS_FACTOR;}
   // Letters and numbers count; punctuation and spaces do not.
   function wordCharacterCount(text){
