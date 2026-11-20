@@ -85,78 +85,30 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
 .instructions-content h3 { margin:0 0 7px; font-size:20px; line-height:1.2; }
 .instructions-intro { margin:0 auto 12px; max-width:365px; line-height:1.43; font-size:14px; }
 .instructions-intro strong { color:#173d8a; }
+/* INTRO PREVIEW — draws the SAME textured 2D spheres as the game fallback.
+   The motions are deliberately storyboarded, not part of live game physics. */
 .merge-demo {
-  border-radius:15px; background:linear-gradient(#132944,#1a3454);
-  color:#fff; padding:9px 12px 12px; overflow:hidden;
+  border-radius:15px; background:linear-gradient(165deg,#12253e,#1e3a60);
+  color:#fff; padding:10px 12px 12px; overflow:hidden;
 }
-.merge-stage { height:151px; position:relative; isolation:isolate; }
-.merge-ground { position:absolute; left:22%; right:22%; bottom:10px; height:2px; background:#7693b459; }
-.demo-ball {
-  position:absolute; left:50%; display:grid; place-items:center; border-radius:50%;
-  transform:translateX(-50%); overflow:hidden;
-  filter:drop-shadow(0 6px 7px #05112499);
-}
-.demo-ball img { height:55%; width:55%; object-fit:contain; filter:drop-shadow(0 1px 2px #0006); }
-.demo-ball-label {
-  display:block; position:absolute; bottom:10%; left:0; right:0;
-  color:#fff; text-shadow:0 1px 2px #171129b9;
-  font-size:10px; font-weight:900;
-}
-.demo-species {
-  width:70px; height:70px; border:2px solid #efbcf5;
-  background:radial-gradient(circle at 27% 22%,#ffcff9 0%,#ef91ea 40%,#a34dc1 95%);
-}
-.demo-falling { top:10px; animation:demo-drop 4.4s cubic-bezier(.24,.64,.28,1) infinite both; }
-.demo-resting { bottom:11px; animation:demo-rest 4.4s ease-in-out infinite both; }
-.demo-genus {
-  top:29px; width:96px; height:96px; border:3px solid #d5c8ff;
-  background:radial-gradient(circle at 27% 21%,#d8d0ff 0%,#897bf5 47%,#5746bb 100%);
-}
-.demo-genus .demo-ball-label { font-size:14px; bottom:12%; }
-.demo-result { animation:demo-evolve 4.4s ease-out infinite both; }
-.demo-spark {
-  position:absolute; left:50%; top:44%; transform:translate(-50%,-50%);
-  font-size:36px; color:#fff3a3; text-shadow:0 0 18px #ffee78;
-  animation:demo-flash 4.4s ease-out infinite both;
-}
-.demo-drop-arrow {
-  position:absolute; left:calc(50% + 47px); top:12px;
-  font-size:23px; font-weight:900; color:#ffde91;
-  animation:demo-arrow 4.4s linear infinite both;
-}
+.demo-topline { display:flex; justify-content:space-between; align-items:center;
+  gap:12px; font-size:10px; color:#b9d8f5; font-weight:900;
+  letter-spacing:.08em; text-transform:uppercase; }
+.demo-topline button { background:transparent; border:1px solid #b9d8f575;
+  color:#f4f9ff; border-radius:7px; font-weight:800; letter-spacing:normal;
+  font-size:11px; padding:4px 8px; cursor:pointer; }
+.demo-topline button:hover { background:#ffffff25; }
+.merge-stage { height:180px; width:100%; position:relative; overflow:hidden; }
+#mergeDemoCanvas { display:block; width:100%; height:100%; }
 .merge-equation {
-  margin:0; color:#f6ecff; font-size:13px; font-weight:800;
-  display:flex; flex-wrap:wrap; justify-content:center; gap:7px;
+  margin:2px auto 0; min-height:18px; color:#f6ecff; font-size:13px;
+  font-weight:900; line-height:1.3; text-align:center;
 }
-.merge-equation strong { color:#ffdd8e; }
-@keyframes demo-drop {
-  0%,10% { opacity:0; transform:translate(-50%,-88px); }
-  14% { opacity:1; transform:translate(-50%,-88px); }
-  43% { opacity:1; transform:translate(-50%,1px); }
-  47% { opacity:1; transform:translate(-50%,6px) scale(1.05,.91); }
-  52%,100% { opacity:0; transform:translate(-50%,25px) scale(.25); }
-}
-@keyframes demo-rest {
-  0%,43% { opacity:1; transform:translateX(-50%) scale(1); }
-  48% { opacity:1; transform:translateX(-50%) scale(1.08,.89); }
-  53%,100% { opacity:0; transform:translateX(-50%) scale(.24); }
-}
-@keyframes demo-evolve {
-  0%,48% { opacity:0; transform:translateX(-50%) scale(.2); }
-  55% { opacity:1; transform:translateX(-50%) scale(1.18); }
-  63%,86% { opacity:1; transform:translateX(-50%) scale(1); }
-  95%,100% { opacity:0; transform:translateX(-50%) scale(.7); }
-}
-@keyframes demo-flash {
-  0%,46% { opacity:0; transform:translate(-50%,-50%) scale(.1); }
-  52% { opacity:1; transform:translate(-50%,-50%) scale(2.5); }
-  64%,100% { opacity:0; transform:translate(-50%,-50%) scale(3); }
-}
-@keyframes demo-arrow {
-  0%,13% { opacity:0; }
-  17%,38% { opacity:1; }
-  49%,100% { opacity:0; }
-}
+.demo-progress { display:grid; grid-template-columns:repeat(8,minmax(0,1fr));
+  gap:4px; margin:10px 1px 0; }
+.demo-progress span { height:4px; background:#ffffff35; border-radius:3px; }
+.demo-progress span.active { background:#ffda83; }
+.demo-progress span.complete { background:#82d6f4; }
 .instructions-steps { margin:14px 0 13px; display:grid; gap:10px; text-align:left; }
 .instructions-step { display:flex; align-items:flex-start; gap:10px; }
 .instructions-step-number {
@@ -190,14 +142,10 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   .instructions-heading { padding:14px 13px 12px; }
   .instructions-content { padding:12px 15px 15px; }
   .instructions-intro { margin-bottom:10px; }
-  .merge-stage { height:130px; }
+  .merge-stage { height:154px; }
   .instructions-steps { gap:8px; margin:12px 0; }
 }
 @media (prefers-reduced-motion:reduce) {
-  .demo-falling,.demo-resting,.demo-result,.demo-spark,.demo-drop-arrow { animation:none!important; }
-  .demo-falling,.demo-resting { display:none; }
-  .demo-result { opacity:1; transform:translateX(-50%); }
-  .demo-spark,.demo-drop-arrow { display:none; }
   .instructions-launch:active { transform:none; }
 }
 .modal { width:min(95vw,480px); max-height:calc(100svh - 28px); overflow-y:auto; overscroll-behavior:contain; padding:20px 16px; border:1px solid #b5b5b5; border-radius:18px; background:#fff; box-shadow:0 16px 36px #0003; text-align:center; }
@@ -228,28 +176,25 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     <div class="instructions-card">
       <header class="instructions-heading">
         <h2 id="instructionsTitle">TAXONOMY DROP</h2>
+        <p>Match. Merge. Evolve!</p>
       </header>
       <div class="instructions-content">
         <h3>How to Play</h3>
-        <p class="instructions-intro" id="instructionsDescription">Help Skubert find his roots in the biological taxonomy,<br>starting at the species level (<i>Skubertus Mascotus</i>)<br>and building your way to the domain level (<i>Eukarya</i>).</p>
-        <p class="instructions-intro" id="instructionsDescription">Drop a ball so it touches <strong>another of the same type</strong>.<br>They merge into a larger ball representing the <strong>next type!</strong></p>
-        <div class="merge-demo" aria-label="Animated demonstration: a Species ball drops onto another Species ball, producing one Genus ball.">
-          <div class="merge-stage" aria-hidden="true">
-            <div class="merge-ground"></div>
-            <div class="demo-drop-arrow">↓</div>
-            <div class="demo-ball demo-species demo-falling"><img src="silhouettes/00-species.png" alt="" onerror="this.hidden=true"><span class="demo-ball-label">Species</span></div>
-            <div class="demo-ball demo-species demo-resting"><img src="silhouettes/00-species.png" alt="" onerror="this.hidden=true"><span class="demo-ball-label">Species</span></div>
-            <div class="demo-spark">✦</div>
-            <div class="demo-ball demo-genus demo-result"><img src="silhouettes/01-genus.png" alt="" onerror="this.hidden=true"><span class="demo-ball-label">Genus</span></div>
-          </div>
-          <p class="merge-equation"><span>Species</span><span>+</span><span>Species</span><span>→</span><strong>Genus</strong></p>
+        <p class="instructions-intro" id="instructionsDescription">Drop a ball so it touches <strong>another of the same type</strong>. They merge into a ball of the <strong>next type!</strong></p>
+        <div class="merge-demo" aria-label="Looping tutorial showing all seven merges, Species through Domain, followed by two Eukarya spheres bursting into all seven lower ranks.">
+          <div class="demo-topline"><span id="mergeDemoStep">Step 1 of 8 · Merge</span><button id="mergeDemoReplay" type="button" aria-label="Replay the full merge demonstration">↻ Replay</button></div>
+          <div class="merge-stage" aria-hidden="true"><canvas id="mergeDemoCanvas"></canvas></div>
+          <p class="merge-equation" id="mergeDemoEquation">Species + Species → Genus</p>
+          <div class="demo-progress" id="mergeDemoProgress" aria-hidden="true"></div>
         </div>
         <div class="instructions-steps">
-          <div class="instructions-step"><span class="instructions-step-number" aria-hidden="true">1</span><div><strong>Aim and drop</strong><p>Move your mouse to aim. Click to drop.</p></div></div>
-          <div class="instructions-step"><span class="instructions-step-number" aria-hidden="true">2</span><div><strong>Keep merging</strong><p>Match the same types to advance from Species to Domain.</p></div></div>
-          <div class="instructions-step"><span class="instructions-step-number" aria-hidden="true">3</span><div><strong>Don't overflow!</strong><p>The game ends if the pyramid overflows.</p></div></div>
+          <div class="instructions-step"><span class="instructions-step-number" aria-hidden="true">1</span><div><strong>Aim and drop</strong><p>Move your mouse or use the arrow keys to aim. Click, tap, or press Space to drop.</p></div></div>
+          <div class="instructions-step"><span class="instructions-step-number" aria-hidden="true">2</span><div><strong>Keep merging</strong><p>Match identical types from Species to Domain. Two Eukarya balls burst into all seven lower ranks.</p></div></div>
+          <div class="instructions-step"><span class="instructions-step-number" aria-hidden="true">3</span><div><strong>Don't overflow!</strong><p>Keep balls in the pyramid. If one spills out and reaches the bottom, the game ends.</p></div></div>
         </div>
-        <button id="instructionsLaunch" class="instructions-launch" type="button">Start →</button>
+        <p class="instructions-goal">Can you reach Domain: Eukarya?</p>
+        <button id="instructionsLaunch" class="instructions-launch" type="button">LET'S DROP! →</button>
+        <p class="instructions-note">Matching balls merge automatically when they touch.</p>
       </div>
     </div>
   </div>
@@ -383,6 +328,20 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   let lastDroppedLevel=null;
   const instructionsOverlay=$('instructionsOverlay');
   const instructionsLaunch=$('instructionsLaunch');
+  const demoCanvas=$('mergeDemoCanvas');
+  const demoCtx=demoCanvas.getContext('2d');
+  const demoEquation=$('mergeDemoEquation');
+  const demoStep=$('mergeDemoStep');
+  const demoProgress=$('mergeDemoProgress');
+  const demoReplay=$('mergeDemoReplay');
+  let demoStartedAt=0,demoLastStage=-1;
+  const DEMO_MERGE_SECONDS=1.58;
+  const DEMO_BURST_SECONDS=3.10;
+  const DEMO_TOTAL_SECONDS=7*DEMO_MERGE_SECONDS+DEMO_BURST_SECONDS;
+  for(let n=0;n<8;n++){
+    const tick=document.createElement('span');
+    demoProgress.appendChild(tick);
+  }
   const helpButton=$('helpButton');
   let instructionsOpen=false, instructionsOpenedAt=0;
   // Colors match the original pyramid, while sphere textures use a more saturated palette.
@@ -535,11 +494,155 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     }
     discoveryCtx.restore();
   }
+  // Tutorial renderer. Reuses drawSphere() — the same fallback renderer called
+  // by live gameplay — including its actual silhouette images and shading.
+  // The tutorial canvas cannot mutate the game's balls/physics/score.
+  const demoEaseOut=t=>1-Math.pow(1-clamp(t,0,1),3);
+  const demoEaseIn=t=>Math.pow(clamp(t,0,1),2.1);
+  function resetMergeDemo(){
+    demoStartedAt=performance.now();
+    demoLastStage=-1;
+    if(instructionsOpen)renderMergeDemo(demoStartedAt);
+  }
+  function renderMergeDemo(ms){
+    if(!demoCtx || !instructionsOpen) return;
+    const rect=demoCanvas.getBoundingClientRect();
+    const width=rect.width,height=rect.height;
+    if(width<1 || height<1)return;
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    const backingW=Math.round(width*dpr),backingH=Math.round(height*dpr);
+    if(demoCanvas.width!==backingW || demoCanvas.height!==backingH){
+      demoCanvas.width=backingW;
+      demoCanvas.height=backingH;
+    }
+    demoCtx.setTransform(dpr,0,0,dpr,0,0);
+    demoCtx.clearRect(0,0,width,height);
+    const t=REDUCED_MOTION ? 0 : (Math.max(0,(ms-demoStartedAt)/1000)%DEMO_TOTAL_SECONDS);
+    const stage=REDUCED_MOTION ? 7 : Math.min(7,Math.floor(t/DEMO_MERGE_SECONDS));
+    if(stage!==demoLastStage){
+      demoLastStage=stage;
+      demoStep.textContent=stage===7?'Step 8 of 8 · Eukarya burst':`Step ${stage+1} of 8 · Merge`;
+      demoEquation.textContent=stage===7?
+        'Eukarya + Eukarya → All seven lower ranks' :
+        `${LEVELS[stage].name} + ${LEVELS[stage].name} → ${LEVELS[stage+1].name}${stage===6?' (Eukarya)':''}`;
+      [...demoProgress.children].forEach((el,i)=>{
+        el.className=i<stage?'complete':i===stage?'active':'';
+      });
+    }
+    // Soft background rings and floor stay inside this independent canvas.
+    const cx=width*.5, cy=height*.57;
+    demoCtx.save();
+    const spotlight=demoCtx.createRadialGradient(cx,cy,5,cx,cy,width*.57);
+    spotlight.addColorStop(0,'#395c8429');spotlight.addColorStop(1,'#10253b00');
+    demoCtx.fillStyle=spotlight;demoCtx.fillRect(0,0,width,height);
+    demoCtx.strokeStyle='#bbdaf540';demoCtx.lineWidth=1.4;
+    demoCtx.beginPath();demoCtx.ellipse(cx,height*.91,width*.32,6,0,0,Math.PI*2);demoCtx.stroke();
+    demoCtx.restore();
+    const maxRadius=Math.min(width*.172,height*.363);
+    // Compress the real game's 14:1 size progression for readability in a
+    // 180px tutorial: only display size changes, never actual physics values.
+    const demoRadius=level=>maxRadius*(.39+.61*Math.pow(level/7,.86));
+    const sphere=(x,y,r,level,pulse=0,squish=0)=>
+      drawSphere(x,y,r,level,false,pulse,0,squish,0,demoCtx);
+    const label=(text,x,y,size=11)=>{
+      demoCtx.save();
+      demoCtx.textAlign='center';demoCtx.textBaseline='middle';
+      demoCtx.font=`900 ${size}px system-ui,Arial,sans-serif`;
+      demoCtx.lineWidth=3.2;demoCtx.strokeStyle='#10233ee6';
+      demoCtx.strokeText(text,x,y);
+      demoCtx.fillStyle='#f9fbff';demoCtx.fillText(text,x,y);
+      demoCtx.restore();
+    };
+    const sparkle=(x,y,amount)=>{
+      if(amount<=0)return;
+      demoCtx.save();
+      for(let k=0;k<12;k++){
+        const a=k*Math.PI*2/12;
+        const distance=(17+45*demoEaseOut(amount))*Math.min(1,width/350);
+        const xx=x+Math.cos(a)*distance, yy=y+Math.sin(a)*distance*.72;
+        const alpha=(1-amount)*.92;
+        demoCtx.globalAlpha=alpha;
+        demoCtx.beginPath();demoCtx.arc(xx,yy,1.5+(k%3===0?1.8:0),0,Math.PI*2);
+        demoCtx.fillStyle=['#fff9c5','#fff','#91efff','#ff96b4'][k%4];demoCtx.fill();
+      }
+      demoCtx.restore();
+    };
+    if(stage<7){
+      const p=REDUCED_MOTION ? .50 : (t-stage*DEMO_MERGE_SECONDS)/DEMO_MERGE_SECONDS;
+      const r=demoRadius(stage);
+      const targetY=cy;
+      const impact=.66;
+      if(p<impact){
+        const descent=demoEaseIn((p-.08)/(impact-.08));
+        const approachingX=cx+r*.90;
+        const startY=-r-5;
+        const y=startY+(targetY-startY)*descent;
+        sphere(cx-r*.90,targetY,r,stage,0,p>.60?(p-.60)*1.4:0);
+        if(p>.08) sphere(approachingX,y,r,stage);
+        label(LEVELS[stage].name,cx-r*.9,targetY+r+13);
+      } else {
+        const merged=(p-impact)/(1-impact);
+        const emerging=demoEaseOut(merged/.39);
+        const nextR=demoRadius(stage+1);
+        if(merged<.20){
+          demoCtx.globalAlpha=Math.max(0,1-merged/.20);
+          sphere(cx-r*.74,cy,r*(1-merged*.75),stage,0,.1);
+          sphere(cx+r*.74,cy,r*(1-merged*.75),stage,0,-.1);
+          demoCtx.globalAlpha=1;
+        }
+        if(emerging>0){
+          demoCtx.globalAlpha=emerging;
+          sphere(cx,cy,nextR*(.45+.55*emerging),stage+1,.18*Math.sin(Math.min(1,merged/.7)*Math.PI));
+          demoCtx.globalAlpha=1;
+          if(merged>.17)label(stage===6?'Eukarya':LEVELS[stage+1].name,cx,cy+nextR+15);
+        }
+        sparkle(cx,cy,merged*.95);
+      }
+    } else {
+      // Match the actual burstEukarya() rule: TWO top-tier balls disappear,
+      // and precisely ONE ball of every lower rank (6,5,4,3,2,1,0) appears.
+      const p=REDUCED_MOTION ? .86 :
+        (t-7*DEMO_MERGE_SECONDS)/DEMO_BURST_SECONDS;
+      const r=demoRadius(7);
+      if(p<.43){
+        const collision=demoEaseIn(p/.43);
+        const displacement=(width*.25-r*.53)*(1-collision);
+        sphere(cx-displacement,cy,r,7,0,collision*.05);
+        sphere(cx+displacement,cy,r,7,0,-collision*.05);
+        label('Eukarya',cx,Math.max(14,cy-r-14));
+      } else {
+        const q=clamp((p-.43)/.37,0,1), spread=demoEaseOut(q);
+        sparkle(cx,cy,clamp((p-.43)/.57,0,1));
+        if(q<.40){
+          demoCtx.save();demoCtx.globalAlpha=(1-q/.40)*.65;
+          demoCtx.fillStyle='#fff3c5';demoCtx.beginPath();
+          demoCtx.arc(cx,cy,9+width*.13*demoEaseOut(q/.4),0,Math.PI*2);
+          demoCtx.fill();demoCtx.restore();
+        }
+        const positions=[
+          [.17,.30], [.50,.30], [.83,.30],
+          [.12,.76], [.37,.76], [.63,.76], [.88,.76]
+        ];
+        for(let n=0;n<7;n++){
+          const level=6-n;
+          const [fx,fy]=positions[n];
+          const x=cx+(width*fx-cx)*spread;
+          const y=cy+(height*fy-cy)*spread;
+          const rr=demoRadius(level)*.49*(.5+.5*spread);
+          demoCtx.globalAlpha=Math.min(1,q*5);
+          sphere(x,y,rr,level);
+          demoCtx.globalAlpha=1;
+          if(q>.60)label(LEVELS[level].name,x,y+rr+11,9);
+        }
+      }
+    }
+  }
   function showInstructions(){
     if(instructionsOpen)return;
     instructionsOpen=true;
     instructionsOpenedAt=performance.now();
     instructionsOverlay.hidden=false;
+    resetMergeDemo();
     helpButton.hidden=true;
     instructionsLaunch.textContent=started ? 'BACK TO GAME →' : "LET'S DROP! →";
     down=false;
@@ -1361,7 +1464,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       popping=false;
       endTitle.textContent='Game Over';
       endMessage.textContent=domainCreated
-        ?'Great job!!! You helped Skubert trace his roots all the way to Eukarya! Indeed, Skubert does have distinct cell nuclei, membrane-bound organelles, and organization supported by a cytoskeleton. No surprises. Always good to check though!'
+        ?'A sphere spilled out of the pyramid and reached the bottom. Great job! You helped Skubert trace his roots back to Eukarya! Indeed, Skubert does have a distinct cell nucleus, membrane-bound organelles, and organization supported by a cytoskeleton. Always good to check though.'
         :'A sphere spilled out of the pyramid and reached the bottom. Oops! Skubert still needs help tracing his roots back to Eukarya! Try matching faster!';
       endScore.textContent=fmt.format(score)+' points';
       $('playAgain').textContent='Play again';
@@ -1438,7 +1541,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   }
   function hexRGB(hex){ const c=hex.replace('#',''); return [parseInt(c.slice(0,2),16), parseInt(c.slice(2,4),16), parseInt(c.slice(4,6),16)]; }
   function tint(hex,t){ const rgb=hexRGB(hex); return `rgb(${rgb.map(n=>Math.round(n+(t>=0?(255-n):n)*t)).join(',')})`; }
-  function drawSphere(x,y,r,level,ghost=false,pulse=0,angle=0,squish=0,squishAxis=0){
+  function drawSphere(x,y,r,level,ghost=false,pulse=0,angle=0,squish=0,squishAxis=0,renderCtx=ctx){
+    // Only the canvas target varies; appearance and silhouette logic stay identical.
+    const ctx=renderCtx;
     const color=LEVELS[level].color;
     ctx.save();
     ctx.globalAlpha=ghost?.85:1;
@@ -1646,7 +1751,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   }
   function frame(ms){
     if(instructionsOpen){
-      // Freeze physics, autoplay, animations, and watchdogs while help is visible.
+      // Only the tutorial advances; game physics and timers remain paused.
+      renderMergeDemo(ms);
       lastFrame=ms;
       accumulator=0;
       requestAnimationFrame(frame);
@@ -1696,14 +1802,20 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       else if(!e.repeat) drop();
     }
   });
+  demoReplay.addEventListener('click',resetMergeDemo);
   instructionsLaunch.addEventListener('click',launchFromInstructions);
   helpButton.addEventListener('click',showInstructions);
   instructionsOverlay.addEventListener('keydown',e=>{
     if(e.key==='Escape'&&started){
       e.preventDefault();launchFromInstructions();
     } else if(e.key==='Tab'){
-      // The instructions dialog has one action; keep focus inside it.
-      e.preventDefault();instructionsLaunch.focus({preventScroll:true});
+      // Help includes Replay and Let's Drop; keep tab navigation within them.
+      const first=demoReplay,last=instructionsLaunch;
+      if(e.shiftKey && (document.activeElement===first || document.activeElement===instructionsOverlay)){
+        e.preventDefault();last.focus({preventScroll:true});
+      } else if(!e.shiftKey && document.activeElement===last){
+        e.preventDefault();first.focus({preventScroll:true});
+      }
     }
   });
   $('playAgain').addEventListener('click',()=>reset(false));
