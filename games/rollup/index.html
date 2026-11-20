@@ -559,6 +559,108 @@ body.rollup-wide-gutters .stats .stat {
 <script>
 (() => {
   'use strict';
+  // BEGIN ROLLUP_CONFIG_V1 — Single source of truth for tunable values.
+  // Edit this block only. World units are logical pixels, not screen pixels.
+  // Changing scoring or movement values changes leaderboard comparability.
+  // There is intentionally NO maximum Skubert diameter or size-based speed increase.
+  const ROLLUP_CONFIG = {
+      "world": {
+          "ARTICLE_OVERSCAN_TOP": 720,
+          "ARTICLE_OVERSCAN_BOTTOM": 980,
+          "WORLD_WIDTH": 1920,
+          "WORLD_HEIGHT": 1080
+      },
+      "camera": {
+          "CAMERA_START_ZOOM": 4.5,
+          "CAMERA_MIN_ZOOM": 1.2,
+          "CAMERA_COVER_ZOOM_LIMIT": 1.6,
+          "CAMERA_FULL_VIEW_DIAMETER": 81,
+          "CAMERA_ZOOM_RESPONSE": 6.0,
+          "CAMERA_FOLLOW_RESPONSE": 6.0,
+          "CAMERA_DEAD_ZONE": 0.15,
+          "CAMERA_LOOK_AHEAD": 0.08,
+          "CAMERA_LOOK_AHEAD_RESPONSE": 5.0,
+          "CAMERA_ARTICLE_VIEWPORT_SHARE": 0.7,
+          "CAMERA_ARTICLE_ZOOM_CEILING": 1.75,
+          "CAMERA_ARTICLE_MIN_ASPECT": 1.2,
+          "CAMERA_ARTICLE_FOCUS_BIAS": 0.36,
+          "CAMERA_ARTICLE_FOCUS_RESPONSE": 3.0,
+          "CAMERA_ARTICLE_PLAYER_SAFE_FRACTION": 0.32
+      },
+      "movement": {
+          "MOVE_SPEED": 225,
+          "CHASE_RESPONSE_SMALL": 4.5,
+          "CHASE_RESPONSE_LARGE": 1.5,
+          "CHASE_RESPONSE_CURVE_POWER": 0.5,
+          "SLOWDOWN_RADIUS": 105,
+          "EDGE_SCROLL_PUSH": 400,
+          "EDGE_SCROLL_ZONE": 500,
+          "EDGE_SCROLL_VIEWPORT_FRACTION": 0.25
+      },
+      "growth": {
+          "AVATAR_START_SIZE": 18,
+          "AVATAR_GROWTH_RATE": 16,
+          "AVATAR_INERTIA_REFERENCE_SIZE": 1920
+      },
+      "pickup": {
+          "COLLECT_RADIUS_FACTOR": 0.5,
+          "WORD_START_MAX_CHARS": 3,
+          "WORD_DIAMETER_PER_EXTRA_CHAR": 6,
+          "OBJECT_PICKUP_MIN_DIAMETER": 36,
+          "BLOCK_LARGE_OBJECTS": true,
+          "BLOCK_RADIUS_FACTOR": 0.44,
+          "BLOCK_STEP_PX": 4
+      },
+      "discovery": {
+          "WORDS_PER_SCAN": 400,
+          "SPATIAL_CELL_SIZE": 192
+      },
+      "attachments": {
+          "MAX_ITEMS": 110,
+          "MAX_PENDING_SPRITES": 110,
+          "SPRITES_PER_FRAME": 4,
+          "SPRITE_FRAME_BUDGET_MS": 3,
+          "ATTACHMENT_MAX_FPS": 90,
+          "SPRITE_FADE_MS": 140,
+          "MAX_CAPTURE_QUEUE": 32,
+          "WORD_SPRITE_RASTER_SCALE": 5,
+          "WORD_OUTLINE_WIDTH": 0.85,
+          "WORD_SPRITE_PADDING": 3
+      },
+      "physics": {
+          "PHYSICS_MAX_STEP_SECONDS": 0.025,
+          "PHYSICS_MAX_CATCHUP_SECONDS": 0.24,
+          "PICKUP_CHECK_INTERVAL_SECONDS": 0.055
+      },
+      "scoring": {
+          "massThresholdTier2": 7,
+          "massThresholdTier3": 20,
+          "comboWindowMs": 1700,
+          "comboPerMultiplier": 5,
+          "maxMultiplier": 4,
+          "baseTier1": 10,
+          "baseTier2": 30,
+          "baseTier3": 70,
+          "maxDescendantScoreBonus": 25,
+          "descendantScoreBonusEach": 2,
+          "maxDescendantMassBonus": 6,
+          "descendantMassBonusEach": 0.28
+      }
+  };
+  // END ROLLUP_CONFIG_V1
+  for (const section of Object.values(ROLLUP_CONFIG)) Object.freeze(section);
+  Object.freeze(ROLLUP_CONFIG);
+  window.rollupConfig = ROLLUP_CONFIG; // Read-only diagnostic in DevTools.
+  const { ARTICLE_OVERSCAN_TOP, ARTICLE_OVERSCAN_BOTTOM, WORLD_WIDTH, WORLD_HEIGHT } = ROLLUP_CONFIG.world;
+  const { CAMERA_START_ZOOM, CAMERA_MIN_ZOOM, CAMERA_COVER_ZOOM_LIMIT, CAMERA_FULL_VIEW_DIAMETER, CAMERA_ZOOM_RESPONSE, CAMERA_FOLLOW_RESPONSE, CAMERA_DEAD_ZONE, CAMERA_LOOK_AHEAD, CAMERA_LOOK_AHEAD_RESPONSE, CAMERA_ARTICLE_VIEWPORT_SHARE, CAMERA_ARTICLE_ZOOM_CEILING, CAMERA_ARTICLE_MIN_ASPECT, CAMERA_ARTICLE_FOCUS_BIAS, CAMERA_ARTICLE_FOCUS_RESPONSE, CAMERA_ARTICLE_PLAYER_SAFE_FRACTION } = ROLLUP_CONFIG.camera;
+  const { MOVE_SPEED, CHASE_RESPONSE_SMALL, CHASE_RESPONSE_LARGE, CHASE_RESPONSE_CURVE_POWER, SLOWDOWN_RADIUS, EDGE_SCROLL_PUSH, EDGE_SCROLL_ZONE, EDGE_SCROLL_VIEWPORT_FRACTION } = ROLLUP_CONFIG.movement;
+  const { AVATAR_START_SIZE, AVATAR_GROWTH_RATE, AVATAR_INERTIA_REFERENCE_SIZE } = ROLLUP_CONFIG.growth;
+  const { COLLECT_RADIUS_FACTOR, WORD_START_MAX_CHARS, WORD_DIAMETER_PER_EXTRA_CHAR, OBJECT_PICKUP_MIN_DIAMETER, BLOCK_LARGE_OBJECTS, BLOCK_RADIUS_FACTOR, BLOCK_STEP_PX } = ROLLUP_CONFIG.pickup;
+  const { WORDS_PER_SCAN, SPATIAL_CELL_SIZE } = ROLLUP_CONFIG.discovery;
+  const { MAX_ITEMS, MAX_PENDING_SPRITES, SPRITES_PER_FRAME, SPRITE_FRAME_BUDGET_MS, ATTACHMENT_MAX_FPS, SPRITE_FADE_MS, MAX_CAPTURE_QUEUE, WORD_SPRITE_RASTER_SCALE, WORD_OUTLINE_WIDTH, WORD_SPRITE_PADDING } = ROLLUP_CONFIG.attachments;
+  const { PHYSICS_MAX_STEP_SECONDS, PHYSICS_MAX_CATCHUP_SECONDS, PICKUP_CHECK_INTERVAL_SECONDS } = ROLLUP_CONFIG.physics;
+  const SCORE_RULES = ROLLUP_CONFIG.scoring;
+
   // Self-contained, original game. Automatic DOM discovery; no Weball source or external libraries.
   const $ = id => document.getElementById(id);
   const field = $('playfield');
@@ -566,8 +668,6 @@ body.rollup-wide-gutters .stats .stat {
   // The saved article lives in exactly ONE iframe. The padded internal page
   // places document coordinate zero at game-world y=0, despite a taller
   // viewport that visually extends above and below the playable world.
-  const ARTICLE_OVERSCAN_TOP = 720;
-  const ARTICLE_OVERSCAN_BOTTOM = 980;
   function prepareContinuousArticle(frame){
     const doc=frame.contentDocument;
     if(!doc?.body)return false;
@@ -591,28 +691,11 @@ body.rollup-wide-gutters .stats .stat {
     return true;
   }
 
-  const WORLD_WIDTH = 1920;
-  const WORLD_HEIGHT = 1080;
     // ROLLUP_GROWTH_CAMERA_V1 — visual camera only; game.x/game.y stay in world units.
   // The world, collectible geometry, size tiers, physics and score logic do not reflow.
-  const CAMERA_START_ZOOM = 4.5;
-  const CAMERA_MIN_ZOOM = 1.20; // 1.20x or more when needed to fill the browser
-  const CAMERA_COVER_ZOOM_LIMIT = 1.60; // avoid extreme cropping on portrait screens
-  const CAMERA_FULL_VIEW_DIAMETER = 81;
-  const CAMERA_ZOOM_RESPONSE = 6.0;
-  const CAMERA_FOLLOW_RESPONSE = 6.0;
-  const CAMERA_DEAD_ZONE = 0.15; // fraction of currently visible camera width/height
-  const CAMERA_LOOK_AHEAD = 0.08; // up to 8% of visible world width
-  const CAMERA_LOOK_AHEAD_RESPONSE = 5.0;
   // ROLLUP_HORIZONTAL_ARTICLE_FRAMING_V1
   // At wide aspect ratios, prefer Wikipedia's article column over blank side
   // margins, but NEVER modify the saved page's layout or collectible geometry.
-  const CAMERA_ARTICLE_VIEWPORT_SHARE = 0.70; // Intended article share of screen width.
-  const CAMERA_ARTICLE_ZOOM_CEILING = 1.75;  // Mild late-game zoom floor, not a size cap.
-  const CAMERA_ARTICLE_MIN_ASPECT = 1.20;     // Don't force extra zoom on portrait phones.
-  const CAMERA_ARTICLE_FOCUS_BIAS = 0.36;    // Soft content centering when zoomed out.
-  const CAMERA_ARTICLE_FOCUS_RESPONSE = 3.0;
-  const CAMERA_ARTICLE_PLAYER_SAFE_FRACTION = 0.32; // Keep Skubert near the central 64%.
   const CAMERA_REDUCED_MOTION = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
   let displayScale = 1;
   const camera = {
@@ -765,32 +848,13 @@ body.rollup-wide-gutters .stats .stat {
   // TIMED RUN: 60 seconds on the Product Lifecycle snapshot.
   const DURATION = 60;
   // MOVEMENT SETTINGS — change these values to customize the ball-like feel.
-  const MOVE_SPEED = 225;          // Maximum speed (pixels/second).
   // ROLLUP_SIZE_MOMENTUM_V1 — steering response depends on Skubert diameter.
-  const CHASE_RESPONSE_SMALL = 4.5;      // Fast steering when smallest.
-  const CHASE_RESPONSE_LARGE = 1.5;      // Heavy steering when largest.
-  const CHASE_RESPONSE_CURVE_POWER = 0.5; // 1 = linear; 0.5 = heavier sooner.
-  const SLOWDOWN_RADIUS = 105;     // Distance (px) over which Skubert brakes near the cursor.
-  const EDGE_SCROLL_PUSH = 400;    // Virtual cursor target extension near an edge.
-  const EDGE_SCROLL_ZONE = 500;     // Maximum distance (px) from an edge to begin scrolling.
-  const EDGE_SCROLL_VIEWPORT_FRACTION = 0.25; // Start scrolling about 25% before the top/bottom edge.
   function earlyScrollMargin(height){
     // Keep top and bottom trigger regions separate, even on small screens.
     return Math.max(28,Math.min(EDGE_SCROLL_ZONE,height*EDGE_SCROLL_VIEWPORT_FRACTION,height/2-28));
   }
-  // GROWTH SETTINGS — one size function controls the GLB/fallback, attached
-  // items, drop-in landing, and the HTML pickup hitbox. Adjust here only.
-  const AVATAR_START_SIZE = 18;       // Diameter in CSS pixels at zero mass.
-  const AVATAR_GROWTH_RATE = 16; // Uncapped diameter gained per square root of collected mass.
-  const AVATAR_INERTIA_REFERENCE_SIZE = 1920;
-  const COLLECT_RADIUS_FACTOR = 0.50; // Pickup radius as a fraction of avatar diameter.
+  // The growth and pickup settings above control GLB size, hitbox and attachments.
   // ROLLUP_WORD_GROWTH_V1 — word length, visible diameter and camera grow together.
-  const WORD_START_MAX_CHARS = 3;
-  const WORD_DIAMETER_PER_EXTRA_CHAR = 6; // Logical pixels needed to unlock each next character.
-  const OBJECT_PICKUP_MIN_DIAMETER = 36;  // At the start, only words are collectible.
-  const BLOCK_LARGE_OBJECTS = true;
-  const BLOCK_RADIUS_FACTOR = 0.44;
-  const BLOCK_STEP_PX = 4;
   // Keep a one-element stage list for compatibility with the existing collection engine.
   const SCENES = [
     {name:'PRODUCT LIFECYCLE', url:'./levels/product-lifecycle-snapshot.html'}
@@ -807,7 +871,6 @@ body.rollup-wide-gutters .stats .stat {
   let queuedRescan=false;
   // Tokenize visible text incrementally. A full saved webpage may contain many
   // thousands of words, so a one-time 650-word limit misses later sections.
-  const WORDS_PER_SCAN=400;
   // ROLLUP_WORD_REPLENISHMENT_V1: finish scanning visible article words
   // incrementally in idle time, rather than requiring the next scroll event.
   let pendingVisibleWordScan=false;
@@ -817,7 +880,7 @@ body.rollup-wide-gutters .stats .stat {
   const clamp=(v,min,max)=>Math.min(Math.max(v,min),max);
   const timeText=secs=>{if(secs===Infinity)return '∞';const s=Math.max(0,Math.ceil(secs));return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`};
   function show(el,visible){el.hidden=!visible}
-  function levelFromMass(m){return m>=20?3:m>=7?2:1}
+  function levelFromMass(m){return m>=SCORE_RULES.massThresholdTier3?3:m>=SCORE_RULES.massThresholdTier2?2:1}
   // World-space diameter, not screen transform. The same result drives drawing,
   // attachments and collision distance so the pickup area always grows with Skubert.
   function avatarSize(){
@@ -1063,7 +1126,6 @@ body.rollup-wide-gutters .stats .stat {
   // Static cached geometry lives in 192px cells. Sticky/fixed nodes are tested
   // separately because their screen-space positions vary with article scroll.
   // The final overlap checks still use the original precise rectangles.
-  const SPATIAL_CELL_SIZE=192;
   const spatialCells=new Map();
   const spatialDynamic=new Set();
   let spatialVersion=-1;
@@ -1465,20 +1527,13 @@ body.rollup-wide-gutters .stats .stat {
   // It deliberately avoids external libraries and never reads cross-origin pixels.
   const attachments = (() => {
     const items=[];
-    const MAX_ITEMS=110;
     // Collectible logic resolves the entire collision in one batch; expensive
     // attachment sprites are produced over multiple animation frames instead.
-    const MAX_PENDING_SPRITES=110;
-    const SPRITES_PER_FRAME=4;
-    const SPRITE_FRAME_BUDGET_MS=3;
-    const ATTACHMENT_MAX_FPS=90; // Skip excessive 120/144 Hz redraws without reducing 60/75 Hz cadence.
-    const SPRITE_FADE_MS=140; // Smoothly upgrade a quick preview to a detailed object sprite.
     const golden=Math.PI*(3-Math.sqrt(5));
     let phase=0, dpr=1, w=0, h=0;
     let lastAttachmentFrame=0, pendingDX=0, pendingDY=0;
     let captureQueue=[], captureScheduled=false, captureEpoch=0;
     let spriteQueue=[];
-    const MAX_CAPTURE_QUEUE=32;
     const back=attachmentBack.getContext('2d');
     const front=attachmentFront.getContext('2d');
     const canvas=document.createElement('canvas');
@@ -1489,11 +1544,8 @@ body.rollup-wide-gutters .stats .stat {
       ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+ww,y,x+ww,y+hh,r);ctx.arcTo(x+ww,y+hh,x,y+hh,r);ctx.arcTo(x,y+hh,x,y,r);ctx.arcTo(x,y,x+ww,y,r);ctx.closePath();
     }
     // ROLLUP_ORIGINAL_WORD_SPRITES_V1
-    // The source CSS font size is preserved in world pixels; the high-density
-    // canvas only adds sampling detail for the growth-driven camera zoom.
-    const WORD_SPRITE_RASTER_SCALE = 5;
-    const WORD_OUTLINE_WIDTH = 0.85; // logical pixels, outlined around each glyph
-    const WORD_SPRITE_PADDING = 3;   // room for outline and anti-aliasing
+    // Source CSS font size is preserved. Configure outlines and raster density
+    // in ROLLUP_CONFIG.attachments at the beginning of this script.
     function wordSpriteLabel(text,css) {
       const transform=css.textTransform;
       if(transform==='uppercase')return text.toUpperCase();
@@ -1815,16 +1867,17 @@ body.rollup-wide-gutters .stats .stat {
       c.eaten=true;
       c.el.classList.add('eaten');
     }
+    // Scoring constants are maintained in ROLLUP_CONFIG.scoring.
     let earned=0,massEarned=0;
-    let nextCombo=now-game.lastEatTime<1700?game.combo:0;
+    let nextCombo=now-game.lastEatTime<SCORE_RULES.comboWindowMs?game.combo:0;
     let maxTier=1;
     for(const c of roots){
       nextCombo++;
-      const mult=clamp(Math.floor(nextCombo/5)+1,1,4);
+      const mult=clamp(Math.floor(nextCombo/SCORE_RULES.comboPerMultiplier)+1,1,SCORE_RULES.maxMultiplier);
       const removed=removedPerRoot.get(c);
-      const base=c.tier===3?70:c.tier===2?30:10;
-      earned+=(base+Math.min(25,(removed-1)*2))*mult;
-      massEarned+=c.tier+Math.min(6,(removed-1)*.28);
+      const base=c.tier===3?SCORE_RULES.baseTier3:c.tier===2?SCORE_RULES.baseTier2:SCORE_RULES.baseTier1;
+      earned+=(base+Math.min(SCORE_RULES.maxDescendantScoreBonus,(removed-1)*SCORE_RULES.descendantScoreBonusEach))*mult;
+      massEarned+=c.tier+Math.min(SCORE_RULES.maxDescendantMassBonus,(removed-1)*SCORE_RULES.descendantMassBonusEach);
       maxTier=Math.max(maxTier,c.tier);
     }
     game.combo=nextCombo;game.lastEatTime=now;
@@ -1958,9 +2011,6 @@ body.rollup-wide-gutters .stats .stat {
   // Use real elapsed time for the competition clock. Movement advances in
   // bounded slices, so 10–30 FPS does not artificially slow the character.
   // A long background-tab stall does NOT simulate seconds of catch-up motion.
-  const PHYSICS_MAX_STEP_SECONDS=0.025;
-  const PHYSICS_MAX_CATCHUP_SECONDS=0.24;
-  const PICKUP_CHECK_INTERVAL_SECONDS=0.055;
   let pickupCheckElapsed=0;
   function advanceGameplayPhysics(dt,now){
     if(game.pointer)pointerWorldTargetFromScreen();
