@@ -472,35 +472,6 @@ body.rollup-wide-gutters .stats .stat {
 
 
 
-/* ROLLUP_WORD_PROGRESS_HUD_V1 — readable, unscaled progression display. */
-.game-shell > #wordProgressHud {
-  position:absolute;top:14px;left:16px;z-index:40;
-  pointer-events:none;min-width:173px;max-width:240px;
-  padding:9px 13px 10px;border-radius:13px;
-  background:#0032b1;color:#fff;
-  border:1px solid #ffffff38;box-shadow:0 6px 24px #0e293e29;
-  font:700 12px/1.3 Inter,ui-sans-serif,system-ui,sans-serif;
-}
-#wordProgressHud[hidden]{display:none!important}
-#wordProgressHud .word-progress-label {
-  font-size:9px;font-weight:850;letter-spacing:.08em;color:#cfdeff;margin-bottom:3px;
-}
-#wordProgressHud .word-progress-value {white-space:nowrap}
-#wordProgressHud .word-progress-value strong {font-weight:950;color:#ffdf77}
-#wordProgressHud .word-progress-track {
-  height:3px;border-radius:6px;background:#ffffff36;overflow:hidden;margin-top:7px;
-}
-#wordProgressHud .word-progress-track span {
-  display:block;height:100%;width:0;background:#ffdf77;border-radius:6px;
-  transition:width .12s linear;
-}
-@media(max-width:800px){
-  .game-shell > #wordProgressHud {top:53px;left:10px;min-width:150px;padding:7px 10px 8px;font-size:11px}
-}
-@media(prefers-reduced-motion:reduce){
-  #wordProgressHud .word-progress-track span {transition:none}
-}
-
 </style>
 <link rel="stylesheet" href="../../shared/score-entry.css">
 </head>
@@ -527,12 +498,6 @@ body.rollup-wide-gutters .stats .stat {
     <div class="stat"><div class="stat-label">Time left</div><div class="stat-value" id="timeLabel">1:00</div></div>
   </section>
   <div class="game-shell">
-    <!-- Fixed-size progression HUD; its position and text do not zoom with the page. -->
-    <div id="wordProgressHud" role="status" aria-live="polite" hidden>
-      <div class="word-progress-label">WORD PICKUP</div>
-      <div class="word-progress-value">Up to <strong id="wordProgressLimit">3</strong> characters</div>
-      <div class="word-progress-track" aria-hidden="true"><span id="wordProgressFill"></span></div>
-    </div>
     <div id="playfield" tabindex="0" aria-label="Game area. Move your mouse or arrow keys to guide Skubert over page elements.">
       <div id="siteContent"></div>
       <canvas id="attachmentBack" class="attachment-layer" aria-hidden="true"></canvas>
@@ -594,7 +559,7 @@ body.rollup-wide-gutters .stats .stat {
   // BEGIN ROLLUP_CONFIG_V1 — Single source of truth for tunable values.
   // Edit this block only. World units are logical pixels, not screen pixels.
   // Changing scoring or movement values changes leaderboard comparability.
-  // There is intentionally NO maximum Skubert diameter or size-based speed increase.
+  // Skubert diameter is uncapped. Maximum travel speed rises gradually with size.
   const ROLLUP_CONFIG = {
       "world": {
           "ARTICLE_OVERSCAN_TOP": 720,
@@ -620,7 +585,9 @@ body.rollup-wide-gutters .stats .stat {
           "CAMERA_ARTICLE_PLAYER_SAFE_FRACTION": 0.32
       },
       "movement": {
-          "MOVE_SPEED": 225,
+          "MOVE_SPEED_START": 225,
+          "MOVE_SPEED_MAX": 450,
+          "MOVE_SPEED_GROWTH": 0.9,
           "CHASE_RESPONSE_SMALL": 4.5,
           "CHASE_RESPONSE_LARGE": 1.5,
           "CHASE_RESPONSE_CURVE_POWER": 0.5,
@@ -685,7 +652,7 @@ body.rollup-wide-gutters .stats .stat {
   window.rollupConfig = ROLLUP_CONFIG; // Read-only diagnostic in DevTools.
   const { ARTICLE_OVERSCAN_TOP, ARTICLE_OVERSCAN_BOTTOM, WORLD_WIDTH, WORLD_HEIGHT } = ROLLUP_CONFIG.world;
   const { CAMERA_START_ZOOM, CAMERA_MIN_ZOOM, CAMERA_COVER_ZOOM_LIMIT, CAMERA_FULL_VIEW_DIAMETER, CAMERA_ZOOM_RESPONSE, CAMERA_FOLLOW_RESPONSE, CAMERA_DEAD_ZONE, CAMERA_LOOK_AHEAD, CAMERA_LOOK_AHEAD_RESPONSE, CAMERA_ARTICLE_VIEWPORT_SHARE, CAMERA_ARTICLE_ZOOM_CEILING, CAMERA_ARTICLE_MIN_ASPECT, CAMERA_ARTICLE_FOCUS_BIAS, CAMERA_ARTICLE_FOCUS_RESPONSE, CAMERA_ARTICLE_PLAYER_SAFE_FRACTION } = ROLLUP_CONFIG.camera;
-  const { MOVE_SPEED, CHASE_RESPONSE_SMALL, CHASE_RESPONSE_LARGE, CHASE_RESPONSE_CURVE_POWER, SLOWDOWN_RADIUS, EDGE_SCROLL_PUSH, EDGE_SCROLL_ZONE, EDGE_SCROLL_VIEWPORT_FRACTION } = ROLLUP_CONFIG.movement;
+  const { MOVE_SPEED_START, MOVE_SPEED_MAX, MOVE_SPEED_GROWTH, CHASE_RESPONSE_SMALL, CHASE_RESPONSE_LARGE, CHASE_RESPONSE_CURVE_POWER, SLOWDOWN_RADIUS, EDGE_SCROLL_PUSH, EDGE_SCROLL_ZONE, EDGE_SCROLL_VIEWPORT_FRACTION } = ROLLUP_CONFIG.movement;
   const { AVATAR_START_SIZE, AVATAR_GROWTH_RATE, AVATAR_INERTIA_REFERENCE_SIZE } = ROLLUP_CONFIG.growth;
   const { COLLECT_RADIUS_FACTOR, WORD_START_MAX_CHARS, WORD_DIAMETER_PER_EXTRA_CHAR, OBJECT_PICKUP_MIN_DIAMETER, BLOCK_LARGE_OBJECTS, BLOCK_RADIUS_FACTOR, BLOCK_STEP_PX } = ROLLUP_CONFIG.pickup;
   const { WORDS_PER_SCAN, SPATIAL_CELL_SIZE } = ROLLUP_CONFIG.discovery;
@@ -825,7 +792,7 @@ body.rollup-wide-gutters .stats .stat {
     const visibleH=Math.min(WORLD_HEIGHT,host.clientHeight/Math.max(.001,camera.baseScale*camera.zoom));
     const zoneX=visibleW*CAMERA_DEAD_ZONE/2;
     const zoneY=visibleH*CAMERA_DEAD_ZONE/2;
-    const targetLeadX=Math.max(-1,Math.min(1,game.vx/Math.max(1,MOVE_SPEED)))
+    const targetLeadX=Math.max(-1,Math.min(1,game.vx/Math.max(1,currentMaxSpeed())))
       *visibleW*CAMERA_LOOK_AHEAD;
     const leadAlpha=CAMERA_REDUCED_MOTION?1:1-Math.exp(-CAMERA_LOOK_AHEAD_RESPONSE*dt);
     const previousLeadX=camera.lookAheadX;
@@ -920,6 +887,13 @@ body.rollup-wide-gutters .stats .stat {
     // No viewport or maximum-diameter cap: growth depends only on accumulated mass.
     return AVATAR_START_SIZE +
       AVATAR_GROWTH_RATE * Math.sqrt(Math.max(0, game.mass));
+  }
+  // ROLLUP_SIZE_DEPENDENT_SPEED_V1: keep the starting feel, gradually raise
+  // the top speed as Skubert grows. Inertia still controls how quickly he
+  // accelerates, brakes and turns; the maximum diameter remains uncapped.
+  function currentMaxSpeed(){
+    return Math.min(MOVE_SPEED_MAX,
+      MOVE_SPEED_START + Math.max(0,avatarSize()-AVATAR_START_SIZE)*MOVE_SPEED_GROWTH);
   }
   function collectRadius(){return avatarSize()*COLLECT_RADIUS_FACTOR;}
   // Letters and numbers count; punctuation and spaces do not.
@@ -1373,19 +1347,7 @@ body.rollup-wide-gutters .stats .stat {
   function updateHud(){
     $('scoreLabel').textContent=game.score.toLocaleString();
     $('eatenLabel').innerHTML=`${game.eaten} <span class="stat-suffix">/ ${game.total}</span>`;
-    const wordLimit=maxWordCharacters();
-    $('sizeLabel').textContent=`LV ${game.level} · ≤${wordLimit} chars`;
-    // Keep the new indicator outside the camera transform; announce only new unlocks.
-    const progressHud=$('wordProgressHud');
-    progressHud.hidden=!['playing','paused','help'].includes(game.status);
-    const wordProgressLimit=$('wordProgressLimit');
-    if(wordProgressLimit.textContent!==String(wordLimit))wordProgressLimit.textContent=String(wordLimit);
-    const lastUnlockDiameter=AVATAR_START_SIZE+
-      (wordLimit-WORD_START_MAX_CHARS)*WORD_DIAMETER_PER_EXTRA_CHAR;
-    const unlockProgress=clamp(
-      (avatarSize()-lastUnlockDiameter)/WORD_DIAMETER_PER_EXTRA_CHAR,0,1
-    );
-    $('wordProgressFill').style.width=`${(unlockProgress*100).toFixed(1)}%`;
+    $('sizeLabel').textContent=`LV ${game.level}`;
     $('timeLabel').textContent=game.mode==='relaxed'?'∞':timeText(game.remaining);
     $('remainingLabel').textContent=`${game.sceneTotal-game.sceneEaten} DOM items remaining`;
     $('progressFill').style.width=`${game.sceneTotal?(game.sceneEaten/game.sceneTotal)*100:0}%`;
@@ -2058,11 +2020,12 @@ body.rollup-wide-gutters .stats .stat {
     const dx=(keys.has('arrowright')||keys.has('d')?1:0)-(keys.has('arrowleft')||keys.has('a')?1:0);
     const dy=(keys.has('arrowdown')||keys.has('s')?1:0)-(keys.has('arrowup')||keys.has('w')?1:0);
     // Match the existing ball-like controls, but integrate in small time slices.
+    const maxSpeed=currentMaxSpeed();
     let desiredVx=0,desiredVy=0;
     if(dx||dy){
       const length=Math.hypot(dx,dy);
-      desiredVx=dx/length*MOVE_SPEED;
-      desiredVy=dy/length*MOVE_SPEED;
+      desiredVx=dx/length*maxSpeed;
+      desiredVy=dy/length*maxSpeed;
       game.pointer=false;
     }else if(game.pointer){
       let targetY=game.ty;
@@ -2076,7 +2039,7 @@ body.rollup-wide-gutters .stats .stat {
       const toX=game.tx-game.x,toY=targetY-game.y;
       const distance=Math.hypot(toX,toY);
       if(distance>0.01){
-        const desiredSpeed=MOVE_SPEED*Math.min(1,distance/SLOWDOWN_RADIUS);
+        const desiredSpeed=maxSpeed*Math.min(1,distance/SLOWDOWN_RADIUS);
         desiredVx=toX/distance*desiredSpeed;
         desiredVy=toY/distance*desiredSpeed;
       }
@@ -2091,10 +2054,10 @@ body.rollup-wide-gutters .stats .stat {
     const response=1-Math.exp(-currentChaseResponse*dt);
     game.vx+=(desiredVx-game.vx)*response;
     game.vy+=(desiredVy-game.vy)*response;
-    // Retain the intentional 225 px/s speed limit, independent of frame rate.
+    // Clamp to the CURRENT size-dependent maximum, not the starting speed.
     const speed=Math.hypot(game.vx,game.vy);
-    if(speed>MOVE_SPEED){
-      const scale=MOVE_SPEED/speed;
+    if(speed>maxSpeed){
+      const scale=maxSpeed/speed;
       game.vx*=scale;game.vy*=scale;
     }
     if(Math.abs(game.vx)<0.04)game.vx=0;
