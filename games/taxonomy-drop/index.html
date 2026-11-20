@@ -164,8 +164,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   let balls=[],particles=[],floating=[],shockwaves=[],score=0,highest=0;
   let unlocked=new Set([0]);
   let aimX=200,current=0,next=1,ended=false,dropWait=0;
-  // Loss condition: a ball must pass over the OPEN left or right upper lip,
-  // then completely exit the visible screen. Rising above Eukarya alone is safe.
+  // Loss condition: a ball must pass over the OPEN left or right upper lip.
+  // It then enters a contained cinematic fall and ends at the bottom impact.
+  // Rising above Eukarya alone is safe.
   const SPILL_LIP_MARGIN=2;
   // Preserve rigid wall contact even when squash deforms the visible sphere.
   // The physical sphere-to-sphere radius remains unchanged.
@@ -174,8 +175,13 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   // Escape is a one-way cinematic state. Freeze the pyramid, suspend drops,
   // track the escaped sphere in view, and finish on a bottom-edge impact.
   const ESCAPE_FALL_DURATION_SECONDS=2.35; // Real-time duration of the fall.
-  const ESCAPE_SLOW_MOTION_FACTOR=.32;     // Spin/secondary animation speed.
-  const ESCAPE_SIDE_TRACK_SECONDS=.72;     // Ease into the visible side gutter.
+  const ESCAPE_SLOW_MOTION_FACTOR=.32;     // Spin and original horizontal momentum.
+  // Soft, invisible guard walls activate ONLY during the cinematic fall.
+  // Radius + warning clearance keeps the entire ball and red halo onscreen.
+  const ESCAPE_SIDE_WARNING_CLEARANCE=56;
+  const ESCAPE_SIDE_WALL_RESTITUTION=.68;  // Fraction of horizontal speed after a bounce.
+  const ESCAPE_HORIZONTAL_DRAG=.48;       // Per-second exponential drag between bounces.
+  const ESCAPE_MAX_HORIZONTAL_SPEED=370;  // Cinematic world units per real second.
   let escapeSequence=null;
   let fireworks=[],fireworkBursts=[],impactFlash=0;
   const FIREWORK_COLORS=['#ffdf54','#ffffff','#ff5b80','#6be4ff','#99ffcc','#e4a1ff','#ff9b4b'];
@@ -466,9 +472,19 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   }
   function beginEscapeSequence(b){
     if(escapeSequence || ended)return;
-    const gutter=Math.max(58,b.r+36);
-    escapeSequence={id:b.id,side:b.spilled,elapsed:0,startX:b.x,startY:b.y,
-      targetX:b.spilled<0?gutter:W-gutter,targetY:H-b.r-10};
+    // Guard walls sit just inside the screen edges, leaving enough space for
+    // the whole sphere AND its pulsing red warning rings to remain visible.
+    const margin=Math.min(W*.45,b.r+ESCAPE_SIDE_WARNING_CLEARANCE);
+    const minX=margin,maxX=W-margin;
+    // A ball may already be halfway offscreen when the lip check runs.
+    // Immediately place it inside the guard walls before the next render.
+    b.x=clamp(b.x,minX,maxX);
+    const inheritedVx=clamp(b.vx*ESCAPE_SLOW_MOTION_FACTOR,
+      -ESCAPE_MAX_HORIZONTAL_SPEED,ESCAPE_MAX_HORIZONTAL_SPEED);
+    // Almost-stationary spills should still visibly rebound from their side.
+    const vx=Math.abs(inheritedVx)<110 ? b.spilled*145 : inheritedVx;
+    escapeSequence={id:b.id,side:b.spilled,elapsed:0,startY:b.y,
+      targetY:H-b.r-10,minX,maxX,vx,wallFlash:0,wallFlashX:0,wallFlashY:0};
     dropDeadline=Infinity; // Stop auto-drop and allow no more manual drops.
     down=false;
     setMessage(`${LEVELS[b.level].name} escaped the ${b.spilled<0?'left':'right'} lip! Slow-motion fall...`);
@@ -480,20 +496,31 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     if(!b){ escapeSequence=null; return; }
     seq.elapsed+=dt;
     const progress=clamp(seq.elapsed/ESCAPE_FALL_DURATION_SECONDS,0,1);
-    // Deliberate, readable slow-motion path. The rest of the pile is frozen;
-    // no hidden collision forces or merges run during this sequence.
+    // The pile stays frozen; the escaped sphere alone retains horizontal
+    // inertia, rebounds against invisible screen-edge guards, and slows down.
+    seq.wallFlash=Math.max(0,seq.wallFlash-dt);
+    const attemptedX=b.x+seq.vx*dt;
+    if(attemptedX<seq.minX || attemptedX>seq.maxX){
+      const hitLeft=attemptedX<seq.minX;
+      const wallX=hitLeft?seq.minX:seq.maxX;
+      // Reflect any small penetration instead of sticking to the boundary.
+      b.x=clamp(2*wallX-attemptedX,seq.minX,seq.maxX);
+      seq.vx=(hitLeft?1:-1)*Math.abs(seq.vx)*ESCAPE_SIDE_WALL_RESTITUTION;
+      seq.wallFlash=.26;
+      seq.wallFlashX=wallX;
+      seq.wallFlashY=b.y;
+    } else {
+      b.x=attemptedX;
+    }
+    seq.vx*=Math.exp(-ESCAPE_HORIZONTAL_DRAG*dt);
+    // Keep the previous slow-motion vertical timing and bottom-edge finale.
     const fallEase=Math.pow(progress,1.55);
-    const track=clamp(seq.elapsed/ESCAPE_SIDE_TRACK_SECONDS,0,1);
-    const trackEase=1-Math.pow(1-track,3);
-    b.x=seq.startX+(seq.targetX-seq.startX)*trackEase;
     b.y=seq.startY+(seq.targetY-seq.startY)*fallEase;
     b.angle+=b.omega*dt*ESCAPE_SLOW_MOTION_FACTOR;
     b.pulse=Math.max(0,b.pulse-dt*ESCAPE_SLOW_MOTION_FACTOR);
     time+=dt*ESCAPE_SLOW_MOTION_FACTOR;
     updateBurstEffects(dt);
     if(progress>=1){
-      // The impact happens on the bottom edge, NOT as soon as the ball
-      // crosses Eukarya or slips just outside the sloping walls.
       launchFinale(b);
       endGame(b);
     }
@@ -1133,6 +1160,23 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     }
     // Escape warning follows the sphere outside the pyramid's open sides.
     drawSpillWarnings();
+    // Brief contact flash makes an otherwise invisible guard-wall bounce clear.
+    if(escapeSequence?.wallFlash>0&&!ended){
+      const seq=escapeSequence,alpha=seq.wallFlash/.26;
+      ctx.save();
+      const inner=seq.wallFlashX<W/2?1:-1;
+      const flashX=seq.wallFlashX-inner*18;
+      const grad=ctx.createLinearGradient(flashX-35,0,flashX+35,0);
+      grad.addColorStop(0,'rgba(255,48,68,0)');
+      grad.addColorStop(.5,`rgba(255,74,95,${(.48*alpha).toFixed(3)})`);
+      grad.addColorStop(1,'rgba(255,48,68,0)');
+      ctx.fillStyle=grad;
+      ctx.fillRect(flashX-35,Math.max(0,seq.wallFlashY-95),70,190);
+      ctx.beginPath();ctx.arc(seq.wallFlashX,seq.wallFlashY,26+(1-alpha)*42,0,Math.PI*2);
+      ctx.strokeStyle=`rgba(255,255,255,${(.92*alpha).toFixed(3)})`;
+      ctx.lineWidth=4*alpha+1;ctx.stroke();
+      ctx.restore();
+    }
     // Spectacular end-of-run balloon bursts can fly beyond the V walls.
     if(popping||popFragments.length||popRings.length){
       ctx.save();
