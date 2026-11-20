@@ -1381,14 +1381,52 @@ body.rollup-wide-gutters .stats .stat {
       r=Math.max(0,Math.min(r,ww/2,hh/2));
       ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+ww,y,x+ww,y+hh,r);ctx.arcTo(x+ww,y+hh,x,y+hh,r);ctx.arcTo(x,y+hh,x,y,r);ctx.arcTo(x,y,x+ww,y,r);ctx.closePath();
     }
+    // ROLLUP_ORIGINAL_WORD_SPRITES_V1
+    // The source CSS font size is preserved in world pixels; the high-density
+    // canvas only adds sampling detail for the growth-driven camera zoom.
+    const WORD_SPRITE_RASTER_SCALE = 5;
+    const WORD_OUTLINE_WIDTH = 0.85; // logical pixels, outlined around each glyph
+    const WORD_SPRITE_PADDING = 3;   // room for outline and anti-aliasing
+    function wordSpriteLabel(text,css) {
+      const transform=css.textTransform;
+      if(transform==='uppercase')return text.toUpperCase();
+      if(transform==='lowercase')return text.toLowerCase();
+      if(transform==='capitalize')return text.replace(/\b\S/g,ch=>ch.toUpperCase());
+      return text;
+    }
+    function sourceWordFont(css) {
+      return [css.fontStyle||'normal',css.fontWeight||'400',css.fontSize||'16px',css.fontFamily||'sans-serif'].join(' ');
+    }
+    function configureWordContext(ctx,css) {
+      ctx.font=sourceWordFont(css);
+      ctx.textBaseline='middle';
+      if('letterSpacing' in ctx)ctx.letterSpacing=css.letterSpacing==='normal'?'0px':(css.letterSpacing||'0px');
+    }
     function snapshot(el,type,cachedRect){
       const rect=cachedRect||screenRect(el);
-      const width=type==='word'?Math.min(118,Math.max(25,Math.ceil(rect.width)+12)):Math.min(156,Math.max(34,Math.ceil(rect.width*.65)));
-      const height=type==='word'?24:Math.min(102,Math.max(28,Math.ceil(rect.height*.65)));
-      const scale=2;
-      const img=document.createElement('canvas');img.width=width*scale;img.height=height*scale;
-      const ctx=img.getContext('2d');ctx.scale(scale,scale);
       const css=(el.ownerDocument.defaultView||window).getComputedStyle(el);
+      const isWord=type==='word';
+      let width,height;
+      if(isWord){
+        const measuring=canvas.getContext('2d');
+        configureWordContext(measuring,css);
+        const label=wordSpriteLabel(asText(el),css);
+        const measured=measuring.measureText(label).width;
+        const sourceFontSize=parseFloat(css.fontSize)||16;
+        width=Math.max(1,Math.ceil(Math.max(rect.width,measured)+WORD_SPRITE_PADDING*2));
+        height=Math.max(1,Math.ceil(Math.max(rect.height,sourceFontSize*1.2)+WORD_SPRITE_PADDING*2));
+      }else{
+        width=Math.min(156,Math.max(34,Math.ceil(rect.width*.65)));
+        height=Math.min(102,Math.max(28,Math.ceil(rect.height*.65)));
+      }
+      const scale=isWord?WORD_SPRITE_RASTER_SCALE:2;
+      const img=document.createElement('canvas');
+      img.width=Math.max(1,Math.ceil(width*scale));
+      img.height=Math.max(1,Math.ceil(height*scale));
+      // Store the original world-space dimensions, not the pixel-buffer size.
+      img.logicalWidth=width;
+      img.logicalHeight=height;
+      const ctx=img.getContext('2d');ctx.scale(scale,scale);
       // Word sprites are transparent: only their text attaches to Skubert.
       // Keep the existing card treatment for larger HTML objects.
       if(type!=='word'){
@@ -1402,11 +1440,16 @@ body.rollup-wide-gutters .stats .stat {
       }
       const text=asText(el);
       if(type==='word'){
-        ctx.font=`700 11px system-ui, sans-serif`;
-        ctx.fillStyle=css.color||'#183e3c';ctx.textBaseline='middle';
-        let label=text;
-        while(label.length>2 && ctx.measureText(label).width>width-9)label=label.slice(0,-2)+'…';
-        ctx.fillText(label,5,height/2);
+        configureWordContext(ctx,css);
+        const label=wordSpriteLabel(text,css);
+        const x=WORD_SPRITE_PADDING;
+        const y=height/2;
+        ctx.lineWidth=WORD_OUTLINE_WIDTH;
+        ctx.lineJoin='round';
+        ctx.strokeStyle='#ffffff';
+        ctx.strokeText(label,x,y);
+        ctx.fillStyle=css.color||'#183e3c';
+        ctx.fillText(label,x,y);
       }else{
         const emojiEl=el.matches('.product-emoji,.hero-emoji')?el:el.querySelector('.product-emoji,.hero-emoji');
         const pic=el.matches('img')?el:el.querySelector('img');
@@ -1550,8 +1593,10 @@ body.rollup-wide-gutters .stats .stat {
       const image=item.sprite;
       const depth=(v.z+1)/2;
       const k=(.63+depth*.50)*Math.min(1.3,Math.max(.64,radius/62));
-      const sw=Math.min(image.width/2*k,radius*.87);
-      const sh=Math.min(image.height/2*k,radius*.56);
+      // Word attachments retain their original logical-pixel dimensions.
+      // HTML-object cards still use the existing size/perspective scaling.
+      const sw=item.kind==='word' ? image.logicalWidth : Math.min(image.width/2*k,radius*.87);
+      const sh=item.kind==='word' ? image.logicalHeight : Math.min(image.height/2*k,radius*.56);
       const x=game.x+v.x*radius*.91,y=game.y+v.y*radius*.87;
       const age=Math.min(1,(now-item.born)/210);
       ctx.save();ctx.globalAlpha=age*(v.z<0?.73:1);
