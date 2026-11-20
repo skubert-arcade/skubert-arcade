@@ -519,7 +519,7 @@ body.rollup-wide-gutters .stats .stat {
       <div class="screen launch-screen" id="introOverlay">
         <div class="screen-card launch-card">
           <h2>Skubert Roll Up</h2>
-          <p>Roll over HTML objects, grow, and explore the Product Lifecycle page.</p>
+          <p>Start with words of 3 characters or fewer. Grow to unlock longer words and webpage objects.</p>
           <div class="screen-buttons">
             <button id="startTimed" class="btn btn-green" type="button"><span class="drop-arrow" aria-hidden="true">↓</span> DROP IN <span class="subtle">· 1:00</span></button>
             <button id="startZen" class="btn" type="button">Explore freely</button>
@@ -531,7 +531,7 @@ body.rollup-wide-gutters .stats .stat {
       <div class="screen" id="helpOverlay" hidden>
         <div class="screen-card">
           <div class="figure">🍽️</div><h2>How to play</h2>
-          <p>Explore the locally saved Product Lifecycle webpage. Absorb words and other HTML elements to grow. Timed play gives you 60 seconds.</p>
+          <p>Start by collecting words of 3 characters or fewer. Bigger words stay in place until you grow enough to absorb them. Webpage objects unlock as you grow. Timed play gives you 60 seconds.</p>
           <div class="instructions">
             <div class="instruction"><strong>🖱️ Mouse / touch</strong>Move or drag within the game area. Push Skubert against the top or bottom edge to scroll the article.</div>
             <div class="instruction"><strong>⌨️ Keyboard</strong>Use arrows or WASD to move and scroll at the edges; P pauses.</div>
@@ -660,11 +660,11 @@ body.rollup-wide-gutters .stats .stat {
   const WORLD_HEIGHT = 1080;
     // ROLLUP_GROWTH_CAMERA_V1 — visual camera only; game.x/game.y stay in world units.
   // The world, collectible geometry, size tiers, physics and score logic do not reflow.
-  const CAMERA_START_ZOOM = 2.5;
+  const CAMERA_START_ZOOM = 4.5;
   const CAMERA_MIN_ZOOM = 1.20; // 1.20x or more when needed to fill the browser
   const CAMERA_COVER_ZOOM_LIMIT = 1.60; // avoid extreme cropping on portrait screens
-  const CAMERA_FULL_VIEW_DIAMETER = 75;
-  const CAMERA_ZOOM_RESPONSE = 4.0;
+  const CAMERA_FULL_VIEW_DIAMETER = 81;
+  const CAMERA_ZOOM_RESPONSE = 6.0;
   const CAMERA_FOLLOW_RESPONSE = 6.0;
   const CAMERA_DEAD_ZONE = 0.15; // fraction of currently visible camera width/height
   const CAMERA_LOOK_AHEAD = 0.08; // up to 8% of visible world width
@@ -818,12 +818,16 @@ body.rollup-wide-gutters .stats .stat {
   }
   // GROWTH SETTINGS — one size function controls the GLB/fallback, attached
   // items, drop-in landing, and the HTML pickup hitbox. Adjust here only.
-  const AVATAR_START_SIZE = 30;       // Diameter in CSS pixels at zero mass.
+  const AVATAR_START_SIZE = 18;       // Diameter in CSS pixels at zero mass.
   const AVATAR_GROWTH_RATE = 8;      // Size gained per square root of mass (previously 13).
   const AVATAR_MAX_SIZE = 1920;        // Maximum desktop diameter (previously 220).
   const AVATAR_MAX_VIEWPORT = 2.0;  // Limit on narrow screens to 90% of field width.
   const AVATAR_INERTIA_REFERENCE_SIZE = 1920;
   const COLLECT_RADIUS_FACTOR = 0.50; // Pickup radius as a fraction of avatar diameter.
+  // ROLLUP_WORD_GROWTH_V1 — word length, visible diameter and camera grow together.
+  const WORD_START_MAX_CHARS = 3;
+  const WORD_DIAMETER_PER_EXTRA_CHAR = 6; // Logical pixels needed to unlock each next character.
+  const OBJECT_PICKUP_MIN_DIAMETER = 36;  // At the start, only words are collectible.
   const BLOCK_LARGE_OBJECTS = true;
   const BLOCK_RADIUS_FACTOR = 0.44;
   const BLOCK_STEP_PX = 4;
@@ -858,6 +862,53 @@ body.rollup-wide-gutters .stats .stat {
     AVATAR_GROWTH_RATE * Math.sqrt(Math.max(0,game.mass));
 }
   function collectRadius(){return avatarSize()*COLLECT_RADIUS_FACTOR;}
+  // Letters and numbers count; punctuation and spaces do not.
+  function wordCharacterCount(text){
+    return (String(text||'').match(/[\p{L}\p{N}]/gu)||[]).length;
+  }
+  function maxWordCharacters(){
+    return WORD_START_MAX_CHARS + Math.floor(
+      Math.max(0,avatarSize()-AVATAR_START_SIZE) / WORD_DIAMETER_PER_EXTRA_CHAR
+    );
+  }
+  function canCollectElement(c){
+    if(c.type==='word'){
+      const n=c.charCount??wordCharacterCount(c.el.textContent);
+      return n>=1 && n<=maxWordCharacters();
+    }
+    return c.type==='object' &&
+      avatarSize()>=OBJECT_PICKUP_MIN_DIAMETER && c.tier<=game.level;
+  }
+  // Wikipedia's plain text links are not solid obstacles just because their
+  // width puts them into a higher object tier. The words inside remain pass-through.
+  function isPassThroughTextLink(el){
+    if(!el.matches('a') || el.querySelector('img,svg,video,canvas,picture'))return false;
+    const style=(el.ownerDocument.defaultView||window).getComputedStyle(el);
+    const paintedBackground=style.backgroundImage!=='none' && style.backgroundImage!=='' ||
+      !['transparent','rgba(0, 0, 0, 0)'].includes(style.backgroundColor);
+    const visibleBorder=['Top','Right','Bottom','Left'].some(side=>
+      parseFloat(style['border'+side+'Width'])>0 && style['border'+side+'Style']!=='none');
+    return !paintedBackground && !visibleBorder;
+  }
+  // A collectible HTML container may contain wrapped or not-yet-scanned words.
+  // Don't let it absorb a longer word as a side effect of collecting the parent.
+  // This is checked only when an object is already in pickup range.
+  function containsLockedWord(root){
+    const maxChars=maxWordCharacters();
+    for(const span of root.querySelectorAll('.dom-word:not(.eaten)')){
+      if(wordCharacterCount(span.textContent)>maxChars)return true;
+    }
+    const walker=(root.ownerDocument||document).createTreeWalker(root,NodeFilter.SHOW_TEXT);
+    let node;
+    while((node=walker.nextNode())){
+      const parent=node.parentElement;
+      if(!parent || parent.closest('.dom-word,.eaten,script,style,noscript'))continue;
+      for(const token of (node.nodeValue.match(/\S+/g)||[])){
+        if(wordCharacterCount(token)>maxChars)return true;
+      }
+    }
+    return false;
+  }
   // DOM collection engine v2. Discovers text and visible objects without requiring
   // the original webpage's .edible classes or manually assigned data-tier values.
   // Collection is scoped to #siteContent; game controls and score UI are excluded.
@@ -1045,7 +1096,7 @@ body.rollup-wide-gutters .stats .stat {
     const words=[...root.querySelectorAll('.dom-word')].filter(el=>!existing.has(el)&&isVisible(el));
     const objects=[...root.querySelectorAll('*')].filter(el=>!existing.has(el)&&isVisualObject(el));
     if(!append)collectibles=[];
-    const discovered=[...words.map(el=>({el,type:'word',tier:1,eaten:false})),
+    const discovered=[...words.map(el=>({el,type:'word',tier:1,charCount:wordCharacterCount(el.textContent),eaten:false})),
       ...objects.map(el=>({el,type:'object',tier:objectTier(el),eaten:false}))];
     for(const c of discovered){
       if(c.type==='object')c.el.classList.add('dom-object');
@@ -1122,7 +1173,7 @@ body.rollup-wide-gutters .stats .stat {
   function updateHud(){
     $('scoreLabel').textContent=game.score.toLocaleString();
     $('eatenLabel').innerHTML=`${game.eaten} <span class="stat-suffix">/ ${game.total}</span>`;
-    $('sizeLabel').textContent=`LV ${game.level}`;
+    $('sizeLabel').textContent=`LV ${game.level} · ≤${maxWordCharacters()} chars`;
     $('timeLabel').textContent=game.mode==='relaxed'?'∞':timeText(game.remaining);
     $('remainingLabel').textContent=`${game.sceneTotal-game.sceneEaten} DOM items remaining`;
     $('progressFill').style.width=`${game.sceneTotal?(game.sceneEaten/game.sceneTotal)*100:0}%`;
@@ -1569,6 +1620,7 @@ body.rollup-wide-gutters .stats .stat {
       const dx=rect.left-fieldRect.left+rect.width/2-game.x;
       const dy=rect.top-fieldRect.top+rect.height/2-game.y;
       if(!inside(dx,dy))continue;
+      if(containsLockedWord(c.el))continue; // Don't swallow locked longer words via a parent.
       // Do not absorb a containing element while it still contains words or
       // objects outside Skubert's reach. A fully enclosed object is safe.
       if(!fullyInside(c) && c.el.querySelector('.dom-word:not(.eaten), .dom-object:not(.eaten)'))continue;
@@ -1671,6 +1723,7 @@ body.rollup-wide-gutters .stats .stat {
     const blockers=[];
     for(const c of collectibles){
       if(c.eaten||c.type!=='object'||c.tier<=game.level||!c.el.isConnected)continue;
+      if(isPassThroughTextLink(c.el))continue; // Plain longer links never block the player.
       if(c.el.closest('.eaten'))continue;
       const r=collectibleRect(c,scrollY);
       if(!r.width||!r.height)continue;
@@ -1706,7 +1759,7 @@ body.rollup-wide-gutters .stats .stat {
     const scrollY=articleScrollPosition();
     const inRange=[];
     for(const c of collectibles){
-      if(c.eaten || c.tier>game.level || !c.el.isConnected)continue;
+      if(c.eaten || !canCollectElement(c) || !c.el.isConnected)continue;
       const r=collectibleRect(c,scrollY);
       if(!r.width || !r.height)continue;
       if(r.right<fr.left-radius || r.left>fr.right+radius ||
