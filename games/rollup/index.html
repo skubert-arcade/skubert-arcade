@@ -620,15 +620,15 @@ body.rollup-wide-gutters .stats .stat {
       },
       "footprints": {
           "ENABLED": true,
-          "LENGTH_RATIO": 0.68,
-          "WIDTH_RATIO": 0.34,
-          "SIDE_OFFSET_RATIO": 0.21,
-          "BACK_OFFSET_RATIO": 0.22,
-          "STEP_DISTANCE_RATIO": 0.68,
-          "MIN_STEP_DISTANCE": 15,
-          "MIN_STEP_INTERVAL_MS": 105,
-          "OPACITY": 0.46,
-          "FILL_COLOR": "#372c46",
+          "LENGTH_RATIO": 0.30,
+          "WIDTH_RATIO": 0.14,
+          "SIDE_OFFSET_RATIO": 0.055,
+          "BACK_OFFSET_RATIO": 0.13,
+          "STEP_DISTANCE_RATIO": 0.38,
+          "MIN_STEP_DISTANCE": 8,
+          "MIN_STEP_INTERVAL_MS": 60,
+          "OPACITY": 0.20,
+          "FILL_COLOR": "#45484b",
           "LIFETIME_MS": 8000,
           "FADE_MS": 3000,
           "MAX_COUNT": 120,
@@ -1654,8 +1654,8 @@ body.rollup-wide-gutters .stats .stat {
     }
     avatar.style.translate=`${game.x}px ${game.y}px`;
   }
-  // ROLLUP_BIGFOOT_FOOTPRINTS_V1
-  // One independent world-space canvas. Existing attachment canvases clear every
+  // ROLLUP_SOFT_DRAG_TRACKS_V2
+  // Small, faded scuffs live in one independent world-space canvas. Attachment canvases clear every
   // frame and cannot retain footprints. The camera transforms this entire layer
   // along with the Wikipedia scene. The article scroll offset is recorded with
   // each stamp so it stays on the exact part of the page where it was placed.
@@ -1663,7 +1663,7 @@ body.rollup-wide-gutters .stats .stat {
     const cfg=FOOTPRINT_CONFIG;
     const ctx=footprintCanvas.getContext('2d');
     const marks=[];
-    let previous=null, walkedSincePrint=0, leftFoot=true, clockMs=0;
+    let previous=null, walkedSincePrint=0, leftSide=true, clockMs=0;
     let lastStampMs=-Infinity, lastDrawMs=-Infinity, dpr=1;
     const MAX_SPAWNS_PER_FRAME=12;
     function articleY(){
@@ -1688,14 +1688,13 @@ body.rollup-wide-gutters .stats .stat {
       previous=null;walkedSincePrint=0;
     }
     function reset(){
-      marks.length=0;leftFoot=true;clockMs=0;lastStampMs=-Infinity;
+      marks.length=0;leftSide=true;clockMs=0;lastStampMs=-Infinity;
       resetSampling();
       if(ctx){resize();ctx.clearRect(0,0,WORLD_WIDTH,WORLD_HEIGHT);}
       lastDrawMs=-Infinity;
     }
-    // Original vector silhouette: curved heel, slight inner arch, broad
-    // forefoot and five separately distinguishable toes. The larger toe is
-    // on the inside; mirroring alternates anatomical left and right feet.
+    // Soft, nondescript drag marks: no foot silhouette, heel, or toes.
+    // Stored local variation keeps the same irregular scuff on every redraw.
     function paintStamp(fp,scroll,age){
       const remaining=cfg.LIFETIME_MS-age;
       if(remaining<=0)return;
@@ -1704,48 +1703,56 @@ body.rollup-wide-gutters .stats .stat {
       if(x < -fp.length || x > WORLD_WIDTH+fp.length ||
          y < -fp.length || y > WORLD_HEIGHT+fp.length)return;
       const w=fp.width,h=fp.length;
+      const bend=(fp.seed-.5)*w*.75;
       ctx.save();
       ctx.translate(x,y);
+      // Track is stretched along the travel direction, not shaped like a foot.
       ctx.rotate(fp.heading+Math.PI/2);
-      if(fp.left)ctx.scale(-1,1);
-      ctx.globalAlpha=cfg.OPACITY*fade;
+      ctx.lineCap='round';
+      ctx.lineJoin='round';
+      ctx.strokeStyle=cfg.FILL_COLOR;
       ctx.fillStyle=cfg.FILL_COLOR;
-      ctx.strokeStyle='#1e172b';
-      ctx.lineWidth=Math.max(.55,w*.026);
+      ctx.globalAlpha=cfg.OPACITY*fade*(.78+.22*fp.seed);
+      // Primary, slightly wandering dragged smudge.
+      ctx.lineWidth=Math.max(.65,w*.42);
       ctx.beginPath();
-      // The back of the footprint lies at +Y; toes point toward -Y.
-      ctx.moveTo(-.06*w,.45*h);
-      ctx.bezierCurveTo(-.38*w,.47*h,-.38*w,.28*h,-.32*w,.15*h);
-      ctx.bezierCurveTo(-.26*w,.035*h,-.48*w,-.13*h,-.42*w,-.31*h);
-      ctx.bezierCurveTo(-.37*w,-.46*h,-.12*w,-.49*h,.13*w,-.45*h);
-      ctx.bezierCurveTo(.43*w,-.43*h,.49*w,-.28*h,.40*w,-.13*h);
-      ctx.bezierCurveTo(.35*w,.025*h,.34*w,.22*h,.34*w,.33*h);
-      ctx.bezierCurveTo(.31*w,.53*h,.06*w,.55*h,-.06*w,.45*h);
-      ctx.closePath();ctx.fill();ctx.stroke();
-      // Five toe pads: the biggest is the inside toe, slightly farther ahead.
-      const toes=[
-        [-.35,-.52,.092],[-.18,-.588,.115],
-        [0,-.625,.132],[.20,-.615,.155],[.39,-.565,.178]
-      ];
-      for(const [tx,ty,r] of toes){
+      ctx.moveTo(-.08*w,.44*h);
+      ctx.bezierCurveTo(-.24*w+bend*.3,.16*h,
+        .13*w+bend,-.12*h,.04*w+bend*.25,-.45*h);
+      ctx.stroke();
+      // A thinner broken abrasion alongside it. Deliberately asymmetrical.
+      ctx.globalAlpha*=.43;
+      ctx.lineWidth=Math.max(.4,w*.15);
+      ctx.beginPath();
+      ctx.moveTo(-.37*w,.26*h);
+      ctx.quadraticCurveTo(-.27*w+bend*.3,-.10*h,-.18*w+bend*.4,-.36*h);
+      ctx.stroke();
+      if(fp.seed>.34){
         ctx.beginPath();
-        ctx.ellipse(tx*w,ty*h,Math.max(.7,r*w),Math.max(.85,r*w*1.12),-.13,0,Math.PI*2);
-        ctx.fill();
+        ctx.moveTo(.30*w,.21*h);
+        ctx.quadraticCurveTo(.25*w,-.02*h,.33*w+bend*.2,-.23*h);
+        ctx.stroke();
       }
+      // A faint patch of disturbed surface, not a heel or toe pad.
+      ctx.globalAlpha*=.5;
+      ctx.beginPath();
+      ctx.ellipse(.12*w,-.05*h,Math.max(.4,w*.18),
+        Math.max(.5,h*.12),-.2,0,Math.PI*2);
+      ctx.fill();
       ctx.restore();
     }
     function stamp(x,y,heading,size,now){
-      const side=leftFoot?-1:1;
+      const side=leftSide?-1:1;
       const perpX=-Math.sin(heading),perpY=Math.cos(heading);
       const back=cfg.BACK_OFFSET_RATIO*size;
       const sideways=cfg.SIDE_OFFSET_RATIO*size*side;
       marks.push({
         x:x+perpX*sideways-Math.cos(heading)*back,
         y:y+perpY*sideways-Math.sin(heading)*back,
-        heading,left:leftFoot,length:size*cfg.LENGTH_RATIO,
-        width:size*cfg.WIDTH_RATIO,born:now
+        heading,length:size*cfg.LENGTH_RATIO,
+        width:size*cfg.WIDTH_RATIO,seed:Math.random(),born:now
       });
-      leftFoot=!leftFoot;
+      leftSide=!leftSide;
       if(marks.length>cfg.MAX_COUNT)marks.splice(0,marks.length-cfg.MAX_COUNT);
     }
     function updateAndRender(dtMs,now){
