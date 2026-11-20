@@ -429,7 +429,7 @@ body{min-width:320px;background:#eff3ef;color:#172d35}
    The moving world still clips inside .game-shell; nothing gets reflowed. */
 .game-shell { isolation:isolate; background:#fff; }
 .game-shell::before,.game-shell::after { content:none!important; display:none!important; }
-#playfield {z-index:1;will-change:transform;}
+#playfield {z-index:1;will-change:auto;}
 /* Pause, help, game-over and toast are direct children of the shell; they
    never zoom or crop with the game camera. */
 .game-shell > .screen { z-index:55; }
@@ -822,7 +822,7 @@ body.rollup-wide-gutters .stats .stat {
   // GROWTH SETTINGS — one size function controls the GLB/fallback, attached
   // items, drop-in landing, and the HTML pickup hitbox. Adjust here only.
   const AVATAR_START_SIZE = 18;       // Diameter in CSS pixels at zero mass.
-  const AVATAR_GROWTH_RATE = 8; // Uncapped diameter gained per square root of collected mass.
+  const AVATAR_GROWTH_RATE = 16; // Uncapped diameter gained per square root of collected mass.
   const AVATAR_INERTIA_REFERENCE_SIZE = 1920;
   const COLLECT_RADIUS_FACTOR = 0.50; // Pickup radius as a fraction of avatar diameter.
   // ROLLUP_WORD_GROWTH_V1 — word length, visible diameter and camera grow together.
@@ -849,6 +849,9 @@ body.rollup-wide-gutters .stats .stat {
   // Tokenize visible text incrementally. A full saved webpage may contain many
   // thousands of words, so a one-time 650-word limit misses later sections.
   const WORDS_PER_SCAN=400;
+  // ROLLUP_WORD_REPLENISHMENT_V1: finish scanning visible article words
+  // incrementally in idle time, rather than requiring the next scroll event.
+  let pendingVisibleWordScan=false;
   const game={mode:'timed',status:'intro',scene:0,score:0,eaten:0,total:0,sceneTotal:0,sceneEaten:0,mass:0,level:1,remaining:DURATION,x:120,y:260,tx:120,ty:260,vx:0,vy:0,pointer:false,combo:0,lastEatTime:0,transitioning:false,sound:false,previous:0,lastCheck:0,lastHudTime:0,saved:false};
   // Read-only for the optional 3D renderer; gameplay owns movement and growth.
   window.skubertWeballState = game;
@@ -959,6 +962,10 @@ body.rollup-wide-gutters .stats .stat {
       }
       textNode.replaceWith(fragment);
     }
+    // One additional scan is harmless when exactly 400 tokens were wrapped.
+    // Continuing only when the budget was exhausted avoids repeated full DOM
+    // discovery when the current viewport has no more unwrapped words.
+    pendingVisibleWordScan=capacity<=0;
   }
   function snapshotIframe(){return site.querySelector('#levelSnapshot');}
   function collectRoot(){
@@ -1093,7 +1100,7 @@ body.rollup-wide-gutters .stats .stat {
     // to avoid triggering an endless mutation/re-scan loop.
     if(siteObserver)siteObserver.disconnect();
     const root=collectRoot();
-    if(!root){collectibles=[];return;}
+    if(!root){collectibles=[];pendingVisibleWordScan=false;return;}
     splitWords(root);
     const existing=new Set(append?collectibles.map(c=>c.el):[]);
     const words=[...root.querySelectorAll('.dom-word')].filter(el=>!existing.has(el)&&isVisible(el));
@@ -1116,6 +1123,9 @@ body.rollup-wide-gutters .stats .stat {
       subtree:true,childList:true,attributes:true,
       attributeFilter:['style','hidden','width','height','src']
     });
+    // The existing rescan scheduler throttles calls and uses idle callbacks.
+    // Keep replenishing only while a tokenized-text backlog remains.
+    if(pendingVisibleWordScan && game.status==='playing')rescanVisibleArticle();
   }
   siteObserver=new MutationObserver(records=>{
     // Listen for structural changes and layout-affecting attributes; game-only
@@ -1255,6 +1265,8 @@ body.rollup-wide-gutters .stats .stat {
     launchToken++;
     clearLaunchEffects();
     closeMenu();
+    pickupCheckElapsed=0;
+    game.previous=0;
     game.status='intro';game.score=0;game.mass=0;game.level=1;game.eaten=0;game.total=0;game.scene=0;game.sceneEaten=0;game.combo=0;game.remaining=DURATION;game.transitioning=false;game.saved=false;game.pointer=false;
     attachments.reset();
     game.x=field.clientWidth*.50;game.y=field.clientHeight*.35;game.tx=game.x;game.ty=game.y;game.vx=0;game.vy=0;
@@ -1288,7 +1300,9 @@ body.rollup-wide-gutters .stats .stat {
       moveAvatarToGame();
       if(dropAnimation){dropAnimation.cancel();dropAnimation=null;}
       game.status='playing';game.previous=performance.now();
+      pickupCheckElapsed=0;
       beginGameplayCamera();
+      if(pendingVisibleWordScan)rescanVisibleArticle();
       $('pauseBtn').disabled=false;updateHud();
       setToast('PRODUCT LIFECYCLE · 1:00');
       field.focus({preventScroll:true});
@@ -1835,102 +1849,111 @@ body.rollup-wide-gutters .stats .stat {
     updateHud();
   }
 
+  // ROLLUP_LOW_FPS_PHYSICS_V1
+  // Use real elapsed time for the competition clock. Movement advances in
+  // bounded slices, so 10–30 FPS does not artificially slow the character.
+  // A long background-tab stall does NOT simulate seconds of catch-up motion.
+  const PHYSICS_MAX_STEP_SECONDS=0.025;
+  const PHYSICS_MAX_CATCHUP_SECONDS=0.24;
+  const PICKUP_CHECK_INTERVAL_SECONDS=0.055;
+  let pickupCheckElapsed=0;
+  function advanceGameplayPhysics(dt,now){
+    if(game.pointer)pointerWorldTargetFromScreen();
+    const dx=(keys.has('arrowright')||keys.has('d')?1:0)-(keys.has('arrowleft')||keys.has('a')?1:0);
+    const dy=(keys.has('arrowdown')||keys.has('s')?1:0)-(keys.has('arrowup')||keys.has('w')?1:0);
+    // Match the existing ball-like controls, but integrate in small time slices.
+    let desiredVx=0,desiredVy=0;
+    if(dx||dy){
+      const length=Math.hypot(dx,dy);
+      desiredVx=dx/length*MOVE_SPEED;
+      desiredVy=dy/length*MOVE_SPEED;
+      game.pointer=false;
+    }else if(game.pointer){
+      let targetY=game.ty;
+      const visible=cameraVisibleBounds();
+      const edgeMargin=earlyScrollMargin(visible.height);
+      if(game.ty<visible.top+edgeMargin){
+        targetY-=EDGE_SCROLL_PUSH*(1-clamp((game.ty-visible.top)/edgeMargin,0,1));
+      }else if(game.ty>visible.bottom-edgeMargin){
+        targetY+=EDGE_SCROLL_PUSH*(1-clamp((visible.bottom-game.ty)/edgeMargin,0,1));
+      }
+      const toX=game.tx-game.x,toY=targetY-game.y;
+      const distance=Math.hypot(toX,toY);
+      if(distance>0.01){
+        const desiredSpeed=MOVE_SPEED*Math.min(1,distance/SLOWDOWN_RADIUS);
+        desiredVx=toX/distance*desiredSpeed;
+        desiredVy=toY/distance*desiredSpeed;
+      }
+    }
+    const sizeProgress=clamp(
+      (avatarSize()-AVATAR_START_SIZE)/
+      (AVATAR_INERTIA_REFERENCE_SIZE-AVATAR_START_SIZE),0,1
+    );
+    const inertiaProgress=Math.pow(sizeProgress,CHASE_RESPONSE_CURVE_POWER);
+    const currentChaseResponse=CHASE_RESPONSE_SMALL+
+      (CHASE_RESPONSE_LARGE-CHASE_RESPONSE_SMALL)*inertiaProgress;
+    const response=1-Math.exp(-currentChaseResponse*dt);
+    game.vx+=(desiredVx-game.vx)*response;
+    game.vy+=(desiredVy-game.vy)*response;
+    // Retain the intentional 225 px/s speed limit, independent of frame rate.
+    const speed=Math.hypot(game.vx,game.vy);
+    if(speed>MOVE_SPEED){
+      const scale=MOVE_SPEED/speed;
+      game.vx*=scale;game.vy*=scale;
+    }
+    if(Math.abs(game.vx)<0.04)game.vx=0;
+    if(Math.abs(game.vy)<0.04)game.vy=0;
+    const movement=moveAroundLargeObjects(game.vx*dt,game.vy*dt);
+    const attemptedX=movement.x,attemptedY=movement.y;
+    if(movement.hitX)game.vx=0;
+    if(movement.hitY)game.vy=0;
+    const margin=28;
+    const height=field.clientHeight;
+    const visible=cameraVisibleBounds();
+    const edgeMargin=earlyScrollMargin(visible.height);
+    const safeTop=visible.top+edgeMargin,safeBottom=visible.bottom-edgeMargin;
+    game.x=clamp(attemptedX,margin,Math.max(margin,field.clientWidth-margin));
+    let wantedScroll=0;
+    if(game.vy<0 && attemptedY<safeTop){
+      wantedScroll=Math.min(0,attemptedY-Math.min(game.y,safeTop));
+    }else if(game.vy>0 && attemptedY>safeBottom){
+      wantedScroll=Math.max(0,attemptedY-Math.max(game.y,safeBottom));
+    }
+    const frameScrollDelta=Math.abs(wantedScroll)>.01?scrollArticleBy(wantedScroll):0;
+    game.y=clamp(attemptedY-frameScrollDelta,margin,Math.max(margin,height-margin));
+    // Time-based pickup checks remain frequent enough for 1–3 letter words.
+    pickupCheckElapsed+=dt;
+    if(pickupCheckElapsed>=PICKUP_CHECK_INTERVAL_SECONDS){
+      pickupCheckElapsed%=PICKUP_CHECK_INTERVAL_SECONDS;
+      checkCollisions(now);
+    }
+    return frameScrollDelta;
+  }
   function frame(now){
     if(!game.previous)game.previous=now;
-    const dt=clamp((now-game.previous)/1000,0,.06);game.previous=now;
+    const realElapsed=Math.max(0,(now-game.previous)/1000);
+    game.previous=now;
+    const simulatedElapsed=Math.min(realElapsed,PHYSICS_MAX_CATCHUP_SECONDS);
     const previousX=game.x,previousY=game.y;
     let frameScrollDelta=0;
     if(game.status==='playing'){
-      if(game.mode==='timed'){game.remaining=Math.max(0,game.remaining-dt);if(game.remaining<=0)finish('timeout')}
-      if(game.status==='playing'){
-        if(game.pointer)pointerWorldTargetFromScreen();
-        const dx=(keys.has('arrowright')||keys.has('d')?1:0)-(keys.has('arrowleft')||keys.has('a')?1:0);
-        const dy=(keys.has('arrowdown')||keys.has('s')?1:0)-(keys.has('arrowup')||keys.has('w')?1:0);
-        // Steer velocity toward a desired direction, rather than moving Skubert
-        // directly to the pointer. Velocity persists for a natural, ball-like coast.
-        // Exponential smoothing stays consistent at different frame rates.
-        let desiredVx=0,desiredVy=0;
-        if(dx||dy){
-          const length=Math.hypot(dx,dy);
-          desiredVx=dx/length*MOVE_SPEED;
-          desiredVy=dy/length*MOVE_SPEED;
-          game.pointer=false; // Keyboard takes control until next pointer move.
-        }else if(game.pointer){
-          // A pointer near the edge aims just outside the visible playfield.
-          // This preserves edge scrolling after Skubert reaches the boundary.
-          let targetY=game.ty;
-          const visible=cameraVisibleBounds();
-          const edgeMargin=earlyScrollMargin(visible.height);
-          if(game.ty<visible.top+edgeMargin){
-            targetY-=EDGE_SCROLL_PUSH*(1-clamp((game.ty-visible.top)/edgeMargin,0,1));
-          }else if(game.ty>visible.bottom-edgeMargin){
-            targetY+=EDGE_SCROLL_PUSH*(1-clamp((visible.bottom-game.ty)/edgeMargin,0,1));
-          }
-          const toX=game.tx-game.x,toY=targetY-game.y;
-          const distance=Math.hypot(toX,toY);
-          if(distance>0.01){
-            // Brake gradually when approaching the cursor. It can still
-            // overshoot slightly before turning back, like a rolling ball.
-            const desiredSpeed=MOVE_SPEED*Math.min(1,distance/SLOWDOWN_RADIUS);
-            desiredVx=toX/distance*desiredSpeed;
-            desiredVy=toY/distance*desiredSpeed;
-          }
+      // The clock is based on wall time, not capped simulation time.
+      if(game.mode==='timed'){
+        game.remaining=Math.max(0,game.remaining-realElapsed);
+        if(game.remaining<=0)finish('timeout');
+      }
+      if(game.status==='playing' && simulatedElapsed>0){
+        const steps=Math.max(1,Math.ceil(simulatedElapsed/PHYSICS_MAX_STEP_SECONDS));
+        const stepDt=simulatedElapsed/steps;
+        for(let i=0;i<steps && game.status==='playing';i++){
+          frameScrollDelta+=advanceGameplayPhysics(stepDt,now);
         }
-        // Size-normalized steering inertia (world units, independent of display scaling).
-        const sizeProgress = clamp(
-          (avatarSize() - AVATAR_START_SIZE) /
-          (AVATAR_INERTIA_REFERENCE_SIZE - AVATAR_START_SIZE),
-          0,
-          1
-        );
-        const inertiaProgress=Math.pow(sizeProgress,CHASE_RESPONSE_CURVE_POWER);
-        const currentChaseResponse=CHASE_RESPONSE_SMALL+
-          (CHASE_RESPONSE_LARGE-CHASE_RESPONSE_SMALL)*inertiaProgress;
-        const response=1-Math.exp(-currentChaseResponse*dt);
-        game.vx+=(desiredVx-game.vx)*response;
-        game.vy+=(desiredVy-game.vy)*response;
-        // Do not allow diagonal movement or inertia to exceed MOVE_SPEED.
-        const speed=Math.hypot(game.vx,game.vy);
-        if(speed>MOVE_SPEED){
-          const scale=MOVE_SPEED/speed;
-          game.vx*=scale;game.vy*=scale;
-        }
-        if(Math.abs(game.vx)<0.04)game.vx=0;
-        if(Math.abs(game.vy)<0.04)game.vy=0;
-        const movement = moveAroundLargeObjects(
-          game.vx * dt,
-          game.vy * dt
-        );
-
-        const attemptedX = movement.x;
-        const attemptedY = movement.y;
-
-        if (movement.hitX) game.vx = 0;
-        if (movement.hitY) game.vy = 0;
-        const margin=28;
-        const height=field.clientHeight;
-        const visible=cameraVisibleBounds();
-        const edgeMargin=earlyScrollMargin(visible.height);
-        const safeTop=visible.top+edgeMargin,safeBottom=visible.bottom-edgeMargin;
-        game.x=clamp(attemptedX,margin,Math.max(margin,field.clientWidth-margin));
-        // As Skubert moves toward an edge, transfer the excess movement into
-        // scrolling BEFORE he reaches the viewport boundary. If the snapshot
-        // itself is at its top/bottom, use the remaining motion on Skubert.
-        let wantedScroll=0;
-        if(game.vy<0 && attemptedY<safeTop){
-          wantedScroll=Math.min(0,attemptedY-Math.min(game.y,safeTop));
-        }else if(game.vy>0 && attemptedY>safeBottom){
-          wantedScroll=Math.max(0,attemptedY-Math.max(game.y,safeBottom));
-        }
-        if(Math.abs(wantedScroll)>.01)frameScrollDelta=scrollArticleBy(wantedScroll);
-        game.y=clamp(attemptedY-frameScrollDelta,margin,Math.max(margin,height-margin));
-        positionAvatar();if(now-game.lastCheck>75){game.lastCheck=now;checkCollisions(now)}
-        if(now-game.lastHudTime>250){game.lastHudTime=now;updateHud()}
+        positionAvatar();
+        if(now-game.lastHudTime>250){game.lastHudTime=now;updateHud();}
       }
     }
-    // Camera transform changes only display pixels, not game physics.
-    updateGameplayCamera(dt);
-    // Rolling attachments also respond to the ground moving beneath Skubert.
+    // The visual camera is updated once per rendered frame, never per substep.
+    updateGameplayCamera(simulatedElapsed);
     attachments.render(now,game.x-previousX,game.y-previousY+frameScrollDelta);
     requestAnimationFrame(frame);
   }
