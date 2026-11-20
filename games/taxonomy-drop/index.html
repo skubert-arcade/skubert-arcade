@@ -55,18 +55,151 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
 #score { font-variant-numeric:tabular-nums; font-weight:900; }
 .overlay { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:14px; z-index:6; background:#ffffffd6; }
 .overlay[hidden] { display:none; }
-.start-prompt {
-  position:absolute; inset:0; z-index:4; display:flex; justify-content:center;
-  align-items:flex-start; padding-top:7.8%; pointer-events:none;
+/* INSTRUCTIONS POPUP — replaces the previous Start game button. */
+.instructions-overlay {
+  position:fixed; inset:0; z-index:8; display:flex; align-items:center;
+  justify-content:center; padding:clamp(10px,3vmin,24px);
+  background:rgba(10,24,43,.72); backdrop-filter:blur(5px);
+  overflow-y:auto; overscroll-behavior:contain;
 }
-.start-prompt[hidden] { display:none; }
-.start-prompt button {
-  pointer-events:auto; border:1px solid #304d68; border-radius:999px;
-  background:#fffffff2; color:#162b48; padding:13px 24px;
-  font-weight:900; font-size:16px; box-shadow:0 5px 18px #101b2a40;
+.instructions-overlay[hidden] { display:none; }
+.instructions-card {
+  width:min(100%,450px); max-height:calc(100dvh - 24px);
+  overflow-y:auto; overscroll-behavior:contain; margin:auto;
+  border:1px solid #bec9db; border-radius:20px;
+  background:#fff; color:#182744;
+  box-shadow:0 20px 65px #020d24a8;
+  text-align:center;
 }
-.start-prompt button:hover { background:#fff; transform:translateY(-1px); }
-@media(prefers-reduced-motion:reduce){ .start-prompt button:hover { transform:none; } }
+.instructions-heading {
+  padding:19px 18px 15px; color:#fff;
+  border-radius:18px 18px 0 0;
+  background:linear-gradient(135deg,#13233e 0%,#264a79 100%);
+}
+.instructions-heading h2 {
+  margin:0; letter-spacing:.055em; line-height:1.06;
+  font-size:clamp(24px,5vw,33px); font-weight:950;
+}
+.instructions-heading p { margin:7px 0 0; color:#fbe0a2; font-size:14px; font-weight:800; }
+.instructions-content { padding:16px 20px 19px; }
+.instructions-content h3 { margin:0 0 7px; font-size:20px; line-height:1.2; }
+.instructions-intro { margin:0 auto 12px; max-width:365px; line-height:1.43; font-size:14px; }
+.instructions-intro strong { color:#173d8a; }
+.merge-demo {
+  border-radius:15px; background:linear-gradient(#132944,#1a3454);
+  color:#fff; padding:9px 12px 12px; overflow:hidden;
+}
+.merge-stage { height:151px; position:relative; isolation:isolate; }
+.merge-ground { position:absolute; left:22%; right:22%; bottom:10px; height:2px; background:#7693b459; }
+.demo-ball {
+  position:absolute; left:50%; display:grid; place-items:center; border-radius:50%;
+  transform:translateX(-50%); overflow:hidden;
+  filter:drop-shadow(0 6px 7px #05112499);
+}
+.demo-ball img { height:55%; width:55%; object-fit:contain; filter:drop-shadow(0 1px 2px #0006); }
+.demo-ball-label {
+  display:block; position:absolute; bottom:10%; left:0; right:0;
+  color:#fff; text-shadow:0 1px 2px #171129b9;
+  font-size:10px; font-weight:900;
+}
+.demo-species {
+  width:70px; height:70px; border:2px solid #efbcf5;
+  background:radial-gradient(circle at 27% 22%,#ffcff9 0%,#ef91ea 40%,#a34dc1 95%);
+}
+.demo-falling { top:10px; animation:demo-drop 4.4s cubic-bezier(.24,.64,.28,1) infinite both; }
+.demo-resting { bottom:11px; animation:demo-rest 4.4s ease-in-out infinite both; }
+.demo-genus {
+  top:29px; width:96px; height:96px; border:3px solid #d5c8ff;
+  background:radial-gradient(circle at 27% 21%,#d8d0ff 0%,#897bf5 47%,#5746bb 100%);
+}
+.demo-genus .demo-ball-label { font-size:14px; bottom:12%; }
+.demo-result { animation:demo-evolve 4.4s ease-out infinite both; }
+.demo-spark {
+  position:absolute; left:50%; top:44%; transform:translate(-50%,-50%);
+  font-size:36px; color:#fff3a3; text-shadow:0 0 18px #ffee78;
+  animation:demo-flash 4.4s ease-out infinite both;
+}
+.demo-drop-arrow {
+  position:absolute; left:calc(50% + 47px); top:12px;
+  font-size:23px; font-weight:900; color:#ffde91;
+  animation:demo-arrow 4.4s linear infinite both;
+}
+.merge-equation {
+  margin:0; color:#f6ecff; font-size:13px; font-weight:800;
+  display:flex; flex-wrap:wrap; justify-content:center; gap:7px;
+}
+.merge-equation strong { color:#ffdd8e; }
+@keyframes demo-drop {
+  0%,10% { opacity:0; transform:translate(-50%,-88px); }
+  14% { opacity:1; transform:translate(-50%,-88px); }
+  43% { opacity:1; transform:translate(-50%,1px); }
+  47% { opacity:1; transform:translate(-50%,6px) scale(1.05,.91); }
+  52%,100% { opacity:0; transform:translate(-50%,25px) scale(.25); }
+}
+@keyframes demo-rest {
+  0%,43% { opacity:1; transform:translateX(-50%) scale(1); }
+  48% { opacity:1; transform:translateX(-50%) scale(1.08,.89); }
+  53%,100% { opacity:0; transform:translateX(-50%) scale(.24); }
+}
+@keyframes demo-evolve {
+  0%,48% { opacity:0; transform:translateX(-50%) scale(.2); }
+  55% { opacity:1; transform:translateX(-50%) scale(1.18); }
+  63%,86% { opacity:1; transform:translateX(-50%) scale(1); }
+  95%,100% { opacity:0; transform:translateX(-50%) scale(.7); }
+}
+@keyframes demo-flash {
+  0%,46% { opacity:0; transform:translate(-50%,-50%) scale(.1); }
+  52% { opacity:1; transform:translate(-50%,-50%) scale(2.5); }
+  64%,100% { opacity:0; transform:translate(-50%,-50%) scale(3); }
+}
+@keyframes demo-arrow {
+  0%,13% { opacity:0; }
+  17%,38% { opacity:1; }
+  49%,100% { opacity:0; }
+}
+.instructions-steps { margin:14px 0 13px; display:grid; gap:10px; text-align:left; }
+.instructions-step { display:flex; align-items:flex-start; gap:10px; }
+.instructions-step-number {
+  flex:none; display:grid; place-items:center; width:28px; height:28px;
+  border-radius:9px; background:#eaf1fd; color:#204f93; font-size:14px; font-weight:900;
+}
+.instructions-step p { margin:1px 0 0; color:#485770; font-size:13px; line-height:1.36; }
+.instructions-step strong { display:block; font-size:14px; color:#1a2f50; }
+.instructions-goal { margin:5px 0 13px; font-size:15px; font-weight:900; }
+.instructions-launch {
+  display:block; width:100%; border:0; border-radius:12px;
+  background:#2867b5; color:white; padding:14px 20px;
+  font-size:17px; font-weight:950; letter-spacing:.025em;
+  box-shadow:0 4px 0 #1d4680;
+}
+.instructions-launch:hover { background:#1d55a0; }
+.instructions-launch:active { transform:translateY(2px); box-shadow:0 2px 0 #1d4680; }
+.instructions-note { margin:10px 0 0; color:#69758c; font-size:11px; }
+.instructions-help {
+  position:fixed; z-index:5; right:max(12px,env(safe-area-inset-right));
+  bottom:max(12px,env(safe-area-inset-bottom));
+  width:43px; height:43px; border:1px solid #8da2bf;
+  border-radius:50%; background:#fff; color:#17365d;
+  box-shadow:0 2px 10px #0c1a3340; font-size:23px; font-weight:900;
+}
+.instructions-help:hover { background:#eaf2ff; }
+.instructions-help[hidden] { display:none; }
+@media (max-width:520px) {
+  .instructions-overlay { padding:8px; }
+  .instructions-card { max-height:calc(100dvh - 16px); border-radius:17px; }
+  .instructions-heading { padding:14px 13px 12px; }
+  .instructions-content { padding:12px 15px 15px; }
+  .instructions-intro { margin-bottom:10px; }
+  .merge-stage { height:130px; }
+  .instructions-steps { gap:8px; margin:12px 0; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .demo-falling,.demo-resting,.demo-result,.demo-spark,.demo-drop-arrow { animation:none!important; }
+  .demo-falling,.demo-resting { display:none; }
+  .demo-result { opacity:1; transform:translateX(-50%); }
+  .demo-spark,.demo-drop-arrow { display:none; }
+  .instructions-launch:active { transform:none; }
+}
 .modal { width:min(95vw,480px); max-height:calc(100svh - 28px); overflow-y:auto; overscroll-behavior:contain; padding:20px 16px; border:1px solid #b5b5b5; border-radius:18px; background:#fff; box-shadow:0 16px 36px #0003; text-align:center; }
 .modal h2 { font-size:26px; margin:0 0 8px; }
 .modal p { font-size:14px; line-height:1.4; margin:0; }
@@ -76,8 +209,6 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
 .modal > button[hidden] { display:none; }
 .visually-hidden { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important; overflow:hidden!important; clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important; }
 @media (max-width:520px) {
-  /* On small screens the start button is centered, but slightly higher. */
-  .start-prompt { align-items:center; padding-top:0; transform:translateY(-20px); }
   .arcade-link, .score-display { top:max(7px,env(safe-area-inset-top)); font-size:12px; padding:7px 10px; }
   .arcade-link { left:max(7px,env(safe-area-inset-left)); }
   .score-display { right:max(7px,env(safe-area-inset-right)); }
@@ -92,7 +223,38 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   <canvas id="discovery-layer" aria-hidden="true"></canvas>
   <canvas id="sphere-layer" aria-hidden="true"></canvas>
   <canvas id="game" tabindex="0" aria-label="Taxonomy Drop. Move the pointer or use left and right arrow keys to aim, then click, tap or press Space to drop a sphere. Matching spheres merge into the next taxonomic rank. The game enters slow motion when a sphere escapes a side lip, then ends with fireworks when it reaches the bottom."></canvas>
-  <div id="startPrompt" class="start-prompt"><button id="startButton" type="button">Start game</button></div>
+  <button id="helpButton" class="instructions-help" type="button" hidden aria-label="How to play Taxonomy Drop" title="How to play">?</button>
+  <div id="instructionsOverlay" class="instructions-overlay" role="dialog" aria-modal="true" aria-labelledby="instructionsTitle" aria-describedby="instructionsDescription" hidden>
+    <div class="instructions-card">
+      <header class="instructions-heading">
+        <h2 id="instructionsTitle">TAXONOMY DROP</h2>
+        <p>Match. Merge. Evolve!</p>
+      </header>
+      <div class="instructions-content">
+        <h3>How to Play</h3>
+        <p class="instructions-intro" id="instructionsDescription">Drop a ball so it touches <strong>another of the same type</strong>. They merge into a ball of the <strong>next type!</strong></p>
+        <div class="merge-demo" aria-label="Animated demonstration: a Species ball drops onto another Species ball, producing one Genus ball.">
+          <div class="merge-stage" aria-hidden="true">
+            <div class="merge-ground"></div>
+            <div class="demo-drop-arrow">↓</div>
+            <div class="demo-ball demo-species demo-falling"><img src="silhouettes/00-species.png" alt="" onerror="this.hidden=true"><span class="demo-ball-label">Species</span></div>
+            <div class="demo-ball demo-species demo-resting"><img src="silhouettes/00-species.png" alt="" onerror="this.hidden=true"><span class="demo-ball-label">Species</span></div>
+            <div class="demo-spark">✦</div>
+            <div class="demo-ball demo-genus demo-result"><img src="silhouettes/01-genus.png" alt="" onerror="this.hidden=true"><span class="demo-ball-label">Genus</span></div>
+          </div>
+          <p class="merge-equation"><span>Species</span><span>+</span><span>Species</span><span>→</span><strong>Genus</strong></p>
+        </div>
+        <div class="instructions-steps">
+          <div class="instructions-step"><span class="instructions-step-number" aria-hidden="true">1</span><div><strong>Aim and drop</strong><p>Move your mouse or use the arrow keys to aim. Click, tap, or press Space to drop.</p></div></div>
+          <div class="instructions-step"><span class="instructions-step-number" aria-hidden="true">2</span><div><strong>Keep merging</strong><p>Match the same types to advance through the ranks, from Species to Domain.</p></div></div>
+          <div class="instructions-step"><span class="instructions-step-number" aria-hidden="true">3</span><div><strong>Don't overflow!</strong><p>Keep balls in the pyramid. If one spills out and reaches the bottom, the game ends.</p></div></div>
+        </div>
+        <p class="instructions-goal">Can you reach Domain: Eukarya?</p>
+        <button id="instructionsLaunch" class="instructions-launch" type="button">LET'S DROP! →</button>
+        <p class="instructions-note">Matching balls merge automatically when they touch.</p>
+      </div>
+    </div>
+  </div>
   <div id="overlay" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="endTitle">
     <div class="modal">
       <h2 id="endTitle">Game Over</h2>
@@ -221,15 +383,18 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   let domainCreated=false;
   const collisionDeflections=new Map();
   let lastDroppedLevel=null;
-  const startPrompt=document.getElementById('startPrompt');
+  const instructionsOverlay=$('instructionsOverlay');
+  const instructionsLaunch=$('instructionsLaunch');
+  const helpButton=$('helpButton');
+  let instructionsOpen=false, instructionsOpenedAt=0;
   // Colors match the original pyramid, while sphere textures use a more saturated palette.
   const BAND_COLORS=['#eea5e9','#b8aaf8','#9bc8fb','#a8fcfc','#b5fb9a','#fee083','#fda46f','#fe9390'];
   const BAND_Y=[186,310,434,558,682,805,930,1055,1178];
   const ART_SIZE=1254;
   const ART_TOP_LEFT={x:13,y:186}, ART_TOP_RIGHT={x:1127,y:186}, ART_APEX={x:571,y:1178};
   const AUTO_DROP_MS=3000;
-  const DROP_ACCELERATION_START_SECONDS=30;
-  const DROP_DURATION_MULTIPLIER=0.98;
+  const DROP_ACCELERATION_START_SECONDS=60;
+  const DROP_DURATION_MULTIPLIER=0.99;
   let dropDeadline=0, dropDurationMs=AUTO_DROP_MS;
   // "time" advances only during active gameplay, not while on the start/end screen.
   let time=0,lastMergeTime=-100,combo=0,lastFrame=0,accumulator=0,down=false,ballId=0;
@@ -372,12 +537,41 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     }
     discoveryCtx.restore();
   }
+  function showInstructions(){
+    if(instructionsOpen)return;
+    instructionsOpen=true;
+    instructionsOpenedAt=performance.now();
+    instructionsOverlay.hidden=false;
+    helpButton.hidden=true;
+    instructionsLaunch.textContent=started ? 'BACK TO GAME →' : "LET'S DROP! →";
+    down=false;
+    instructionsLaunch.focus({preventScroll:true});
+  }
+  function hideInstructions(){
+    if(!instructionsOpen)return;
+    const pausedFor=Math.max(0,performance.now()-instructionsOpenedAt);
+    // The automatic drop deadline and cinematic watchdogs use real-world clocks.
+    // Move their reference times forward so reopening instructions truly pauses play.
+    if(Number.isFinite(dropDeadline))dropDeadline+=pausedFor;
+    if(escapeSequence)escapeSequence.startedAt+=pausedFor;
+    if(jamEjection)jamEjection.startedAt+=pausedFor;
+    instructionsOpen=false;
+    instructionsOverlay.hidden=true;
+    helpButton.hidden=false;
+    accumulator=0;
+    lastFrame=performance.now();
+  }
   function startGame(){
     if(started||ended)return;
     started=true;
-    startPrompt.hidden=true;
     resetDropTimer();
     setMessage('Drop within three seconds. A side spill triggers a slow-motion fall and a fireworks finale.');
+  }
+  function launchFromInstructions(){
+    const needsStart=!started;
+    hideInstructions();
+    if(needsStart)startGame();
+    canvas.focus({preventScroll:true});
   }
   function radius(level){ return SPECIES_RADIUS*Math.pow(SIZE_GROWTH_FACTOR,level); }
   function choice(excludeLevel=null){
@@ -756,14 +950,14 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     displayWidth=cssW;
     displayHeight=cssH;
   }
-  function reset(){
+  function reset(showHowToPlay=false){
     scoreUI?.reset();
     started=false;
     bandAlpha.fill(0);
     concealedRanks.clear();
     domainCreated=false;
     collisionDeflections.clear(); lastDroppedLevel=null;
-    startPrompt.hidden=false;
+
     balls=[];particles=[];floating=[];shockwaves=[];score=0;highest=0;
     if(requestedTestLevel!==null){
       unlocked=new Set(Array.from({length:requestedTestLevel+1},(_,i)=>i));
@@ -784,6 +978,13 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     dropDurationMs=AUTO_DROP_MS;
     dropDeadline=Infinity;
     setMessage(requestedTestLevel!==null ? `Test mode: dropping ${LEVELS[current].name}. Click / Space to drop.` : 'Aim with mouse, touch, or arrows. Click / Space to drop.');
+    if(showHowToPlay){
+      showInstructions();
+    } else {
+      hideInstructions();
+      startGame();
+      canvas.focus({preventScroll:true});
+    }
   }
   function createBall(level,x,y,vx=0,vy=0){
     const r=radius(level);
@@ -1446,6 +1647,13 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     }
   }
   function frame(ms){
+    if(instructionsOpen){
+      // Freeze physics, autoplay, animations, and watchdogs while help is visible.
+      lastFrame=ms;
+      accumulator=0;
+      requestAnimationFrame(frame);
+      return;
+    }
     if(!lastFrame) lastFrame=ms;
     accumulator+=clamp((ms-lastFrame)/1000,0,.05); lastFrame=ms;
     let loops=0; while(accumulator>=step&&loops<4){ physics(step); accumulator-=step; loops++; }
@@ -1472,20 +1680,15 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     aimX=clampAim(local);
   }
   canvas.addEventListener('pointerdown',e=>{
-    if(ended||escapeSequence||jamEjection)return;
+    if(instructionsOpen||ended||escapeSequence||jamEjection||!started)return;
     e.preventDefault(); aimFromPointer(e);
-    if(!started){ startGame(); down=false; return; }
     down=true; canvas.setPointerCapture(e.pointerId);
   });
-  canvas.addEventListener('pointermove',e=>{ if(!ended&&!escapeSequence&&!jamEjection) aimFromPointer(e); });
+  canvas.addEventListener('pointermove',e=>{ if(started&&!instructionsOpen&&!ended&&!escapeSequence&&!jamEjection) aimFromPointer(e); });
   canvas.addEventListener('pointerup',e=>{ if(!down) return; down=false; aimFromPointer(e); drop(); });
   canvas.addEventListener('pointercancel',()=>{ down=false; });
   document.addEventListener('keydown',e=>{
-    if(ended||escapeSequence||jamEjection||e.altKey||e.ctrlKey||e.metaKey) return;
-    if(!started){
-      if((e.code==='Space'||e.code==='Enter')&&!e.repeat){e.preventDefault();startGame();}
-      return;
-    }
+    if(instructionsOpen||!started||ended||escapeSequence||jamEjection||e.altKey||e.ctrlKey||e.metaKey) return;
     if(['ArrowLeft','ArrowRight','Space',' '].includes(e.code)||['ArrowLeft','ArrowRight',' '].includes(e.key)){
       const target=e.target;
       if(target&&['INPUT','TEXTAREA','SELECT'].includes(target.tagName)) return;
@@ -1495,22 +1698,30 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       else if(!e.repeat) drop();
     }
   });
-  $('startButton').addEventListener('click',startGame);
-  $('playAgain').addEventListener('click',reset);
+  instructionsLaunch.addEventListener('click',launchFromInstructions);
+  helpButton.addEventListener('click',showInstructions);
+  instructionsOverlay.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&started){
+      e.preventDefault();launchFromInstructions();
+    } else if(e.key==='Tab'){
+      // The instructions dialog has one action; keep focus inside it.
+      e.preventDefault();instructionsLaunch.focus({preventScroll:true});
+    }
+  });
+  $('playAgain').addEventListener('click',()=>reset(false));
   document.addEventListener('keydown',e=>{
     // Do not restart the game while somebody enters initials in the score form.
-    if(e.target?.closest?.('input,textarea,select,[contenteditable]')) return;
-    if((e.key==='r'||e.key==='R')&&!e.ctrlKey&&!e.metaKey&&!e.altKey) reset();
+    if(instructionsOpen||e.target?.closest?.('input,textarea,select,[contenteditable]')) return;
+    if((e.key==='r'||e.key==='R')&&!e.ctrlKey&&!e.metaKey&&!e.altKey) reset(false);
   });
   window.addEventListener('resize',resizeDisplay);
   // Covers parent layout changes that do not emit a window resize event.
   if('ResizeObserver' in window){
     new ResizeObserver(resizeDisplay).observe(document.querySelector('.scene'));
   }
-  resizeDisplay(); reset();
-  // Test URLs retain their immediate-drop convenience; normal play deliberately
-  // opens on the unmodified full infographic until the player starts.
-  if(requestedTestLevel!==null || params.get('autostart')==='1')startGame();
+  resizeDisplay();
+  // Normal entry presents instructions; test/autostart URLs still launch directly.
+  reset(requestedTestLevel===null && params.get('autostart')!=='1');
   requestAnimationFrame(frame);
 })();
 </script>
