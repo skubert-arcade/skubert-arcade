@@ -82,8 +82,8 @@ function installFixedVirtualPlayfield() {
   gameContentID.before(slot);
   slot.appendChild(viewport);
   viewport.appendChild(stage);
-  // Dedicated pangram layer: isolated from the normal .word nodes and
-  // rendered BEHIND Skubert, preventing pangram paint from obscuring his GLB.
+  // Dedicated pangram layer for a stationary 2D canvas, rendered BEHIND
+  // Skubert. No moving HTML/gradient elements share the WebGL compositor.
   // The existing word layer stays in its original foreground position.
   const pangramLayer = document.createElement('div');
   pangramLayer.id = 'PangramLayer';
@@ -488,7 +488,7 @@ function installPangramStyles() {
   const style = document.createElement('style');
   style.id = 'pangram-challenge-styles';
   style.textContent = `
-    /* The special text has its own paint/stacking layer and clips to 600x600. */
+    /* Stationary 2D pangram canvas, clipped to fixed 600x600 virtual bounds. */
     #GameStage #PangramLayer {
       position: absolute;
       inset: 0;
@@ -521,50 +521,15 @@ function installPangramStyles() {
     @media (max-width: 520px) {
       #Wrapper #SkubertFreezeStatus { font-size: 9px; padding: 5px 6px; }
     }
-    #PangramLayer .pangram-special {
-      position: absolute !important;
-      left: 50% !important;
-      transform: translateX(-50%);
-      box-sizing: border-box;
-      width: max-content;
-      max-width: calc(100% - 14px);
-      padding: 8px 14px;
-      text-align: center;
-      border-radius: 13px;
-      border: 1px solid rgba(116, 130, 188, .38);
-      background: rgba(255, 255, 255, .91);
-      box-shadow: 0 3px 16px rgba(68, 80, 144, .12);
+    /* One stationary 600x600 canvas; no animated DOM element or gradient
+       compositing next to the transparent 3D viewer. */
+    #PangramLayer canvas.pangram-paint-canvas {
+      position: absolute;
+      inset: 0;
+      width: 600px;
+      height: 600px;
+      display: block;
       pointer-events: none;
-      z-index: 12;
-    }
-    #PangramLayer .pangram-special .pangram-label {
-      display: block;
-      font: 700 10px/1.4 system-ui, sans-serif;
-      text-transform: uppercase;
-      letter-spacing: .14em;
-      color: #6a738c;
-      margin-bottom: 3px;
-    }
-    #PangramLayer .pangram-special .pangram-text {
-      display: block;
-      margin: 0;
-      padding: 0;
-      font: 800 22px/1.3 system-ui, sans-serif;
-      overflow-wrap: normal;
-      white-space: normal;
-      color: #686ac2;
-      background: linear-gradient(105deg,
-        #8c64b6 0%, #5f83c0 21%, #4d9ca2 44%,
-        #ac9159 66%, #b67c9f 85%, #8c64b6 100%);
-      background-size: 200% 100%;
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
-      animation: pangram-rainbow-shift 7s ease-in-out infinite alternate;
-    }
-    @keyframes pangram-rainbow-shift {
-      from { background-position: 0% 50%; }
-      to { background-position: 100% 50%; }
     }
     #GameContent .pangram-all-clear {
       position: absolute;
@@ -612,43 +577,114 @@ function nextPangram() {
   return phrase;
 }
 
+// Draw the pangram into a FIXED 2D canvas, instead of scrolling an HTML
+// card through the same compositing tree as Skubert's transparent WebGL canvas.
+// This is deliberately a different rendering path for diagnosing the cutout
+// artifacts. It does not change the phrase-selection, timings, or scoring.
+const PANGRAM_FONT = '800 22px system-ui, sans-serif';
+const PANGRAM_LABEL_FONT = '700 10px system-ui, sans-serif';
+const PANGRAM_CANVAS_EDGE = VIRTUAL_GAME_WIDTH;
+const PANGRAM_CARD_MAX_WIDTH = 570;
+const PANGRAM_CARD_HPAD = 14;
+const PANGRAM_LINE_HEIGHT = 29;
+const PANGRAM_DRAW_ENABLED = new URLSearchParams(window.location.search).get('pangramGraphics') !== 'off';
+
+function wrapPangramLines(ctx, phrase, maxWidth) {
+  ctx.font = PANGRAM_FONT;
+  const words = phrase.split(/\s+/);
+  const lines = [];
+  let current = '';
+  for (const word of words) {
+    const candidate = current ? current + ' ' + word : word;
+    if (current && ctx.measureText(candidate).width > maxWidth) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
 function spawnPangram() {
   if (gameOver || activePangram || isFreezeActive()) return;
   const phrase = nextPangram();
-  const element = document.createElement('div');
-  element.className = 'pangram-special'; // NOT a .word (preserve array / DOM alignment)
+  const element = document.createElement('canvas');
+  element.className = 'pangram-paint-canvas';
+  element.width = PANGRAM_CANVAS_EDGE;
+  element.height = VIRTUAL_GAME_HEIGHT;
   element.setAttribute('aria-label', 'Pangram challenge: ' + phrase);
-
-  const label = document.createElement('span');
-  label.className = 'pangram-label';
-  label.textContent = 'Pangram • type to clear the board';
-  const text = document.createElement('p');
-  text.className = 'pangram-text';
-  text.textContent = phrase;
-  element.append(label, text);
   document.getElementById('PangramLayer').appendChild(element);
-
-  // Begin fully visible at the bottom, and rise all the way off the top.
-  const top = Math.max(0, gameHeight - element.offsetHeight - 4);
-  element.style.top = top + 'px';
+  const ctx = element.getContext('2d', { alpha: true });
+  if (!ctx) { element.remove(); return; }
+  const lines = wrapPangramLines(ctx, phrase, PANGRAM_CARD_MAX_WIDTH - 2 * PANGRAM_CARD_HPAD);
+  const cardHeight = 31 + lines.length * PANGRAM_LINE_HEIGHT + 15;
+  // Preserve the previous center alignment, white translucent card and subtle
+  // multicolored letters, without CSS background-clip or animated elements.
+  const top = Math.max(0, gameHeight - cardHeight - 4);
   activePangram = {
-    phrase, element, top, height: element.offsetHeight,
+    phrase, element, ctx, lines, top, height: cardHeight,
     elapsedTravelSeconds: 0
   };
+  positionPangram();
+}
+
+function paintRoundedRect(ctx, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 function positionPangram() {
   if (!activePangram) return;
   const p = activePangram;
-  // The game is always 600 x 600 virtual pixels: the pangram height is
-  // measured ONCE in spawnPangram(), not every 20ms during animation.
-  // Transform-only movement avoids repeated layout and repaint work from
-  // rewriting CSS top while a transparent WebGL canvas is composited nearby.
-  const startTop = Math.max(0, gameHeight - p.height - 4);
   const traveled = gameHeight * Math.min(1, p.elapsedTravelSeconds / PANGRAM_TRAVEL_SECONDS);
-  p.top = startTop - traveled; // preserve the existing expiration condition
-  // Keep the original horizontal centering (left:50%, translateX(-50%)).
-  p.element.style.transform = `translate(-50%, ${-traveled}px)`;
+  p.top = Math.max(0, gameHeight - p.height - 4) - traveled;
+  // Nothing in the DOM moves. Only the pixels inside a fixed-size 2D canvas
+  // are repainted. The canvas itself is beneath Skubert in stacking order.
+  const ctx = p.ctx;
+  ctx.clearRect(0, 0, VIRTUAL_GAME_WIDTH, VIRTUAL_GAME_HEIGHT);
+  if (!PANGRAM_DRAW_ENABLED) return; // optional diagnostic ?pangramGraphics=off
+  const w = PANGRAM_CARD_MAX_WIDTH, x = (VIRTUAL_GAME_WIDTH - w) / 2;
+  const y = p.top;
+  if (y > VIRTUAL_GAME_HEIGHT || y + p.height < 0) return;
+  ctx.save();
+  ctx.shadowBlur = 16;
+  ctx.shadowColor = 'rgba(68, 80, 144, .12)';
+  ctx.shadowOffsetY = 3;
+  paintRoundedRect(ctx, x, y, w, p.height, 13);
+  ctx.fillStyle = 'rgba(255,255,255,.91)';
+  ctx.fill();
+  ctx.restore();
+  paintRoundedRect(ctx, x, y, w, p.height, 13);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(116,130,188,.38)';
+  ctx.stroke();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = PANGRAM_LABEL_FONT;
+  ctx.fillStyle = '#6a738c';
+  ctx.fillText('PANGRAM · TYPE TO CLEAR THE BOARD', VIRTUAL_GAME_WIDTH / 2, y + 21);
+  ctx.font = PANGRAM_FONT;
+  const gradient = ctx.createLinearGradient(x + 28, 0, x + w - 28, 0);
+  for (const [position, color] of [
+    [0,'#8c64b6'], [.21,'#5f83c0'], [.44,'#4d9ca2'],
+    [.66,'#ac9159'], [.85,'#b67c9f'], [1,'#8c64b6']
+  ]) gradient.addColorStop(position, color);
+  ctx.fillStyle = gradient;
+  p.lines.forEach((line, index) => {
+    ctx.fillText(line, VIRTUAL_GAME_WIDTH / 2, y + 56 + index * PANGRAM_LINE_HEIGHT);
+  });
 }
 
 function showPangramClear(wordsCleared, points) {
