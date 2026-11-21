@@ -247,9 +247,10 @@ body {
   padding-top: 0 !important;
   padding-bottom: 0 !important;
 }
-/* Diagnostic: remove the pangram's rectangular overlay */
-#GameContent .pangram-special {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
+/* Diagnostic: disable animated rainbow compositing */
+#GameContent .pangram-special .pangram-text {
+  animation: none !important;
+  background: none !important;
+  -webkit-text-fill-color: #8867bb !important;
+  color: #8867bb !important;
 }
