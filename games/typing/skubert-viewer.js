@@ -35,7 +35,11 @@ let lastBackingHeight = -1;
 let lastScale = -1;
 let lastOpacity = '';
 mount.style.transformOrigin = 'center bottom';
-mount.style.transition = 'opacity 0.2s ease, transform 180ms ease-out';
+// Avoid CSS opacity/transform animations of a live transparent WebGL canvas.
+// After a pangram these can promote/recombine overlapping layers in Chrome.
+mount.style.transition = 'none';
+const DISABLE_PANGRAM_EFFECTS = new URLSearchParams(location.search).get('pangramEffects') === 'off';
+let respawnAnimationStart = 0;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
@@ -133,6 +137,12 @@ function ensureCelebrationCanvas() {
   return layer;
 }
 
+function disposeCelebrationCanvas() {
+  if (celebrationLayer) celebrationLayer.remove();
+  celebrationLayer = null;
+  celebrationCtx = null;
+}
+
 function fireworksAtSkubert(token) {
   const layer = ensureCelebrationCanvas();
   if (!celebrationCtx) return;
@@ -189,7 +199,7 @@ function fireworksAtSkubert(token) {
   function render(now) {
     if (token !== pangramCelebrationToken || document.hidden) {
       ctx.clearRect(0, 0, width, height);
-      layer.style.display = 'none';
+      disposeCelebrationCanvas();
       lastExplosionFrameId = 0;
       return;
     }
@@ -268,7 +278,7 @@ function fireworksAtSkubert(token) {
       lastExplosionFrameId = requestAnimationFrame(render);
     } else {
       ctx.clearRect(0, 0, width, height);
-      layer.style.display = 'none';
+      disposeCelebrationCanvas();
       lastExplosionFrameId = 0;
     }
   }
@@ -279,30 +289,31 @@ function fireworksAtSkubert(token) {
 function startPangramCelebration() {
   const token = ++pangramCelebrationToken;
   if (gameFinished || gameArea.querySelector('.modal-gameover')) return;
-  fireworksAtSkubert(token); // Snapshot the OLD grown size before shrinking.
+
+  // A/B diagnostic: ?pangramEffects=off preserves the scoring and growth
+  // reset in app.js, but bypasses ALL viewer fireworks/respawn changes.
+  if (DISABLE_PANGRAM_EFFECTS) {
+    updateSkubertGrowth();
+    return;
+  }
+
+  fireworksAtSkubert(token);
   pangramCelebrating = true;
-  mount.style.transition = 'none';
-  mount.style.opacity = '0';
-  lastOpacity = '0';
-  updateSkubertGrowth(); // app.js already set skubertGrowthLetters back to zero.
+  respawnAnimationStart = 0;
+  // Hide the 3D scene, NOT the live transparent WebGL DOM canvas.
+  // No opacity/transform animations on the compositor layer.
+  skubertPivot.visible = false;
+  updateSkubertGrowth(); // app.js already reset the letter count to zero.
 
   const delay = reducedFireworksMotion ? 320 : PANGRAM_RESPAWN_DELAY_MS;
   window.setTimeout(() => {
     if (token !== pangramCelebrationToken) return;
     pangramCelebrating = false;
     if (gameFinished || gameArea.querySelector('.modal-gameover')) return;
-    // Preserve any ordinary-word growth earned during the fireworks.
     updateSkubertGrowth();
-    mount.style.transition = 'opacity 240ms ease-out, transform 180ms ease-out';
-    mount.style.opacity = '1';
-    lastOpacity = '1';
-    if (isLoaded && renderer.domElement.animate && !reducedFireworksMotion) {
-      renderer.domElement.animate([
-        { transform: 'scale(.77)', opacity: 0 },
-        { transform: 'scale(1.07)', opacity: 1, offset: .68 },
-        { transform: 'scale(1)', opacity: 1 }
-      ], { duration: 370, easing: 'ease-out' });
-    }
+    skubertPivot.visible = true;
+    // Animate only the 3D object INSIDE WebGL, not the canvas element.
+    respawnAnimationStart = performance.now();
   }, delay);
 }
 window.addEventListener('skubert:pangram-fireworks', startPangramCelebration);
@@ -385,12 +396,30 @@ function animate(now) {
     trackLowestWord();
     previousTrack = now;
   }
-  const opacity = (gameFinished || pangramCelebrating) ? '0' : '1';
-  if (opacity !== lastOpacity) {
-    mount.style.opacity = opacity;
-    lastOpacity = opacity;
+  if (gameFinished) {
+    mount.style.visibility = 'hidden';
+    return;
   }
-  if (gameFinished) return;
+  // Keep the WebGL surface mounted and continuously rendered. A 3D object's
+  // visibility can change without changing DOM stacking or canvas alpha.
+  if (mount.style.visibility === 'hidden') mount.style.visibility = 'visible';
+  if (skubertPivot.visible === pangramCelebrating) {
+    skubertPivot.visible = !pangramCelebrating;
+  }
+  if (respawnAnimationStart > 0) {
+    const t = Math.min(1, (now - respawnAnimationStart) / 370);
+    if (t >= 1 || reducedFireworksMotion) {
+      skubertPivot.scale.setScalar(1);
+      respawnAnimationStart = 0;
+    } else {
+      const ease = 1 - Math.pow(1 - t, 3);
+      // Start small, briefly overshoot, and settle at regular size.
+      const scale = t < .68
+        ? .77 + .30 * ease / (1 - Math.pow(1-.68,3))
+        : 1.07 - .07 * ((t - .68) / .32);
+      skubertPivot.scale.setScalar(scale);
+    }
+  }
 
   let targetYaw = 0;
   let targetPitch = 0;
