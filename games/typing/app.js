@@ -5,7 +5,7 @@ const LEVEL = 2000;
 // FALL SPEED
 // Start at half the previous speed: 25 px/sec instead of 50 px/sec.
 // After 30 seconds of play, global speed increases 1% every second (compounded).
-const BASE_FALL_SPEED_PX_PER_SECOND = 20;
+const BASE_FALL_SPEED_PX_PER_SECOND = 25;
 const VIRTUAL_GAME_WIDTH = 600;
 const VIRTUAL_GAME_HEIGHT = 600;
 const REFERENCE_GAME_HEIGHT_PX = VIRTUAL_GAME_HEIGHT; // fixed game units
@@ -23,13 +23,20 @@ const MIN_WORD_SPEED_MULTIPLIER = 0.5;
 // A new upward-moving pangram appears at 0:30, 1:00, 1:30, ...
 // It takes approximately 12 seconds to travel across the game field.
 const PANGRAM_INTERVAL_SECONDS = 30;
-const PANGRAM_TRAVEL_SECONDS = 16;
+const PANGRAM_TRAVEL_SECONDS = 12;
+
+// SECRET POWER-UP: type "skubert" once per 60 real-world seconds.
+// All existing words (including a pangram) and new spawns pause for 8 seconds.
+const FREEZE_COMMAND = 'skubert';
+const FREEZE_DURATION_MS = 8000;
+const FREEZE_COOLDOWN_MS = 60000;
 const PANGRAMS = [
   'the quick brown fox jumps over the lazy dog',
   'sphinx of black quartz judge my vow',
-  'the five boxing wizards jump quickly',
+  'pack my box with five dozen liquor jugs',
   'how vexingly quick daft zebras jump',
-
+  'the five boxing wizards jump quickly',
+  'jackdaws love my big sphinx of quartz',
 ];
 
 function getWordSpeedMultiplier(word) {
@@ -75,7 +82,13 @@ function installFixedVirtualPlayfield() {
   gameContentID.before(slot);
   slot.appendChild(viewport);
   viewport.appendChild(stage);
-  stage.append(gameContentID, viewer);
+  // Dedicated pangram layer: isolated from the normal .word nodes and
+  // rendered BEHIND Skubert, preventing pangram paint from obscuring his GLB.
+  // The existing word layer stays in its original foreground position.
+  const pangramLayer = document.createElement('div');
+  pangramLayer.id = 'PangramLayer';
+  pangramLayer.setAttribute('aria-label', 'Special pangram challenge');
+  stage.append(pangramLayer, viewer, gameContentID);
 
   function fitStage() {
     // Fit both dimensions while preserving the immutable 1:1 game geometry.
@@ -124,8 +137,75 @@ let arrWordsDiv = [];
 let gameStartTime = 0;
 let activePangram = null;
 let lastPangramInterval = 0;
+let lastWordSpawnInterval = 0;
 let remainingPangrams = [];
 let previousPangram = null;
+
+// Only ACTIVE play time advances falling speed / word phase / pangram schedule.
+// Real time still controls the 8-second freeze and 60-second recharge.
+let activeElapsedMs = 0;
+let lastClockTick = 0;
+let freezeUntil = 0;
+let lastFreezeActivatedAt = -Infinity;
+let freezeStatusEl = null;
+
+function isFreezeActive(now = performance.now()) {
+  return !gameOver && now < freezeUntil;
+}
+
+function activePlaySeconds() {
+  return activeElapsedMs / 1000;
+}
+
+function advanceGameClock(now) {
+  if (!lastClockTick) { lastClockTick = now; return 0; }
+  const previous = lastClockTick;
+  lastClockTick = now;
+  // If the freeze expires between updates, count only time AFTER expiration.
+  const playMs = previous < freezeUntil
+    ? Math.max(0, now - Math.max(previous, freezeUntil))
+    : Math.max(0, now - previous);
+  activeElapsedMs += playMs;
+  return playMs / 1000;
+}
+
+function installFreezeStatus() {
+  if (freezeStatusEl) return;
+  const bar = document.querySelector('#Wrapper .container-data');
+  if (!bar) return;
+  freezeStatusEl = document.createElement('span');
+  freezeStatusEl.id = 'SkubertFreezeStatus';
+  freezeStatusEl.title = 'Type skubert and press Enter to freeze falling and spawning for 8 seconds. Recharge: 60 seconds.';
+  freezeStatusEl.setAttribute('aria-live', 'off');
+  bar.appendChild(freezeStatusEl);
+  updateFreezeStatus();
+}
+
+function updateFreezeStatus(now = performance.now()) {
+  if (!freezeStatusEl) return;
+  const freezeLeft = Math.max(0, freezeUntil - now);
+  const cooldownLeft = Math.max(0, FREEZE_COOLDOWN_MS - (now - lastFreezeActivatedAt));
+  const message = gameOver ? '' : freezeLeft > 0
+    ? `❄ FROZEN · ${Math.ceil(freezeLeft / 1000)}s`
+    : cooldownLeft > 0
+      ? `❄ SKUBERT · ${Math.ceil(cooldownLeft / 1000)}s`
+      : '❄ TYPE SKUBERT TO FREEZE';
+  if (freezeStatusEl.textContent !== message) freezeStatusEl.textContent = message;
+  freezeStatusEl.classList.toggle('is-frozen', freezeLeft > 0 && !gameOver);
+}
+
+function tryActivateSkubertFreeze() {
+  if (gameOver) return;
+  const now = performance.now();
+  // Account for the final fraction of active time BEFORE starting the pause.
+  advanceGameClock(now);
+  if (now - lastFreezeActivatedAt >= FREEZE_COOLDOWN_MS) {
+    lastFreezeActivatedAt = now;
+    freezeUntil = now + FREEZE_DURATION_MS;
+  }
+  // The command is consumed even while recharging; it is never a missed word.
+  updateFreezeStatus(now);
+}
 
 // SOUNDS
 const startGameSound = document.getElementById('StartGameSound');
@@ -224,6 +304,7 @@ const DICTIONARY = [
 function init() {
   installFixedVirtualPlayfield();
   installPangramStyles();
+  installFreezeStatus();
   // Suppress field history, autofill suggestions, and text corrections.
   // The HTML input should also have autocomplete="off" as defense in depth.
   inputElementID.autocomplete = 'off';
@@ -232,12 +313,10 @@ function init() {
   inputElementID.spellcheck = false;
   if (inputElementID.form) inputElementID.form.autocomplete = 'off';
   gameStartTime = performance.now();
+  lastClockTick = gameStartTime;
   showLevel();
-  setInterval(() => {
-    if (!gameOver) {
-      drawWord();
-    }
-  }, currentLevel);
+  // Word spawning is driven by ACTIVE gameplay time, just like movement and
+  // pangrams. Freezing pauses the remaining time until the next spawn.
   updateWordPosition();
 }
 
@@ -368,7 +447,7 @@ function drawUnusedWordInWindow(minLength, maxLength, insideWindow) {
 }
 
 function generateRandomWord() {
-  const elapsedSeconds = Math.max(0, (performance.now() - gameStartTime) / 1000);
+  const elapsedSeconds = activePlaySeconds();
   const phaseIndex = getSelectionPhaseIndex(elapsedSeconds);
   const phase = WORD_SELECTION_PHASES[phaseIndex];
 
@@ -409,7 +488,40 @@ function installPangramStyles() {
   const style = document.createElement('style');
   style.id = 'pangram-challenge-styles';
   style.textContent = `
-    #GameContent .pangram-special {
+    /* The special text has its own paint/stacking layer and clips to 600x600. */
+    #GameStage #PangramLayer {
+      position: absolute;
+      inset: 0;
+      width: 600px;
+      height: 600px;
+      overflow: hidden;
+      box-sizing: border-box;
+      pointer-events: none;
+      isolation: isolate;
+      contain: layout paint;
+      z-index: 0;
+    }
+    #GameStage #skubert-viewer { z-index: 1 !important; }
+    #GameStage #GameContent { z-index: 2 !important; }
+    #Wrapper #SkubertFreezeStatus {
+      font: 700 11px/1.2 system-ui, sans-serif;
+      letter-spacing: .06em;
+      color: #b5eaff;
+      padding: 6px 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(150, 215, 255, .22);
+      background: rgba(23, 50, 83, .56);
+      white-space: nowrap;
+    }
+    #Wrapper #SkubertFreezeStatus.is-frozen {
+      background: rgba(69, 160, 230, .36);
+      border-color: rgba(158, 234, 255, .85);
+      color: white;
+    }
+    @media (max-width: 520px) {
+      #Wrapper #SkubertFreezeStatus { font-size: 9px; padding: 5px 6px; }
+    }
+    #PangramLayer .pangram-special {
       position: absolute !important;
       left: 50% !important;
       transform: translateX(-50%);
@@ -425,7 +537,7 @@ function installPangramStyles() {
       pointer-events: none;
       z-index: 12;
     }
-    #GameContent .pangram-special .pangram-label {
+    #PangramLayer .pangram-special .pangram-label {
       display: block;
       font: 700 10px/1.4 system-ui, sans-serif;
       text-transform: uppercase;
@@ -433,7 +545,7 @@ function installPangramStyles() {
       color: #6a738c;
       margin-bottom: 3px;
     }
-    #GameContent .pangram-special .pangram-text {
+    #PangramLayer .pangram-special .pangram-text {
       display: block;
       margin: 0;
       padding: 0;
@@ -480,26 +592,28 @@ function installPangramStyles() {
       100% { opacity: 0; transform: translate(-50%, -60%) scale(1); }
     }
     @media (prefers-reduced-motion: reduce) {
-      #GameContent .pangram-special .pangram-text,
+      #PangramLayer .pangram-special .pangram-text,
       #GameContent .pangram-all-clear { animation: none; }
     }
   `;
   document.head.appendChild(style);
 }
 
-let nextPangramIndex = 0;
-
 function nextPangram() {
-  const phrase = PANGRAMS[nextPangramIndex];
-
-  nextPangramIndex =
-    (nextPangramIndex + 1) % PANGRAMS.length;
-
+  if (remainingPangrams.length === 0) {
+    remainingPangrams = shuffleInPlace([...PANGRAMS]);
+    if (remainingPangrams.length > 1 && remainingPangrams[remainingPangrams.length - 1] === previousPangram) {
+      [remainingPangrams[0], remainingPangrams[remainingPangrams.length - 1]] =
+        [remainingPangrams[remainingPangrams.length - 1], remainingPangrams[0]];
+    }
+  }
+  const phrase = remainingPangrams.pop();
+  previousPangram = phrase;
   return phrase;
 }
 
 function spawnPangram() {
-  if (gameOver || activePangram) return;
+  if (gameOver || activePangram || isFreezeActive()) return;
   const phrase = nextPangram();
   const element = document.createElement('div');
   element.className = 'pangram-special'; // NOT a .word (preserve array / DOM alignment)
@@ -512,25 +626,29 @@ function spawnPangram() {
   text.className = 'pangram-text';
   text.textContent = phrase;
   element.append(label, text);
-  gameContentID.appendChild(element);
+  document.getElementById('PangramLayer').appendChild(element);
 
   // Begin fully visible at the bottom, and rise all the way off the top.
   const top = Math.max(0, gameHeight - element.offsetHeight - 4);
   element.style.top = top + 'px';
   activePangram = {
     phrase, element, top, height: element.offsetHeight,
-    spawnedAt: performance.now(), elapsedTravelSeconds: 0
+    elapsedTravelSeconds: 0
   };
 }
 
 function positionPangram() {
   if (!activePangram) return;
   const p = activePangram;
-  p.height = p.element.offsetHeight;
+  // The game is always 600 x 600 virtual pixels: the pangram height is
+  // measured ONCE in spawnPangram(), not every 20ms during animation.
+  // Transform-only movement avoids repeated layout and repaint work from
+  // rewriting CSS top while a transparent WebGL canvas is composited nearby.
   const startTop = Math.max(0, gameHeight - p.height - 4);
   const traveled = gameHeight * Math.min(1, p.elapsedTravelSeconds / PANGRAM_TRAVEL_SECONDS);
-  p.top = startTop - traveled;
-  p.element.style.top = p.top + 'px';
+  p.top = startTop - traveled; // preserve the existing expiration condition
+  // Keep the original horizontal centering (left:50%, translateX(-50%)).
+  p.element.style.transform = `translate(-50%, ${-traveled}px)`;
 }
 
 function showPangramClear(wordsCleared, points) {
@@ -579,6 +697,10 @@ function completePangram() {
 function getWord() {
   let inputValue = inputElementID.value.toLowerCase();
   inputElementID.value = '';
+  if (inputValue.trim() === FREEZE_COMMAND) {
+    tryActivateSkubertFreeze();
+    return;
+  }
   // Matching the special phrase accepts accidental extra spaces, but the
   // ordinary word-matching rules remain unchanged.
   if (activePangram && inputValue.trim().replace(/\s+/g, ' ') === activePangram.phrase) {
@@ -611,14 +733,22 @@ function getWord() {
 
 // FALLING WORD LOGIC + GAMEOVER
 function updateWordPosition() {
-  // Start the timer when gameplay starts, not when the script loads.
-  let lastUpdateTime = gameStartTime;
-
   setInterval(() => {
     if (gameOver) return;
 
     const now = performance.now();
-    const elapsedSeconds = Math.floor((now - gameStartTime) / 1000);
+    const deltaSeconds = advanceGameClock(now);
+    updateFreezeStatus(now);
+    // No motion, no new pangrams, and no normal word spawns while frozen.
+    if (isFreezeActive(now)) return;
+    const elapsedSeconds = Math.floor(activePlaySeconds());
+    // Exactly one spawn on each new 2-second ACTIVE-time boundary, with no
+    // backlog when paused or when a throttled browser timer wakes up late.
+    const elapsedSpawnIntervals = Math.floor(activeElapsedMs / currentLevel);
+    if (elapsedSpawnIntervals > lastWordSpawnInterval) {
+      lastWordSpawnInterval = elapsedSpawnIntervals;
+      drawWord();
+    }
     // Schedule by actual game elapsed time (0:30, 1:00, 1:30, ...),
     // rather than starting a drifting independent timer.
     const elapsedPangramIntervals = Math.floor(elapsedSeconds / PANGRAM_INTERVAL_SECONDS);
@@ -631,8 +761,7 @@ function updateWordPosition() {
 
     // Use actual elapsed time, so an occasional delayed timer tick
     // doesn't change the intended falling speed.
-    const deltaSeconds = Math.max(0, (now - lastUpdateTime) / 1000);
-    lastUpdateTime = now;
+    // The gameplay clock has already excluded any frozen portion of the tick.
     // Fixed distance per second in virtual pixels, independent of any resize.
     const globalFallDistance = BASE_FALL_SPEED_PX_PER_SECOND *
       speedMultiplier * deltaSeconds;
@@ -645,6 +774,7 @@ function updateWordPosition() {
       // Same game-over threshold as before, using JS coordinates.
       if (newTop + 15 > gameHeight) {
         gameOver = true;
+        updateFreezeStatus(now);
         gameContentID.classList.add('sk-typing-ended');
         if (activePangram) {
           activePangram.element.remove();
@@ -666,11 +796,9 @@ function updateWordPosition() {
     // A missed pangram simply exits the top; ordinary falling words still
     // determine game over. Its speed is independent of the falling speedup.
     if (!gameOver && activePangram) {
-      // Travel in 12 seconds, measured against the current playfield height.
-      // Preserve proportional travel if the viewport changes mid-challenge.
-      // Do not jump across the field after a background-tab timer delay.
-      const secondsSinceSpawn = Math.max(0, (now - activePangram.spawnedAt) / 1000);
-      activePangram.elapsedTravelSeconds += Math.min(deltaSeconds, secondsSinceSpawn);
+      // Travel time is measured in ACTIVE seconds only. A Skubert freeze
+      // suspends the existing pangram in place and never jumps on unfreeze.
+      activePangram.elapsedTravelSeconds += deltaSeconds;
       positionPangram();
       if (activePangram.top + activePangram.height < 0) {
         activePangram.element.remove();
