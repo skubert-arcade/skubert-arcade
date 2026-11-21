@@ -17,8 +17,9 @@ const LEVEL_COLORS=[
   '#fca571', // Kingdom (orange)
   '#fa9796'  // Domain (salmon)
 ];
-const TEXTURE_PATHS={0:'textures/00-species.png',1:'textures/01-genus.png',2:'textures/02-family.png',3:'textures/03-order.png',4:'textures/04-class.png',5:'textures/05-phylum.png',6:'textures/06-kingdom.png',7:'textures/07-domain.png'};
-const bridge={ready:false,render,renderDemo,clearDemo,disable};
+const TEXTURE_PATHS={1:'textures/01-genus.png',2:'textures/02-family.png',3:'textures/03-order.png',4:'textures/04-class.png'};
+
+const bridge={ready:false,render,renderDemo,clearDemo,renderNext,disable};
 window.SkubertSphere3D=bridge;
 let renderer=null,scene=null,camera=null,geometry=null,materials=[],previewMaterials=[];
 let previewMesh=null;
@@ -269,6 +270,73 @@ function clearDemo(){
   if(!tutorialRenderer||tutorialDisabled)return;
   for(const mesh of tutorialMeshes)mesh.visible=false;
   tutorialRenderer.render(tutorialScene,tutorialCamera);
+}
+
+
+// Next-ball station uses the SAME geometry, textured rank materials, lighting,
+// and world-to-CSS radius as gameplay, but has no simulation or input handlers.
+const nextBallCanvas=document.getElementById('nextBall3D');
+let nextBallRenderer=null,nextBallScene=null,nextBallCamera=null,nextBallMesh=null;
+let nextBallWidth=0,nextBallHeight=0,nextBallDisabled=false;
+function initNextBall(){
+  if(!nextBallCanvas||!bridge.ready||disabled||nextBallDisabled||!geometry)return false;
+  try{
+    nextBallRenderer=new THREE.WebGLRenderer({
+      canvas:nextBallCanvas,alpha:true,antialias:true,powerPreference:'low-power'
+    });
+    nextBallRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+    nextBallRenderer.setClearColor(0x000000,0);
+    nextBallRenderer.toneMapping=THREE.NoToneMapping;
+    nextBallRenderer.outputColorSpace=THREE.SRGBColorSpace;
+    nextBallScene=new THREE.Scene();
+    nextBallCamera=new THREE.OrthographicCamera(0,1,1,0,0.1,2000);
+    nextBallCamera.position.set(0,0,900);
+    nextBallCamera.lookAt(0,0,0);
+    nextBallScene.add(new THREE.HemisphereLight(0xffffff,0xd7daea,1.05));
+    const key=new THREE.DirectionalLight(0xffffff,2.0);
+    key.position.set(-180,280,360);
+    nextBallScene.add(key);
+    const fill=new THREE.DirectionalLight(0xf0f5ff,0.35);
+    fill.position.set(270,-150,210);
+    nextBallScene.add(fill);
+    nextBallMesh=new THREE.Mesh(geometry,materials[0]);
+    nextBallScene.add(nextBallMesh);
+    nextBallCanvas.addEventListener('webglcontextlost',e=>{
+      e.preventDefault();
+      nextBallDisabled=true;
+      nextBallCanvas.style.visibility='hidden';
+    },{passive:false});
+    return true;
+  }catch(e){
+    console.warn('Taxonomy Drop: next-ball 3D preview unavailable.',e);
+    nextBallDisabled=true;
+    nextBallCanvas.style.visibility='hidden';
+    return false;
+  }
+}
+function renderNext({level,radius:r,width:w,height:h}){
+  if(!bridge.ready||disabled||nextBallDisabled)return false;
+  if(!nextBallRenderer&&!initNextBall())return false;
+  try{
+    if(w!==nextBallWidth||h!==nextBallHeight){
+      nextBallWidth=w;nextBallHeight=h;
+      nextBallRenderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+      nextBallRenderer.setSize(Math.round(w),Math.round(h),false);
+      nextBallCamera.left=0;nextBallCamera.right=w;
+      nextBallCamera.top=h;nextBallCamera.bottom=0;
+      nextBallCamera.updateProjectionMatrix();
+    }
+    nextBallMesh.material=materials[level];
+    syncMesh(nextBallMesh,{x:w/2,y:h/2,r,angle:0,squish:0,pulse:0},h);
+    nextBallRenderer.render(nextBallScene,nextBallCamera);
+    nextBallCanvas.style.visibility='visible';
+    return true;
+  }catch(error){
+    console.warn('Taxonomy Drop: next-ball 3D preview failed; using 2D.',error);
+    nextBallDisabled=true;
+    nextBallCanvas.style.visibility='hidden';
+    return false;
+  }
 }
 
 init();

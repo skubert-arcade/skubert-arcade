@@ -175,12 +175,104 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   .arcade-link { left:max(7px,env(safe-area-inset-left)); }
   .score-display { right:max(7px,env(safe-area-inset-right)); }
 }
+
+/* NEXT BALL STATION — independent presentation; physics canvas remains 1000 × 1000. */
+.next-ball-station {
+  position:absolute;
+  z-index:4;
+  left:calc(-1 * (var(--next-panel-width) + 16px));
+  top:45%;
+  width:var(--next-panel-width);
+  --next-panel-width:clamp(148px,17vw,218px);
+  padding:10px 10px 12px;
+  border:1px solid #b4c6d6;
+  border-radius:18px;
+  background:rgba(250,252,255,.96);
+  box-shadow:0 8px 25px #0c274b25;
+  color:#193859;
+  text-align:center;
+  pointer-events:none;
+  user-select:none;
+}
+.next-ball-title {
+  font-weight:950;
+  font-size:11px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:#325e85;
+}
+.next-ball-stage {
+  width:100%;
+  aspect-ratio:1;
+  position:relative;
+  margin:4px auto 2px;
+  background:radial-gradient(circle,#f6fbff 6%,#e7f0f8 61%,#dae5ef 100%);
+  border-radius:50%;
+}
+#nextBall3D,#nextBall2D {
+  position:absolute;
+  inset:0;
+  display:block;
+  width:100%;
+  height:100%;
+  background:transparent;
+}
+#nextBall3D {z-index:1}
+#nextBall2D {z-index:2}
+.next-ball-name {font-size:12px;font-weight:900;line-height:1.3;min-height:16px}
+.next-ball-sparkles {position:absolute;inset:0;pointer-events:none;z-index:3}
+.next-ball-sparkles span {
+  position:absolute;left:50%;top:50%;width:5px;height:5px;
+  border-radius:50%;background:var(--spark-color);
+  opacity:0;
+}
+.next-ball-station.is-popping .next-ball-stage {animation:next-ball-pop .27s cubic-bezier(.22,.76,.31,1.2)}
+.next-ball-station.is-popping .next-ball-sparkles span {animation:next-ball-spark .42s ease-out both}
+@keyframes next-ball-pop {0%{transform:scale(.88)}54%{transform:scale(1.045)}100%{transform:scale(1)}}
+@keyframes next-ball-spark {
+  0%{transform:translate(-50%,-50%) scale(.3);opacity:.95}
+  100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(.3);opacity:0}
+}
+/* On near-square and portrait screens, place the preview in the empty
+   left-hand wedge of the pyramid; never shrink or reflow the game canvas. */
+@media (max-aspect-ratio:3/2) {
+  .next-ball-station {
+    left:2.5%; top:56%;
+    width:clamp(76px,20%,132px);
+    padding:6px 6px 7px;
+    border-radius:12px;
+  }
+  .next-ball-title {font-size:9px;letter-spacing:.06em}
+  .next-ball-name {font-size:10px;min-height:12px}
+  .next-ball-stage {margin:2px auto}
+}
+@media (prefers-reduced-motion:reduce) {
+  .next-ball-station.is-popping .next-ball-stage,
+  .next-ball-station.is-popping .next-ball-sparkles span {animation:none}
+}
   </style>
 </head>
 <body>
 <a class="arcade-link" href="../../index.html" aria-label="Return to Skubert Arcade">← Arcade</a>
 <div class="score-display" aria-label="Current score">Score <span id="score">0</span></div>
 <main class="scene" aria-label="Taxonomy Drop game over the taxonomy pyramid">
+  <!-- The upcoming sphere is a display only; it never intercepts gameplay input. -->
+  <aside class="next-ball-station" id="nextBallStation" aria-label="Next sphere">
+    <div class="next-ball-title">Up Next</div>
+    <div class="next-ball-stage" id="nextBallStage" aria-hidden="true">
+      <canvas id="nextBall3D"></canvas>
+      <canvas id="nextBall2D"></canvas>
+      <div class="next-ball-sparkles" aria-hidden="true">
+        <span style="--dx:-31px;--dy:-18px;--spark-color:#e876ec"></span>
+        <span style="--dx:-9px;--dy:-35px;--spark-color:#7b7ffa"></span>
+        <span style="--dx:24px;--dy:-24px;--spark-color:#2baded"></span>
+        <span style="--dx:35px;--dy:2px;--spark-color:#7ade78"></span>
+        <span style="--dx:9px;--dy:31px;--spark-color:#ffcb52"></span>
+        <span style="--dx:-27px;--dy:23px;--spark-color:#fd7973"></span>
+      </div>
+    </div>
+    <div class="next-ball-name" id="nextBallName">Species</div>
+  </aside>
   <img class="taxonomy-image" src="taxonomy-ranking-system.png" width="1254" height="1254" alt="Taxonomic Ranking System inverted pyramid, from Domain Eukarya at the top to Species Mascotus Skubertus at the bottom." decoding="async">
   <canvas id="discovery-layer" aria-hidden="true"></canvas>
   <canvas id="sphere-layer" aria-hidden="true"></canvas>
@@ -351,6 +443,13 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   const demoStep=$('mergeDemoStep');
   const demoProgress=$('mergeDemoProgress');
   const demoReplay=$('mergeDemoReplay');
+  const nextBallStation=$('nextBallStation');
+  const nextBallStage=$('nextBallStage');
+  const nextBall3D=$('nextBall3D');
+  const nextBall2D=$('nextBall2D');
+  const nextBall2DCtx=nextBall2D.getContext('2d');
+  const nextBallName=$('nextBallName');
+  let nextBallPreviewDirty=true,nextBallPreviewLastDraw=0;
   let demoStartedAt=0,demoLastStage=-1;
   const DEMO_MERGE_SECONDS=1.58;
   const DEMO_BURST_SECONDS=3.10;
@@ -755,10 +854,51 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     // Reroll the preview without changing the sphere already on deck.
     if(requestedTestLevel===null && unlocked.size>1 && next===current){
       next=choice(current);
+      updateNext();
     }
   }
   function setMessage(value){ $('message').textContent=value; }
-  function updateNext(){}
+  function updateNext(pop=false){
+    // 'next' is assigned by the original game. Only its presentation changes.
+    nextBallName.textContent=LEVELS[next].name;
+    nextBallStation.setAttribute('aria-label',`Next sphere: ${LEVELS[next].name}`);
+    nextBallPreviewDirty=true;
+    if(pop && !REDUCED_MOTION){
+      nextBallStation.classList.remove('is-popping');
+      void nextBallStation.offsetWidth; // restart pop / sparkle CSS animation
+      nextBallStation.classList.add('is-popping');
+    }
+  }
+  function renderNextBallPreview(ms){
+    // A low-frequency refresh catches async texture loading and viewport changes
+    // without creating an additional continuous WebGL animation loop.
+    if(!nextBallPreviewDirty && ms-nextBallPreviewLastDraw<1000)return;
+    const width=nextBallStage.clientWidth, height=nextBallStage.clientHeight;
+    if(width<1 || height<1)return;
+    nextBallPreviewLastDraw=ms;
+    nextBallPreviewDirty=false;
+    // Actual sphere radius scaled by the existing game-square CSS dimensions.
+    // The highest ranks fit within the preview instead of being clipped.
+    const sceneWidth=document.querySelector('.scene').getBoundingClientRect().width;
+    const visibleRadius=Math.max(2,Math.min(radius(next)*sceneWidth/W,
+      Math.min(width,height)*.465));
+    const shownIn3D=window.SkubertSphere3D?.renderNext?.({
+      level:next,radius:visibleRadius,width,height
+    })===true;
+    nextBall3D.style.visibility=shownIn3D?'visible':'hidden';
+    nextBall2D.style.visibility=shownIn3D?'hidden':'visible';
+    if(shownIn3D || !nextBall2DCtx)return;
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    const backingW=Math.round(width*dpr),backingH=Math.round(height*dpr);
+    if(nextBall2D.width!==backingW || nextBall2D.height!==backingH){
+      nextBall2D.width=backingW;
+      nextBall2D.height=backingH;
+    }
+    nextBall2DCtx.setTransform(dpr,0,0,dpr,0,0);
+    nextBall2DCtx.clearRect(0,0,width,height);
+    // Same drawSphere fallback, silhouette art and colors as gameplay.
+    drawSphere(width/2,height/2,visibleRadius,next,false,0,0,0,0,nextBall2DCtx);
+  }
   function updateScore(){ scoreEl.textContent=fmt.format(score); if(score>best){ best=score; try{ localStorage.setItem(storageKey,String(best)); }catch(_){}} }
   function xOnLeft(y){ return topLeft + (apexX-topLeft) * ((y-topY)/Math.max(1,apexY-topY)); }
   function xOnRight(y){ return topRight + (apexX-topRight) * ((y-topY)/Math.max(1,apexY-topY)); }
@@ -1160,7 +1300,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     lastDroppedLevel=droppedLevel;
     current=next;
     next=requestedTestLevel!==null ? requestedTestLevel : choice(current);
-    updateNext(); dropWait=MIN_DROP_INTERVAL_SECONDS; aimX=clampAim(aimX);
+    updateNext(true); dropWait=MIN_DROP_INTERVAL_SECONDS; aimX=clampAim(aimX);
     resetDropTimer();
     setMessage(`${automatic?'Auto-dropped':'Dropped'} ${LEVELS[balls[balls.length-1].level].name}. Match two to evolve!`);
   }
@@ -1803,6 +1943,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     }
   }
   function frame(ms){
+    renderNextBallPreview(ms);
     if(instructionsOpen){
       // Only the tutorial advances; game physics and timers remain paused.
       renderMergeDemo(ms);
