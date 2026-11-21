@@ -5,7 +5,7 @@ const LEVEL = 2000;
 // FALL SPEED
 // Start at half the previous speed: 25 px/sec instead of 50 px/sec.
 // After 30 seconds of play, global speed increases 1% every second (compounded).
-const BASE_FALL_SPEED_PX_PER_SECOND = 25;
+const BASE_FALL_SPEED_PX_PER_SECOND = 20;
 const VIRTUAL_GAME_WIDTH = 600;
 const VIRTUAL_GAME_HEIGHT = 600;
 const REFERENCE_GAME_HEIGHT_PX = VIRTUAL_GAME_HEIGHT; // fixed game units
@@ -23,14 +23,13 @@ const MIN_WORD_SPEED_MULTIPLIER = 0.5;
 // A new upward-moving pangram appears at 0:30, 1:00, 1:30, ...
 // It takes approximately 12 seconds to travel across the game field.
 const PANGRAM_INTERVAL_SECONDS = 30;
-const PANGRAM_TRAVEL_SECONDS = 12;
+const PANGRAM_TRAVEL_SECONDS = 16;
 const PANGRAMS = [
   'the quick brown fox jumps over the lazy dog',
   'sphinx of black quartz judge my vow',
-  'pack my box with five dozen liquor jugs',
-  'how vexingly quick daft zebras jump',
   'the five boxing wizards jump quickly',
-  'jackdaws love my big sphinx of quartz',
+  'how vexingly quick daft zebras jump',
+
 ];
 
 function getWordSpeedMultiplier(word) {
@@ -488,16 +487,14 @@ function installPangramStyles() {
   document.head.appendChild(style);
 }
 
+let nextPangramIndex = 0;
+
 function nextPangram() {
-  if (remainingPangrams.length === 0) {
-    remainingPangrams = shuffleInPlace([...PANGRAMS]);
-    if (remainingPangrams.length > 1 && remainingPangrams[remainingPangrams.length - 1] === previousPangram) {
-      [remainingPangrams[0], remainingPangrams[remainingPangrams.length - 1]] =
-        [remainingPangrams[remainingPangrams.length - 1], remainingPangrams[0]];
-    }
-  }
-  const phrase = remainingPangrams.pop();
-  previousPangram = phrase;
+  const phrase = PANGRAMS[nextPangramIndex];
+
+  nextPangramIndex =
+    (nextPangramIndex + 1) % PANGRAMS.length;
+
   return phrase;
 }
 
