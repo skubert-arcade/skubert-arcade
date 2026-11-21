@@ -6,6 +6,7 @@ const LEVEL = 2000;
 // Start at half the previous speed: 25 px/sec instead of 50 px/sec.
 // After 30 seconds of play, global speed increases 1% every second (compounded).
 const BASE_FALL_SPEED_PX_PER_SECOND = 25;
+const REFERENCE_GAME_HEIGHT_PX = 600; // previous fixed-height playfield
 const SPEEDUP_DELAY_SECONDS = 30;
 const SPEEDUP_MULTIPLIER_PER_SECOND = 1.01;
 
@@ -18,9 +19,9 @@ const MIN_WORD_SPEED_MULTIPLIER = 0.5;
 
 // PANGRAM CHALLENGE (edit these constants to tune the feature).
 // A new upward-moving pangram appears at 0:30, 1:00, 1:30, ...
-// It takes approximately 24 seconds to travel across the game field.
+// It takes approximately 12 seconds to travel across the game field.
 const PANGRAM_INTERVAL_SECONDS = 30;
-const PANGRAM_TRAVEL_SECONDS = 24;
+const PANGRAM_TRAVEL_SECONDS = 12;
 const PANGRAMS = [
   'the quick brown fox jumps over the lazy dog',
   'sphinx of black quartz judge my vow',
@@ -48,8 +49,24 @@ const levelElementID = document.getElementById('Level');
 
 // VARIABLES
 const currentLevel = LEVEL;
-const gameWidth = gameContentID.clientWidth;
-const gameHeight = gameContentID.clientHeight;
+// Keep playfield measurements current as CSS responds to viewport changes.
+let gameWidth = gameContentID.clientWidth;
+let gameHeight = gameContentID.clientHeight;
+function syncGameBounds() {
+  gameWidth = gameContentID.clientWidth;
+  gameHeight = gameContentID.clientHeight;
+
+  // Existing falling words stay within the resized playfield horizontally.
+  // Vertical progress is preserved; no words jump backward on resize.
+  for (const node of arrWordsDiv) {
+    const maxLeft = Math.max(4, gameWidth - node.offsetWidth - 4);
+    const oldLeft = parseFloat(node.style.left) || 4;
+    node.style.left = Math.max(4, Math.min(oldLeft, maxLeft)) + 'px';
+  }
+
+  // An active pangram keeps its fraction of upward travel across a resize.
+  if (activePangram) positionPangram();
+}
 let score = 0;
 let gameOver = false;
 let arrWords = [];
@@ -163,6 +180,11 @@ function init() {
   inputElementID.setAttribute('autocapitalize', 'off');
   inputElementID.spellcheck = false;
   if (inputElementID.form) inputElementID.form.autocomplete = 'off';
+  syncGameBounds();
+  if (window.ResizeObserver) {
+    new ResizeObserver(syncGameBounds).observe(gameContentID);
+  }
+  window.addEventListener('resize', syncGameBounds, { passive: true });
   gameStartTime = performance.now();
   showLevel();
   setInterval(() => {
@@ -189,9 +211,12 @@ function drawWord() {
   wordDiv.style.top = '-2px';
   wordDiv._fallY = -2; // visual top, maintained in JS (no per-frame layout read)
   wordDiv.style.zIndex = '1';
-  wordDiv.style.left = (Math.random() * (gameWidth - 150)).toString() + 'px';
   arrWordsDiv.push(wordDiv);
   gameContentClass[0].appendChild(wordDiv);
+  // Measure the actual word, not a hard-coded 150px approximation.
+  // This keeps long terms and newly spawned words on-screen at narrow widths.
+  const maxLeft = Math.max(4, gameWidth - wordDiv.offsetWidth - 4);
+  wordDiv.style.left = (4 + Math.random() * Math.max(0, maxLeft - 4)) + 'px';
 
   // Read the current CSS blue BEFORE replacing the falling block's background.
   // This keeps the lettering in the same blue as the previous block design.
@@ -448,7 +473,20 @@ function spawnPangram() {
   // Begin fully visible at the bottom, and rise all the way off the top.
   const top = Math.max(0, gameContentID.clientHeight - element.offsetHeight - 4);
   element.style.top = top + 'px';
-  activePangram = { phrase, element, top, height: element.offsetHeight, spawnedAt: performance.now() };
+  activePangram = {
+    phrase, element, top, height: element.offsetHeight,
+    spawnedAt: performance.now(), elapsedTravelSeconds: 0
+  };
+}
+
+function positionPangram() {
+  if (!activePangram) return;
+  const p = activePangram;
+  p.height = p.element.offsetHeight;
+  const startTop = Math.max(0, gameHeight - p.height - 4);
+  const traveled = gameHeight * Math.min(1, p.elapsedTravelSeconds / PANGRAM_TRAVEL_SECONDS);
+  p.top = startTop - traveled;
+  p.element.style.top = p.top + 'px';
 }
 
 function showPangramClear(wordsCleared, points) {
@@ -472,28 +510,25 @@ function completePangram() {
   const clearedNodes = arrWordsDiv.splice(0);
   for (const node of clearedNodes) node.remove();
 
-  // Score the phrase AND every cleared word exactly as if it was typed.
-  const completed = [pangram.phrase, ...clearedWords];
-  let gainedPoints = 0;
-  let gainedLetters = 0;
-  for (const word of completed) {
-    gainedPoints += word.length;
-    gainedLetters += (word.match(/[a-z]/g) || []).length;
-  }
-  // A single DOM update for the whole board clear; point totals are unchanged.
+  // Score the pangram AND all visible words, with no Skubert growth.
+  // The reward is points and an ALL CLEAR, not a size increase. Only normal
+  // manually typed words send skubert:word-correct and increment growth.
+  const gainedPoints = pangram.phrase.length +
+    clearedWords.reduce((sum, word) => sum + word.length, 0);
   score += gainedPoints;
   scoreElementID.innerHTML = `<p>Score ${score}</p>`;
-
-  // One aggregate notification preserves the viewer's growth mechanism,
-  // without creating a burst of simultaneous per-word animations.
-  window.skubertGrowthLetters = (window.skubertGrowthLetters || 0) + gainedLetters;
-  window.dispatchEvent(new CustomEvent('skubert:word-correct', {
-    detail: { word: pangram.phrase, letters: gainedLetters,
-              totalLetters: window.skubertGrowthLetters,
-              pangram: true, clearedWords: clearedWords.length }
-  }));
   playSound(pointSound, 0, notPointSound);
   showPangramClear(clearedWords.length, gainedPoints);
+
+  // Pangram reward: a fireworks explosion, followed by Skubert respawning at
+  // his ORIGINAL starting size. Keep the score and word-selection state.
+  // Any normal words typed *after* the burst can begin growing him again.
+  const previousGrowthLetters = Math.max(0, Number(window.skubertGrowthLetters) || 0);
+  window.skubertGrowthLetters = 0;
+  window.dispatchEvent(new CustomEvent('skubert:pangram-fireworks', {
+    detail: { previousGrowthLetters, resetGrowthLetters: 0,
+              clearedWords: clearedWords.length, points: gainedPoints }
+  }));
 }
 
 // GET VALUE FROM INPUT
@@ -554,7 +589,8 @@ function updateWordPosition() {
     // doesn't change the intended falling speed.
     const deltaSeconds = Math.max(0, (now - lastUpdateTime) / 1000);
     lastUpdateTime = now;
-    const globalFallDistance = BASE_FALL_SPEED_PX_PER_SECOND * speedMultiplier * deltaSeconds;
+    const globalFallDistance = BASE_FALL_SPEED_PX_PER_SECOND *
+      (gameHeight / REFERENCE_GAME_HEIGHT_PX) * speedMultiplier * deltaSeconds;
 
     for (let i = 0; i < arrWords.length; i++) {
       const wordNode = arrWordsDiv[i];
@@ -564,6 +600,11 @@ function updateWordPosition() {
       // Same game-over threshold as before, using JS coordinates.
       if (newTop + 15 > gameHeight) {
         gameOver = true;
+        gameContentID.classList.add('sk-typing-ended');
+        if (activePangram) {
+          activePangram.element.remove();
+          activePangram = null;
+        }
         gameContentID.innerHTML = modalGameOver();
         playSound(gameoverSound, 8, startGameSound);
         gameoverSound.style.zIndex = 1;
@@ -580,12 +621,12 @@ function updateWordPosition() {
     // A missed pangram simply exits the top; ordinary falling words still
     // determine game over. Its speed is independent of the falling speedup.
     if (!gameOver && activePangram) {
-      const speed = gameHeight / PANGRAM_TRAVEL_SECONDS;
-      // Do not advance a just-spawned challenge by time elapsed before it appeared
-      // (important when a browser tab resumes after being throttled).
+      // Travel in 12 seconds, measured against the current playfield height.
+      // Preserve proportional travel if the viewport changes mid-challenge.
+      // Do not jump across the field after a background-tab timer delay.
       const secondsSinceSpawn = Math.max(0, (now - activePangram.spawnedAt) / 1000);
-      activePangram.top -= speed * Math.min(deltaSeconds, secondsSinceSpawn);
-      activePangram.element.style.top = activePangram.top + 'px';
+      activePangram.elapsedTravelSeconds += Math.min(deltaSeconds, secondsSinceSpawn);
+      positionPangram();
       if (activePangram.top + activePangram.height < 0) {
         activePangram.element.remove();
         activePangram = null;
