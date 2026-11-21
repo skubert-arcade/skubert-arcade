@@ -247,3 +247,9 @@ body {
   padding-top: 0 !important;
   padding-bottom: 0 !important;
 }
+/* Diagnostic: remove the pangram's rectangular overlay */
+#GameContent .pangram-special {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
