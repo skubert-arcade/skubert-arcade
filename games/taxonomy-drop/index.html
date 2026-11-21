@@ -195,12 +195,11 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
         <h3>How to Play</h3>
         <p class="instructions-intro" id="instructionsDescription">Drop a ball so it touches <strong>another of the same type</strong>.<br>They merge into a ball of the <strong>next type!</strong></p>
         <div class="merge-demo" aria-label="Looping tutorial showing all seven merges, Species through Domain, followed by two Eukarya spheres bursting into all seven lower ranks.">
-        
-<div class="demo-topline">
-  <span id="mergeDemoStep"></span>
-  <button id="mergeDemoReplay" type="button">↻ Replay</button>
-</div>
-
+        <div class="demo-topline">
+          <!-- Keep the counter in the DOM for the tutorial script; existing CSS hides it. -->
+          <span id="mergeDemoStep"></span>
+          <button id="mergeDemoReplay" type="button">↻ Replay</button>
+        </div>
           <div class="merge-stage" aria-hidden="true"><canvas id="mergeDemo3D"></canvas><canvas id="mergeDemoCanvas"></canvas></div>
           <p class="merge-equation" id="mergeDemoEquation">Species + Species → Genus</p>
           <div class="demo-progress" id="mergeDemoProgress" aria-hidden="true"></div>
@@ -368,6 +367,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   const ART_SIZE=1254;
   const ART_TOP_LEFT={x:13,y:186}, ART_TOP_RIGHT={x:1127,y:186}, ART_APEX={x:571,y:1178};
   const AUTO_DROP_MS=3000;
+  // Gameplay tuning: rate-limit drops and cap consecutive-merge rewards.
+  const MIN_DROP_INTERVAL_SECONDS=0.60;
+  const MAX_COMBO_MULTIPLIER=3;
   const DROP_ACCELERATION_START_SECONDS=60;
   const DROP_DURATION_MULTIPLIER=0.99;
   let dropDeadline=0, dropDurationMs=AUTO_DROP_MS;
@@ -694,7 +696,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     instructionsOverlay.hidden=false;
     resetMergeDemo();
     helpButton.hidden=true;
-    instructionsLaunch.textContent=started ? 'BACK TO GAME →' : "START! →";
+    instructionsLaunch.textContent=started ? 'BACK TO GAME →' : "LET'S DROP! →";
     down=false;
     instructionsLaunch.focus({preventScroll:true});
   }
@@ -1159,7 +1161,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     lastDroppedLevel=droppedLevel;
     current=next;
     next=requestedTestLevel!==null ? requestedTestLevel : choice(current);
-    updateNext(); dropWait=.28; aimX=clampAim(aimX);
+    updateNext(); dropWait=MIN_DROP_INTERVAL_SECONDS; aimX=clampAim(aimX);
     resetDropTimer();
     setMessage(`${automatic?'Auto-dropped':'Dropped'} ${LEVELS[balls[balls.length-1].level].name}. Match two to evolve!`);
   }
@@ -1219,7 +1221,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       other.omega=clamp(other.omega+(dx/Math.max(1,dist))*(dy>0?-1:1)*reach*.8,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
     }
     shockwaves.push({x:cx,y:cy,r:merged.r*.35,maxR:range*.55,life:.35,maxLife:.35,color:LEVELS[newLevel].color});
-    combo=(time-lastMergeTime)<1.35?Math.min(combo+1,8):1;
+    combo=(time-lastMergeTime)<1.35?Math.min(combo+1,MAX_COMBO_MULTIPLIER):1;
     lastMergeTime=time;
     const awarded=20*Math.pow(2,newLevel-1)*combo;
     score+=awarded; updateScore();
@@ -1272,7 +1274,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     }
     shockwaves.push({x:cx,y:cy,r:radius(6)*.5,maxR:radius(7)*2.2,
       life:.55,maxLife:.55,color:'#ffffff'});
-    combo=(time-lastMergeTime)<1.35?Math.min(combo+1,8):1;
+    combo=(time-lastMergeTime)<1.35?Math.min(combo+1,MAX_COMBO_MULTIPLIER):1;
     lastMergeTime=time;
     const awarded=20*Math.pow(2,MAX_LEVEL)*combo;
     score+=awarded;updateScore();
