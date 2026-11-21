@@ -21,9 +21,10 @@ const RESOLUTION_STEP_PX = 96;           // Reduce render-target reallocations
 
 const gameArea = document.getElementById('GameContent');
 const wrapper = document.getElementById('Wrapper');
+const virtualStage = document.getElementById('GameStage');
 const mount = document.getElementById('skubert-viewer');
-if (!gameArea || !wrapper || !mount) {
-  throw new Error('Missing #GameContent, #Wrapper, or #skubert-viewer.');
+if (!gameArea || !wrapper || !mount || !virtualStage) {
+  throw new Error('Missing #GameContent, #Wrapper, #GameStage, or #skubert-viewer.');
 }
 
 let skubertDisplayScale = 1;
@@ -80,16 +81,17 @@ function updateSkubertGrowth() {
 }
 
 function sizeAndPosition() {
-  const area = gameArea.getBoundingClientRect();
-  const parent = wrapper.getBoundingClientRect();
-  const width = Math.max(112, Math.min(194, area.width * 0.34));
+  // DOM rectangles are VISUAL CSS pixels, so they change with the stage scale.
+  // Use immutable VIRTUAL coordinates instead: the parent stage handles
+  // scaling both Skubert and every word together, without drift or resizing.
+  const width = Math.max(112, Math.min(194, gameArea.clientWidth * 0.34));
   const height = width;
   viewerWidth = width;
   viewerHeight = height;
   mount.style.width = `${width}px`;
   mount.style.height = `${height}px`;
-  mount.style.left = `${area.left - parent.left + (area.width - width) / 2}px`;
-  mount.style.top = `${area.bottom - parent.top - height - 5}px`;
+  mount.style.left = `${(gameArea.clientWidth - width) / 2}px`;
+  mount.style.top = `${gameArea.clientHeight - height - 5}px`;
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
   updateRenderResolution();

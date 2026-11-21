@@ -6,7 +6,9 @@ const LEVEL = 2000;
 // Start at half the previous speed: 25 px/sec instead of 50 px/sec.
 // After 30 seconds of play, global speed increases 1% every second (compounded).
 const BASE_FALL_SPEED_PX_PER_SECOND = 25;
-const REFERENCE_GAME_HEIGHT_PX = 600; // previous fixed-height playfield
+const VIRTUAL_GAME_WIDTH = 600;
+const VIRTUAL_GAME_HEIGHT = 600;
+const REFERENCE_GAME_HEIGHT_PX = VIRTUAL_GAME_HEIGHT; // fixed game units
 const SPEEDUP_DELAY_SECONDS = 30;
 const SPEEDUP_MULTIPLIER_PER_SECOND = 1.01;
 
@@ -49,23 +51,72 @@ const levelElementID = document.getElementById('Level');
 
 // VARIABLES
 const currentLevel = LEVEL;
-// Keep playfield measurements current as CSS responds to viewport changes.
-let gameWidth = gameContentID.clientWidth;
-let gameHeight = gameContentID.clientHeight;
-function syncGameBounds() {
-  gameWidth = gameContentID.clientWidth;
-  gameHeight = gameContentID.clientHeight;
+// Logical coordinates never change, even if the window is resized mid-game.
+// Only the visual stage is scaled; words retain their exact virtual positions.
+const gameWidth = VIRTUAL_GAME_WIDTH;
+const gameHeight = VIRTUAL_GAME_HEIGHT;
+let virtualStageScale = 1;
 
-  // Existing falling words stay within the resized playfield horizontally.
-  // Vertical progress is preserved; no words jump backward on resize.
-  for (const node of arrWordsDiv) {
-    const maxLeft = Math.max(4, gameWidth - node.offsetWidth - 4);
-    const oldLeft = parseFloat(node.style.left) || 4;
-    node.style.left = Math.max(4, Math.min(oldLeft, maxLeft)) + 'px';
+function installFixedVirtualPlayfield() {
+  const wrapper = document.getElementById('Wrapper');
+  const viewer = document.getElementById('skubert-viewer');
+  if (!wrapper || !viewer) {
+    throw new Error('Typing Frenzy requires #Wrapper and #skubert-viewer.');
   }
 
-  // An active pangram keeps its fraction of upward travel across a resize.
-  if (activePangram) positionPangram();
+  // Upgrade the existing game.html at runtime: no HTML edits required.
+  // Keep Skubert a sibling of GameContent, since GameContent is replaced
+  // with the Game Over dialog when a falling word reaches the bottom.
+  const slot = document.createElement('div');
+  slot.id = 'GameSlot';
+  const viewport = document.createElement('div');
+  viewport.id = 'GameViewport';
+  const stage = document.createElement('div');
+  stage.id = 'GameStage';
+  gameContentID.before(slot);
+  slot.appendChild(viewport);
+  viewport.appendChild(stage);
+  stage.append(gameContentID, viewer);
+
+  function fitStage() {
+    // Fit both dimensions while preserving the immutable 1:1 game geometry.
+    // A resize changes CSS pixels per virtual unit, not time to the bottom.
+    const width = Math.max(1, slot.clientWidth);
+    const top = slot.getBoundingClientRect().top;
+    // Use the layout viewport height. The mobile on-screen keyboard can
+    // shrink visualViewport.height while typing; that must not collapse
+    // the playfield into unreadably small text mid-round.
+    const screenHeight = window.innerHeight;
+    const roomBelow = 104; // input field and a little breathing room
+    const availableHeight = Math.max(250, screenHeight - top - roomBelow);
+    const nextScale = Math.max(0.1, Math.min(
+      1.5, width / VIRTUAL_GAME_WIDTH, availableHeight / VIRTUAL_GAME_HEIGHT
+    ));
+    if (Math.abs(nextScale - virtualStageScale) < 0.0001 && viewport.style.width) return;
+    virtualStageScale = nextScale;
+    const edge = VIRTUAL_GAME_WIDTH * nextScale;
+    viewport.style.width = `${edge}px`;
+    viewport.style.height = `${edge}px`;
+    stage.style.transform = `scale(${nextScale})`;
+  }
+
+  let resizeQueued = false;
+  function scheduleFit() {
+    if (resizeQueued) return;
+    resizeQueued = true;
+    requestAnimationFrame(() => { resizeQueued = false; fitStage(); });
+  }
+  fitStage();
+  window.addEventListener('resize', scheduleFit, { passive: true });
+  window.visualViewport?.addEventListener('resize', scheduleFit, { passive: true });
+  if (window.ResizeObserver) new ResizeObserver(scheduleFit).observe(slot);
+
+  // Observable diagnostic values to verify fair resize behavior in DevTools.
+  window.typingVirtualPlayfield = Object.freeze({
+    width: VIRTUAL_GAME_WIDTH,
+    height: VIRTUAL_GAME_HEIGHT,
+    get scale() { return virtualStageScale; }
+  });
 }
 let score = 0;
 let gameOver = false;
@@ -172,6 +223,7 @@ const DICTIONARY = [
 
 // GAME START
 function init() {
+  installFixedVirtualPlayfield();
   installPangramStyles();
   // Suppress field history, autofill suggestions, and text corrections.
   // The HTML input should also have autocomplete="off" as defense in depth.
@@ -180,11 +232,6 @@ function init() {
   inputElementID.setAttribute('autocapitalize', 'off');
   inputElementID.spellcheck = false;
   if (inputElementID.form) inputElementID.form.autocomplete = 'off';
-  syncGameBounds();
-  if (window.ResizeObserver) {
-    new ResizeObserver(syncGameBounds).observe(gameContentID);
-  }
-  window.addEventListener('resize', syncGameBounds, { passive: true });
   gameStartTime = performance.now();
   showLevel();
   setInterval(() => {
@@ -391,7 +438,7 @@ function installPangramStyles() {
       display: block;
       margin: 0;
       padding: 0;
-      font: 800 clamp(14px, 2.2vw, 22px)/1.3 system-ui, sans-serif;
+      font: 800 22px/1.3 system-ui, sans-serif;
       overflow-wrap: normal;
       white-space: normal;
       color: #686ac2;
@@ -420,7 +467,7 @@ function installPangramStyles() {
       border: 1px solid rgba(110, 132, 201, .35);
       box-shadow: 0 4px 20px rgba(82, 88, 150, .17);
       color: #5f639f;
-      font: 800 clamp(15px, 2.5vw, 23px)/1.25 system-ui, sans-serif;
+      font: 800 23px/1.25 system-ui, sans-serif;
       text-align: center;
       white-space: normal;
       pointer-events: none;
@@ -471,7 +518,7 @@ function spawnPangram() {
   gameContentID.appendChild(element);
 
   // Begin fully visible at the bottom, and rise all the way off the top.
-  const top = Math.max(0, gameContentID.clientHeight - element.offsetHeight - 4);
+  const top = Math.max(0, gameHeight - element.offsetHeight - 4);
   element.style.top = top + 'px';
   activePangram = {
     phrase, element, top, height: element.offsetHeight,
@@ -589,8 +636,9 @@ function updateWordPosition() {
     // doesn't change the intended falling speed.
     const deltaSeconds = Math.max(0, (now - lastUpdateTime) / 1000);
     lastUpdateTime = now;
+    // Fixed distance per second in virtual pixels, independent of any resize.
     const globalFallDistance = BASE_FALL_SPEED_PX_PER_SECOND *
-      (gameHeight / REFERENCE_GAME_HEIGHT_PX) * speedMultiplier * deltaSeconds;
+      speedMultiplier * deltaSeconds;
 
     for (let i = 0; i < arrWords.length; i++) {
       const wordNode = arrWordsDiv[i];
