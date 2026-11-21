@@ -236,3 +236,14 @@ body {
   margin: auto;
   padding: 28px !important;
 }
+/* Move the game closer to the top of the page */
+.wrapper {
+  margin-top: 0 !important;
+  padding-top: 8px;
+}
+
+/* Reduce space occupied by the navigation bar */
+.navbar {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
