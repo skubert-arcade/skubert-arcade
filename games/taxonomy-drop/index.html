@@ -367,14 +367,13 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
   const ART_SIZE=1254;
   const ART_TOP_LEFT={x:13,y:186}, ART_TOP_RIGHT={x:1127,y:186}, ART_APEX={x:571,y:1178};
   const AUTO_DROP_MS=3000;
-  // Gameplay tuning: rate-limit drops and cap consecutive-merge rewards.
+  // Gameplay tuning: limit how quickly another ball can be dropped.
   const MIN_DROP_INTERVAL_SECONDS=0.60;
-  const MAX_COMBO_MULTIPLIER=3;
   const DROP_ACCELERATION_START_SECONDS=60;
   const DROP_DURATION_MULTIPLIER=0.99;
   let dropDeadline=0, dropDurationMs=AUTO_DROP_MS;
   // "time" advances only during active gameplay, not while on the start/end screen.
-  let time=0,lastMergeTime=-100,combo=0,lastFrame=0,accumulator=0,down=false,ballId=0;
+  let time=0,lastMergeTime=-100,lastFrame=0,accumulator=0,down=false,ballId=0;
   function placementDurationMs(){
     // At 60s: 3,000 ms; at 61s: 2,970 ms; then compound by 1% each second.
     const acceleratedSeconds=Math.max(0,Math.floor(time-DROP_ACCELERATION_START_SECONDS));
@@ -1123,7 +1122,7 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       next=choice(current);
     }
     aimX=(topLeft+topRight)/2; updateUnlocks();
-    ended=false; dropWait=0; combo=0; lastMergeTime=-100; time=0; ballId=0;
+    ended=false; dropWait=0; lastMergeTime=-100; time=0; ballId=0;
     popping=false; popElapsed=0; popQueue=[]; popNext=0; popFragments=[]; popRings=[];
     escapeSequence=null;jamEjection=null;clearJamPressure();
     fireworks=[];fireworkBursts=[];impactFlash=0;
@@ -1188,7 +1187,8 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     const cx=(a.x+b.x)/2, cy=(a.y+b.y)/2;
     // Heavy merged bodies retain less of the upward celebration impulse.
     const vx=(a.vx+b.vx)*.35;
-    const vy=-Math.min(480,205+newLevel*26+combo*12) / Math.sqrt(massMultiplier(newLevel));
+    // Keep the same upward launch impulse as an ordinary 1x merge.
+    const vy=-Math.min(480,217+newLevel*26) / Math.sqrt(massMultiplier(newLevel));
     balls.splice(j,1); balls.splice(i,1);
     const merged=createBall(newLevel,cx,cy,vx,vy);
     merged.angle=(a.angle+b.angle)/2;
@@ -1221,16 +1221,16 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
       other.omega=clamp(other.omega+(dx/Math.max(1,dist))*(dy>0?-1:1)*reach*.8,-MAX_ANGULAR_SPEED,MAX_ANGULAR_SPEED);
     }
     shockwaves.push({x:cx,y:cy,r:merged.r*.35,maxR:range*.55,life:.35,maxLife:.35,color:LEVELS[newLevel].color});
-    combo=(time-lastMergeTime)<1.35?Math.min(combo+1,MAX_COMBO_MULTIPLIER):1;
+    // Merge time is still needed by the anti-jam protection.
     lastMergeTime=time;
-    const awarded=20*Math.pow(2,newLevel-1)*combo;
+    const awarded=20*Math.pow(2,newLevel-1);
     score+=awarded; updateScore();
     makeParticles(cx,cy,LEVELS[newLevel].color,newLevel>=4?20:12);
     floating.push({x:cx,y:cy,life:1.0,label:`+${fmt.format(awarded)}`,color:LEVELS[newLevel].color});
     if(floating.length>8) floating.shift();
     if(!unlocked.has(newLevel)){ unlocked.add(newLevel); updateUnlocks(); }
     if(newLevel>highest) highest=newLevel;
-    setMessage(`${LEVELS[a.level].name} + ${LEVELS[b.level].name} → ${LEVELS[newLevel].name}${combo>1?' · '+combo+'× combo!':''}`);
+    setMessage(`${LEVELS[a.level].name} + ${LEVELS[b.level].name} → ${LEVELS[newLevel].name}`);
     if(newLevel===MAX_LEVEL){
       domainCreated=true;
       setMessage('Domain achieved! Continue playing until the pyramid overflows.');
@@ -1274,9 +1274,9 @@ a:focus-visible,button:focus-visible,canvas:focus-visible,input:focus-visible { 
     }
     shockwaves.push({x:cx,y:cy,r:radius(6)*.5,maxR:radius(7)*2.2,
       life:.55,maxLife:.55,color:'#ffffff'});
-    combo=(time-lastMergeTime)<1.35?Math.min(combo+1,MAX_COMBO_MULTIPLIER):1;
+    // Keep anti-jam grace period after the special Eukarya burst.
     lastMergeTime=time;
-    const awarded=20*Math.pow(2,MAX_LEVEL)*combo;
+    const awarded=20*Math.pow(2,MAX_LEVEL);
     score+=awarded;updateScore();
     floating.push({x:cx,y:cy,life:1.5,label:`+${fmt.format(awarded)}`,color:'#ffffff'});
     if(floating.length>8)floating.shift();
