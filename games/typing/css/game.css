@@ -20,7 +20,6 @@ h6 {
   background-size: cover;
   background-position: center;
 }
-
 .container-data {
   display: flex;
   justify-content: space-around;
@@ -29,7 +28,6 @@ h6 {
   -webkit-backdrop-filter: blur(20px);
           backdrop-filter: blur(20px);
 }
-
 #GameContent {
   position: relative;
   margin: 0 auto 0 auto;
@@ -52,7 +50,6 @@ h6 {
   position: relative;
   margin: 0;
 }
-
 .modal-gameover {
   display: flex;
   flex-direction: column;
@@ -75,7 +72,6 @@ input {
 .btn-modal a {
   color: black;
 }
-
 .btn-modal:hover,
 .btn-modal a:hover {
   background-color: rgb(153, 44, 255);
@@ -91,4 +87,72 @@ audio {
 }
 #Level {
   display: none !important;
+}
+
+/* ---- RESPONSIVE TYPING FRENZY PLAYFIELD ----
+   Replaces fixed 600x600 sizing without changing game logic or styling.
+   app.js observes #GameContent and repositions words when its size changes. */
+body {
+  width: 100%;
+  height: auto;
+  min-height: 100vh;
+  min-height: 100svh;
+  overflow-x: hidden;
+}
+.wrapper {
+  width: min(960px, calc(100% - 28px));
+  max-width: 960px;
+  margin: clamp(8px, 2vh, 30px) auto 28px;
+  padding: clamp(10px, 2.2vw, 28px);
+}
+#GameContent.row {
+  --bs-gutter-x: 0;
+  margin-left: 0;
+  margin-right: 0;
+}
+#GameContent {
+  width: 100%;
+  height: clamp(300px, calc(100svh - 215px), 800px);
+  overflow: hidden;
+}
+#GameContent .word {
+  max-width: calc(100% - 8px);
+  overflow-wrap: anywhere;
+  font-size: clamp(12px, 1.55vw, 18px);
+  padding: 2px 9px;
+}
+#Wrapper form {
+  width: 100%;
+  margin: 0;
+}
+#Wrapper #InputWord {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin-top: clamp(12px, 2.2vh, 26px);
+  font-size: 16px; /* avoids iOS auto-zoom on focus */
+}
+#GameContent.sk-typing-ended {
+  height: auto !important;
+  min-height: min(600px, 65svh);
+  overflow: visible;
+  padding: 12px 8px 22px;
+  align-items: flex-start !important;
+}
+#GameContent.sk-typing-ended .modal-gameover {
+  width: min(100%, 500px) !important;
+  max-width: 100%;
+  margin: 12px auto;
+  padding: clamp(12px, 3vw, 24px);
+}
+@media (max-width: 520px) {
+  .wrapper {
+    width: calc(100% - 14px);
+    padding: 8px;
+    margin-top: 4px;
+  }
+  #GameContent { height: clamp(260px, calc(100svh - 195px), 620px); }
+  #GameContent .word { font-size: 12px; padding: 2px 6px; }
+  .container-data { flex-wrap: wrap; gap: 4px 12px; }
+  #Wrapper #InputWord { margin-top: 12px; }
 }
